@@ -2,13 +2,14 @@
 
 This is a long-running hobby project: the design and prototype of a single-player, browser-based, asymmetric, turn-based, roguelike deckbuilder card game played against an AI opponent. The user collaborates on this in short sessions across many days/weeks.
 
-**Before responding to anything substantive, read `DESIGN.md` and `DECISIONS.md` in full.** They are the source of truth for the project. This file orients you to the *collaboration*; those files orient you to the *design*.
+**Before responding to anything substantive, read `DESIGN.md`, `DECISIONS.md`, and `PROTOTYPE.md` in full.** They are the source of truth for the project. This file orients you to the *collaboration*; those files orient you to the *design and the build plan*.
 
 ## Project state
 
-- **Pass 1 (high-level model) is complete** as of 2026-04-29. The doc is large but coherent. A vertical-slice prototype has not been built yet — it is the next major milestone after Pass 1 has settled.
-- **No code exists yet.** No JS framework chosen. No package.json. The repo is currently just docs and a `.gitignore`.
-- **The next concrete deliverable** is either (a) a v0 prototype of one playable encounter (one location, ~12 cards, dumbest-possible AI), or (b) more design work the user wants before prototyping. Ask before committing to either path.
+- **Pass 1 (high-level model) is complete** as of 2026-04-29 and substantially expanded that day with twelve additional decisions covering action queue mechanics, ammo/ranged combat, equipment, conditional stat printing, color-identity sharpening, and more. The docs are large but coherent.
+- **v0 prototype scope is agreed** as of 2026-04-29 (see `PROTOTYPE.md`). Build session has not started.
+- **No code exists yet.** No JS framework chosen. No package.json. The repo is currently docs only.
+- **The next concrete deliverable** is the v0 build per `PROTOTYPE.md` — one playable encounter, one location, one stat (STR), ~8-card deck, dumbest-possible AI, single HTML file.
 
 ## How the user prefers to work
 
@@ -39,6 +40,7 @@ These are the things that most often get lost in translation. Read `DESIGN.md` f
 
 - **`DESIGN.md`** is the living design document. It is the source of truth for the *current* state of design. When you patch it, preserve coherence — the doc should read start-to-finish without contradictions.
 - **`DECISIONS.md`** is append-only. New entries go at the *top* (newest first). Each entry includes Decision / Why / Alternatives / Revisit-when. Don't edit past entries — supersede them with a new entry if needed.
+- **`PROTOTYPE.md`** specifies the build increments. v0 scope is a contract — do not pull mechanics from later increments into v0 without an explicit user decision to widen scope.
 - **Open Questions in `DESIGN.md`** are tagged *(high)* / *(medium)* / *(low)* by priority for upcoming card design and prototyping. Use these tags to steer conversation toward the high-value gaps when the user asks "what should we work on?"
 - **Pass status:** Pass 1 (high-level model) is complete. Pass 2 covers detailed mechanics (turn structure phase-by-phase, card anatomy, board/zones, combat resolution, AI opponent tuning). Pass 2 is intentionally deferred until after a vertical-slice prototype.
 
