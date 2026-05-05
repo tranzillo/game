@@ -14,6 +14,115 @@ Format:
 
 ---
 
+## 2026-05-05 — Blue's three action-acquisition vectors locked; vector pattern as a design framework
+
+**Decision (cluster):**
+
+1. **Blue's deckbuilder verb is *copy*, not steal.** Blue observes actions and produces independent copies for its own deck. The verb never targets stealing or moving cards out of an opponent's deck — copies are independent instances.
+
+2. **Three printable vectors for the *copy* verb:**
+   - **Equipment** (canonical card: *Spellbook*) — wielder-defended, multi-charge (3 pages), copies enemy actions resolving at the wielder's location to your discard pile per page spent.
+   - **Structure** (canonical card: *Forbidden Library*) — one-shot premium (≥3 Insight). Copies the next enemy action resolving here to your hand, then self-destructs.
+   - **Persistent action** (canonical card: *Archeological Expedition*) — patient gamble. At end of cleanup, if any action resolved at this location this turn, copies a random one to your graveyard; Expedition itself goes to your graveyard.
+
+3. **Variation lives in conditions, scope, and requirements** — not in changing the verb. Each vector has distinct trigger conditions, copy destinations, and timing windows; all express the same Blue verb.
+
+4. **The vector pattern generalizes across all five conversion verbs.** Each color's verb (Recruit, Reroute, Convert, Stealswap, Research/Copy) can be expressed across multiple card-type vectors. Red's Recruit already has action-form (R4) and creature-form (Goblin Recruiter). Black's Stealswap has creature-form (Nightmare) and action-form. Blue's three-vector framework establishes the pattern; other colors' vectors will be designed similarly going forward.
+
+5. **Color identity is preserved at the verb level; variety is created at the vector level.** Blue does not steal. Red does not corrupt. Black does not heal. The verb is the principle; the vectors are the printed expressions.
+
+6. **Spellbook is equipment, not structure.** The earlier structure-only framing had only one neutralization path (structure-removal). Equipment-with-wielder gives the design space much richer interaction — kill wielder, displace wielder, equipment-removal, wielder-mobility — and tightens the theme (books are *carried*, not pinned to slabs).
+
+7. **Enemy-only triggering for Spellbook and Forbidden Library** — both vectors specifically copy *opposing* actions, not the player's own. This structurally prevents the self-cast deck-building loophole (where a player casts their own cards repeatedly to spam copies). Theme tightens: Blue is *studying enemy intelligence*, not its own.
+
+8. **Stat gating is via location-presence, not card-text targeting.** Spellbook's "≥2 Insight here" is checked at the location level (the location must have the required Insight in the side's totals). Equipment placement onto a creature is *placement*, not targeting — the player picks the host as a play-time decision, not a resolve-time targeting prompt (per Pillar 10).
+
+9. **Wielder mobility carries Spellbook's "this location" trigger.** When the wielder moves (Shove, Disperse, Bodyswap), Spellbook's location reference updates. Equipment scope follows the host; the book is carried with the wielder.
+
+**Why:** Blue's deckbuilder identity needed real action-acquisition paths. The Research-token-only model produces encounter-temporary copies that don't grow the deck — leaving Blue without a deckbuilder loop. Three vectors give Blue varied deck-building rhythms (in-encounter cycling via Spellbook, immediate hand access via Library, next-encounter investment via Expedition) while staying within the *copy* verb.
+
+The equipment-as-vector reframe (vs. structure-only Spellbook) is critical: the wielder becomes the load-bearing defense, killing the wielder neutralizes the path, equipment-mobility means the book follows the wielder. Cross-color setup plays light up — White Bodyswap to protect, Green stealth to skip combat, Red walls in the column. Blue's acquisition tools require defense from other colors; built-in splash incentive matches Blue's existing brittle-mage identity.
+
+The vector pattern as design framework is a generalizable principle for all colors. Future card design for any color's verb should ask: *which card types can express this verb? What conditions, scopes, and destinations differentiate the vectors?* Blue's three-vector spread is the template.
+
+**Alternatives considered:**
+
+- *Spellbook as a structure (original framing).* Rejected — equipment-with-wielder gives much richer interaction. The structure-only version had only one neutralization path.
+- *Self-cast loophole tolerated* (Spellbook copies any action including yours). Rejected — players can self-build their decks via repeated self-casting. Enemy-only triggering structurally prevents this.
+- *Forbidden Library as a re-skinned Spellbook.* Rejected — variety needs to come from conditions/scope/destination, not numerical re-skins. Library's hand destination + one-shot trigger + structural form are genuinely distinct (though flagged by the user for revisit if the variety isn't sharp enough at gameplay level).
+- *Archeological Expedition with Pray-N channeling.* Rejected — Pray-N is White's mechanic. Blue does not pray. Expedition is a persistent action by nature, not a channeled action with N progress points.
+- *Expedition triggers only on actions entering the graveyard.* Rejected — too combo-locked with Counterspell. Broad scope (any action resolving here) gives Expedition its own design space.
+- *Per-color Blue resource (mana) gating Spellbook triggers.* Rejected — duplicates the presence model, multiplies cognitive load, and the existing mechanisms (charges, sacrifice, one-shot) cover Spellbook's needs cleanly. Mana would also be confused with general "pay to cast everything" by players — dangerous MTG association.
+
+**Implications:**
+
+- **Blue can grow its deck via three distinct rhythms.** Discard cycling (Spellbook), immediate hand (Library), next-encounter graveyard (Expedition).
+- **Cross-color setup plays light up for Blue.** Wielder-defense is the natural splash incentive — White, Green, Red all contribute defensive tools.
+- **Anti-Blue acquisition design space.** Equipment-removal targets Spellbook; structure-removal targets Library; action-slot pressure (Counterspell, Stifle, Curse migration) interferes with Expedition. White and Black are the natural anti-acquisition colors.
+- **The vector pattern is a card-design framework.** Future per-color acquisition design should fan the verb across multiple printable vectors with distinct trigger conditions and timings.
+
+**Revisit when:**
+
+- Playtest reveals Spellbook-equipment is too hard to defend (mitigation: more pages, lower cost, Magnetic-style return-to-junkyard variants).
+- Forbidden Library feels too similar to Spellbook in actual play (mitigation: redesign trigger or effect — flagged by the user as a likely revisit).
+- Archeological Expedition's gamble is too punishing or too strong (mitigation: tune trigger condition narrower/broader, or change copy destination).
+- Other colors' vector spreads need design (Red, Green, White, Black should each get a vector-spread treatment similar to Blue's).
+
+---
+
+## 2026-05-05 — Stealswap mechanic locked: cost-shape, whiff rule, acquisition path
+
+**Decision (cluster):**
+
+1. **The swap card is itself the cost.** Stealswap has *no payable stat-presence cost*. The currency is *the swap card moving to the enemy side*. Stat-presence requirements aren't what gates stealswap; the loss of the swap card is. This is structurally distinct from Recruit, Convert, Reroute, and Research — five distinct cost currencies across the conversion verbs.
+
+2. **The whiff rule is universal across swap cards.** If no legal target exists at resolve time, the swap card *still* moves to the enemy side. Pure whiff = lost card + no acquisition + (for action-swap) potential damage to your own side. Brutal by design, *because* whiffing on purpose is sometimes a real play (deck-thinning).
+
+3. **High-threat printing is the per-card cost-balancer.** The more powerful the swap card's printed stats and abilities, the better the trade can be (you can size up the steal target via threat-parity), but the worse the whiff scenario gets. Each stealswap card balances itself via its own printed threat.
+
+4. **Card-type matching.** Creature-swap takes creatures, action-swap takes actions, structure-swap takes structures, equipment-swap takes equipment. No cross-type swaps.
+
+5. **Multi-slot resistance is emergent.** Multi-slot creatures can't be stolen by single-slot swap cards (no slot symmetry). Free immunity from the multi-slot design space.
+
+6. **Acquired card permanently joins the swapper's deck at encounter end.** Creatures reshuffle to swapper's deck; actions cycle in swapper's discard; structures and equipment join swapper's piles. The earlier working assumption of "reverts to original owner at encounter end" is rejected — the whole point is permanent acquisition through trade.
+
+7. **Pillar 10 setup is the win condition.** Stealswap on a random target = coin flip. Stealswap on the only legal candidate = guaranteed grab. Cross-color setup tools (Bully push, Reroute counter, positional movement) enable precise targeting — Black's mechanic *forces splash setup*, which is itself a feature.
+
+8. **Pillar 5 clean.** Faster cards resolving first is already legal. Swap intercepts the slower card's destination — no stack/response chain.
+
+9. **Whiff-as-deck-thin is a real strategic option.** Pure-whiff permanently removes the swap card from your deck. Black runs lean by structure; deliberate whiffing is one of the lever-pulls that supports the lean identity.
+
+10. **Action-stealswap acquired card resolves from new position.** A damage action that swaps to enemy side fires its damage at "the other side" (which is now the original caster's side). Per the universal damage-fall-through rule, if no creatures are present, damage falls through to the original caster's summoner.
+
+11. **Acquired creatures retain pre-swap damage** ("you take it as it was"). Buffs and debuffs follow normal rules (encounter-scoped buffs persist if their printed duration covers the swap timing).
+
+**Why:** Earlier doc passes had stealswap as a generic relocate-on-reveal subclass with several open questions (does damage carry, who owns the card on encounter end, etc.). Recent design work — including v3 prototype findings, the explicit conversion-verb framing (2026-05-03 entry), and the corrupt/reroute reframe that ceded the patient-acquisition mechanic to Green — reframes stealswap as **Black's primary acquisition verb, structurally distinct from any other color's**.
+
+The cost-shape is genuinely unique: paying with the swap card itself, balanced by the card's own threat output, with whiff-as-real-strategy. This makes Black mechanically the *high-variance, high-stakes* color — gambling-as-color-identity, not just thematically claimed but mechanically expressed.
+
+**Alternatives considered:**
+
+- *Whiff makes the swap card return to your hand.* Rejected — eliminates the whiff penalty; makes stealswap free at worst. Whiffing must be a real cost.
+- *Whiff fizzles entirely (card returns to discard or graveyard, no movement).* Rejected — same reason. Also breaks the deck-thinning-via-whiff strategy that depends on permanent removal of the whiffed card.
+- *Stealswap pays through stat presence (e.g., ≥3 Spite here).* Rejected — collapses stealswap into the same cost-shape as Recruit/Convert, removes the unique high-stakes-trade identity, and removes the whiff-as-real-strategy lever.
+- *Acquired card returns to original owner at encounter end.* Rejected — destroys stealswap as an acquisition verb; reduces it to temporary control-shift. The whole point is permanent acquisition through trade.
+- *Stealswap targets across card types* (e.g., creature for action). Rejected — too freeform; type-matching is cleaner and naturally bounds the mechanic.
+- *Cross-side equipment as the only acquisition vector for equipment.* Held open — equipment-stealswap is in the variants design space; whether it's the primary acquisition path for equipment is a separate question.
+
+**Implications:**
+
+- **Pillar-10 positional play matters more.** Setting up "exactly one legal target" is the primary skill of stealswap-heavy strategies. Cross-color setup tools become Black-enabling.
+- **Anti-stealswap design space exists.** Parliament-style "cards cannot change sides here" location text, cards that punish whiffs harder, cards that suppress acquired cards' effects. White and Blue split this design space.
+- **Swap variants are a rich design space.** Targeting-condition variants, stat-gated variants, conditional variants, friendly-fire variants, multi-card variants — all use the core rules with different printed text.
+- **Engine implication:** state needs to track which cards have been "converted" (entered via stealswap, raise, recruit, etc.). At encounter end, converted cards go to the new owner's deck.
+- **Black's two-path acquisition shape is now structural.** Stealswap (trade-now) + raise-from-any-graveyard (kill-then-claim) — two transactional shapes that share Black's identity but cover different strategic situations. Other colors generally have one acquisition path; Black having two is a deliberate asymmetry that reinforces "transactional engagement is its weapon."
+
+**Revisit when:** playtest reveals (a) the cost-shape feels too brutal for non-experts (mitigation: tune Nightmare's Force lower, weaken whiff penalty), (b) whiffing-on-purpose is too rarely useful (mitigation: more cards that combo with deck-thinning), or (c) the acquired-card-permanent-acquisition rule produces snowballing strategies that need a cap.
+
+**Supersedes:** the prior Stealswap section's "stays flipped, reshuffles to original owner's deck at encounter end" working assumption. All other Stealswap rules in DESIGN.md as of this date are consistent with this entry.
+
+---
+
 ## 2026-05-03 — Junkyard as a separate zone; equipment piles destination follows host side; Magnetic as scope-shifting
 
 **Decision (cluster):**

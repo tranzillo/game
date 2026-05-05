@@ -4,7 +4,7 @@ This is a living document. It will be messy and contradictory at times — that'
 
 When something is uncertain, write it down anyway and flag it under "Open Questions."
 
-> **Pass status:** Pass 1 (high-level model) complete as of 2026-04-26, amended substantially through 2026-04-29. The 2026-04-29 amendments cover: stats-as-resources, scope-of-effects, AI architecture, durability/violence distinction, color identities, persistent actions (Prayer, Curse, Counterspell), comparative costs, zombification, the *Spell* card type renamed *Action* with per-color flavor subtypes, double cost-check (cast and resolve), ephemeral face-down state, stealth mechanics + Tempo-spent principle, slot-as-scarce-resource framing, equipment as slotless modifier card type, attack patterns (cleave as pattern, not keyword), Red's identity as the *now* color, Blue/White's cost-shape distinction, the no-on-resolve-targeting pillar (effects pick at random from legal candidates), the action queue model + permanents-positional vs actions-temporal distinction, actions resolve to discard pile (cycling on deck-empty) with exile as premium one-shot keyword, the Tempo ordering hierarchy (Tempo → location → position → side priority via local Tempo total + alternating fallback), White's second mechanical idea (healing + divine shield protection), Blue's two-archetype control suite (Counterspell + Stifle), Curse design discipline (static board auras or player-direct effects), front-row vs back-row combat semantics with front row as a blocker for the back row, ranged combat with ammo as the first consumable resource, equipment as modifier vs replacement (the "sets" class, e.g., bow sets ranged power), and the *activation actions* design class (actions that interact with permanents, replacing the "activated abilities on creatures" idea). See DECISIONS.md for full reasoning. Sections marked _Pass 2_ are intentionally deferred until the high-level model is validated by a vertical-slice prototype.
+> **Pass status:** Pass 1 (high-level model) complete as of 2026-04-26, amended substantially through 2026-05-05. The 2026-05-05 amendments lock: (a) the **Stealswap** mechanic with full rules (cost-shape = swap card itself, universal whiff rule, high-threat-printing as cost-balancer, Pillar-10 setup as win condition, deck-thinning-via-whiff as a real strategy); (b) **Blue's three action-acquisition vectors** — Spellbook (equipment), Forbidden Library (structure), Archeological Expedition (persistent action) — expressing Blue's *copy* verb across three card-type vectors with distinct conditions/scope/destinations. The vector pattern is now established as a generalizable design framework: each color's verb fans across multiple printable vectors. Earlier 2026-04-29 amendments still apply. The 2026-04-29 amendments cover: stats-as-resources, scope-of-effects, AI architecture, durability/violence distinction, color identities, persistent actions (Prayer, Curse, Counterspell), comparative costs, zombification, the *Spell* card type renamed *Action* with per-color flavor subtypes, double cost-check (cast and resolve), ephemeral face-down state, stealth mechanics + Tempo-spent principle, slot-as-scarce-resource framing, equipment as slotless modifier card type, attack patterns (cleave as pattern, not keyword), Red's identity as the *now* color, Blue/White's cost-shape distinction, the no-on-resolve-targeting pillar (effects pick at random from legal candidates), the action queue model + permanents-positional vs actions-temporal distinction, actions resolve to discard pile (cycling on deck-empty) with exile as premium one-shot keyword, the Tempo ordering hierarchy (Tempo → location → position → side priority via local Tempo total + alternating fallback), White's second mechanical idea (healing + divine shield protection), Blue's two-archetype control suite (Counterspell + Stifle), Curse design discipline (static board auras or player-direct effects), front-row vs back-row combat semantics with front row as a blocker for the back row, ranged combat with ammo as the first consumable resource, equipment as modifier vs replacement (the "sets" class, e.g., bow sets ranged power), and the *activation actions* design class (actions that interact with permanents, replacing the "activated abilities on creatures" idea). See DECISIONS.md for full reasoning. Sections marked _Pass 2_ are intentionally deferred until the high-level model is validated by a vertical-slice prototype.
 
 ---
 
@@ -1269,6 +1269,30 @@ The third tool — **action-disperse** — *redirects* a queued enemy action to 
 
 Together, the three tools cover the full spell-denial space: remove (Counterspell), delay-and-clog (Stifle), or redirect-elsewhere (action-disperse).
 
+#### Blue's three action-acquisition vectors
+
+Blue's deckbuilder identity is fundamentally **copying, not stealing**. Blue observes the actions other sides take and produces independent copies for its own deck. Three distinct printable vectors express this verb across card types:
+
+- **Equipment vector** (canonical card: *Spellbook*) — wielder-defended, multi-charge. While in play, each opposing action that resolves at the wielder's location consumes one of the book's pages and adds a copy to your discard pile. When pages are spent the equipment is destroyed; when the wielder dies the book goes to junkyard with the host. Killing or displacing the wielder is the load-bearing counter-play. Wielder mobility (Shove, Disperse, Bodyswap) carries the book between locations — "this location" tracks wherever the wielder currently is.
+- **Structure vector** (canonical card: *Forbidden Library*) — one-shot, premium. Copies the next opposing action resolving at this location to your *hand* (immediate use this encounter), then self-destructs. Distinct from the equipment path in trigger (one-shot, not multi-charge), destination (hand, not discard), and form (no wielder).
+- **Persistent action vector** (canonical card: *Archeological Expedition*) — patient gamble. Persistent action that occupies an action slot. At end of cleanup, if any action resolved at this location this turn, Expedition resolves: a random action from those resolved is copied to your graveyard, and Expedition itself goes to your graveyard. Copy-to-graveyard means *next-encounter access* — the card joins your deck for future fights via graveyard reshuffle. Visible-in-slot once revealed; opponent can read the threat and route low-value actions through this location to give the player chaff.
+
+**Three deck-building rhythms** from the same Blue verb (*copy*):
+
+- *Equipment:* "use it now" — copies cycle through your discard pile this encounter.
+- *Structure:* "single big play" — copy goes to hand, immediate.
+- *Persistent action:* "save it for later" — copy joins your deck for next encounter via graveyard reshuffle.
+
+Variation lives in **conditions, scope, and requirements** — not in changing the verb. Blue does not steal; Blue copies. (Specific card costs, charge counts, and trigger details live in `CARD_DESIGN.md`.)
+
+The strategic risk-reward worth flagging: blind action acquisition is a **gamble**. Adding bad cards to your deck is one of the worst things a player can do; opponents can read your acquisition tools (visible Spellbook on a creature, visible Library structure, visible Expedition in the action slot) and deliberately route low-value actions through these locations to give the player chaff. Acquisition tools are *not always good plays* — they pay off only when you can constrain or predict the opponent's valuable actions.
+
+##### The vector pattern as a design framework
+
+The vector pattern generalizes across all five conversion verbs. Each color's verb (Recruit, Reroute, Convert, Stealswap, Research) can be printed across multiple card-type vectors, each with distinct trigger conditions and timing — but all expressing the *same* core verb. Red's Recruit already has both action-form and creature-form (Goblin Recruiter). Black's Stealswap has both creature-form (Nightmare) and action-form variants. Blue's three-vector spread above is the template; future card design for any color should ask: *which card types can express this verb? What conditions, scopes, and destinations differentiate the vectors?*
+
+**Color identity is preserved at the verb level; variety is created at the vector level.** Blue does not steal. Red does not corrupt. Black does not heal. The verb is the principle; the vectors are the printed expressions.
+
 ### White — Resolve — the color of belief and channeled intervention
 
 - **Identity:** belief in things outside one's control; reliance on intervention from beyond. The slow inevitability color.
@@ -2259,19 +2283,90 @@ Two confirmed instances of the swap subclass within the relocate-on-reveal famil
 
 ### Stealswap (Black)
 
-**Flavor:** possession, body-snatching, soul exchange. Black's transactional engagement turned spatial.
+**Flavor:** possession, body-snatching, soul exchange. Black's transactional engagement turned spatial. *I take what is yours; you receive something of mine in exchange — but always at the worst possible time for you.*
 
-**Mechanic:** swap this creature with an *enemy* creature in a specified slot relationship. Their creature ends up on your side at this slot; your creature (the source of the swap) ends up on the enemy side. Both creatures' control changes.
+**The basic shape.** A stealswap card targets a card on the other side at the same location. On resolve:
 
-**Cost:** likely high Spite or another premium gating; this effect is rare because permanently flipping a creature's allegiance is enormous value.
+1. The targeted card moves to your side at this location, occupying the slot vacated by the swap card.
+2. The swap card itself moves to the other side at this location, occupying the slot the target vacated.
+3. Net: one card moves each direction. Both sides keep the same card count at the location.
 
-**Open questions:**
-- Does the swapped enemy creature retain damage when it switches sides?
-- Does it count as the player's creature for graveyard / supply-line purposes if destroyed?
-- Does it return to its original side at end of encounter, or stay flipped?
-- Working assumption: stays flipped for the duration of the encounter; reshuffles to *original owner's deck* at encounter end. Pass 2 to confirm.
+#### The whiff rule (universal across swap cards)
 
-**Pairs with:** Black's graveyard recursion theme. A stolen creature that dies enters the *thief's* graveyard, and Black's raise effects can then return it as a zombie under their control.
+If no legal target exists at resolve time, the swap card **still moves to the other side**. You played a card from your hand; it's now an enemy threat; you got nothing back. This is intentionally punitive — *whiffing on purpose is a real strategic option* (see *Deck-thinning via whiff*, below) — so the whiff penalty must be brutal to keep that decision interesting.
+
+#### The swap card itself is the cost
+
+Unlike Recruit or Convert (which require stat-presence cost-payment), stealswap has **no payable cost**. The currency is *willingness to hand the enemy a real threat in exchange for a chance to take theirs*. Stat-presence requirements at the location aren't what gates stealswap; the loss of the swap card is.
+
+This is a unique cost-shape across the conversion verbs:
+- *Recruit* (Red): stat-presence cost (Force-superiority).
+- *Convert* (White): stat-presence cost (Resolve overheal + Force threshold).
+- *Reroute* (Green): temporal cost (delay until card leaves play).
+- *Research* (Blue): resource cost (Insight presence).
+- **Stealswap (Black): material cost — the swap card itself goes to the enemy.**
+
+Five distinct cost currencies; each verb is balanced via a different lever.
+
+#### High-threat printing as cost-balancer
+
+The more powerful the swap card's printed stats and abilities, the better the trade can be (you can size up the steal target via threat-parity), but the worse the whiff scenario gets. **Designers tune the stealswap trade by the swap card's threat output.** A weak Nightmare = free card-steal (broken). A strong Nightmare = real threat-as-compensation (balanced). Each stealswap card sets its own balance via its own stat printing.
+
+#### Card-type matching
+
+A creature-stealswap takes a creature, replaces with the creature swap card. An action-stealswap takes an action, replaces with the action swap card. Same for structures and equipment. **Types must match — no cross-type swaps.** This keeps the slot semantics clean (a creature can't end up in an action slot, etc.).
+
+#### Multi-slot resistance is emergent
+
+A 2-slot creature has no 1-slot Nightmare to take its place; the swap can't physically resolve. **Multi-slot creatures are *swap-resistant by default*** — an emergent immunity for the multi-slot design space, free of any extra rules. Theme: multi-slot creatures are too big to "scare into joining."
+
+#### Pillar 10 setup is the win condition
+
+Stealswap on a random target = coin flip. Stealswap on the *only legal candidate* = guaranteed grab of exactly what you want. Setup tools (Bully push, Reroute counter, positional movement) become Black-supporting plays — and most of them are *other colors' cards* enabling Black's identity. Cross-color combos:
+
+- Red pushes to isolate; Black swaps the isolated target.
+- Green reroutes the reinforcement to your pile; Black swaps the target they need.
+- White's Bodyswap repositions defensively; Black's Stealswap repositions to enable a steal.
+
+#### Pillar 5 clean
+
+Faster cards resolving first is already legal. Swap intercepts the slower card's destination — it doesn't initiate a stack/response chain.
+
+#### Acquired card behavior
+
+- **Acquired creature.** Acts normally on your side from the swap turn forward. Its attack pattern now points at its original allies. Damage taken before the swap rides with it (the wound persists). At end of encounter, the creature reshuffles into *your deck* — **permanent acquisition**.
+- **Acquired action.** Resolves *from its new position*. Card text resolves with "your side" / "the other side" interpreted from the action's new location. So a damage action that was meant to hit the original caster's enemies now hits the *original caster's own creatures*. The card itself ends up in your discard (or whichever pile its native rules dictate) after resolving — yours from now on.
+- **Per the universal damage-fall-through rule**, if the side targeted by the swapped action has no creatures, damage falls through to the targeted summoner.
+
+#### The action-stealswap brutal whiff
+
+When an action-stealswap whiffs (no enemy action to swap with) and the action prints damage, the damage fires from the swap card's *new* position (enemy side). Damage hits *your* side. If your side has no creatures here, damage falls through to *your* summoner. This is the whiff penalty: card gone, your creatures or summoner damaged. **The brutality is load-bearing** — it makes the deck-thinning-via-whiff strategy a real, costly choice rather than a free upside.
+
+#### Deck-thinning via whiff (a real strategy)
+
+Pure-whiff stealswap permanently removes the swap card from your deck (the card is now on the enemy side). Combined with anti-build play, this is a way to *intentionally shrink* your deck — fewer cards = better cycling = more reliable draws of key pieces. Black runs lean by structure, and deliberate whiffing is one of the lever-pulls that supports that. The whiff penalty must remain substantial enough that the decision *between* gambling for the steal and accepting the cost for the thin is genuinely interesting.
+
+#### Anti-stealswap counters
+
+- **Parliament-style location text:** "Cards cannot change sides here" — blocks the mechanic outright. Documented in CARD_DESIGN.md as a Blue-White multi-color biome.
+- **Punish-on-whiff cards:** "If a card swaps to this side at this location, deal X damage to the other summoner." Doubles the whiff penalty.
+- **Suppress-acquired-card cards:** "Cards that swap to this side have Pacifist this encounter" or "lose their printed text this encounter." Reduces immediate value of the steal.
+- **Color attribution:** White (purification, restoring order) and Blue (foresight, perception) split this design space. Red and Green generally don't get anti-stealswap; their tools are positional, not preventive.
+
+#### Variants and design space
+
+Stealswap is a *printable effect*, not a fixed card. Variants share the core rules with different targeting/conditions:
+
+- **Targeting condition variants:** "swap with the front-most enemy creature here" (deterministic), "swap with an enemy creature in back" (positional), "swap with an action here" (intra-type).
+- **Stat-gated variants:** "swap with an enemy creature here whose Force is ≤ X" (size-gated). Lets the swap card calibrate its target size.
+- **Conditional variants:** "if you Forced more this turn, swap with the highest-Force enemy creature here" (combat-conditioned).
+- **Friendly-fire variants:** an action that swaps a card with a card on the same side (rare; useful for repositioning/sacrificing).
+- **Multi-card variants (premium):** "swap two creatures." Premium for multi-target.
+- **Aftermath variants:** "swap, then deal X damage" (the action-stealswap example). The aftermath fires from the swap card's new position — see *The action-stealswap brutal whiff*.
+
+Each variant uses the core swap rules; the variation is in targeting condition and any conditional cost components.
+
+**Pairs with:** Black's graveyard recursion theme — a stolen creature that dies enters *your* graveyard, and Black's raise effects can return it as a zombie under your control. Combined with raise-from-any-graveyard (see *Raise from any graveyard*, when added), Black has two distinct acquisition vectors: trade-now (stealswap) and kill-then-claim (raise).
 
 ### Why two flavors of swap
 

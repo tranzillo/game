@@ -538,6 +538,67 @@ The trio is **Apprentice + Study + Spark**. Without any one of them, the deck's 
 
 ---
 
+## Blue reward pool — first batch (the three action-acquisition vectors)
+
+The first batch of Blue reward-tier cards spans the **three action-acquisition vectors** (see DESIGN.md → *Blue's three action-acquisition vectors*): equipment, structure, and persistent action. Together they give Blue real deck-growth paths beyond the encounter-only research-token model.
+
+All three express the same Blue verb — **copy, never steal** — with distinct conditions, scope, destinations, and timings.
+
+**System variety:** 1 equipment + 1 structure + 1 persistent action.
+
+| # | Name | Type | Cost | F | T | D | Effect | Status |
+|---|---|---|---|---|---|---|---|---|
+| BR1 | Spellbook | equipment | ≥2I | — | — | — | "3 pages. Equip. When an opposing action resolves at this location, this loses 1 page; a copy of that action enters your discard pile. When pages reach 0, this is destroyed." | proposed |
+| BR2 | Forbidden Library | structure | ≥3I | 0 | 0 | — | "When the next opposing action resolves at this location, copy it to your hand. Then this is destroyed." | proposed |
+| BR3 | Archeological Expedition | action | ≥2I | — | — | — | "Persistent. At end of cleanup, if at least one action resolved at this location this turn: copy a random one of them to your graveyard. Then this goes to your graveyard." | proposed |
+
+### Card-by-card rationale
+
+**BR1 Spellbook** — Blue's *ongoing study* equipment. ≥2 Insight gates it to Insight-rich locations (Blue's mage-heavy boards). Once equipped to a creature on your side, every opposing action that resolves at the wielder's location burns 1 of 3 pages and adds a copy to your discard pile (cycles back into your deck via reshuffle).
+
+The wielder is the load-bearing defense — kill the wielder, equipment goes to junkyard. Spellbook is an *infrastructure investment that demands protection*. Cross-color synergies light up: White Bodyswap to put a tank in front of the wielder, Green stealth to skip combat, Red walls defending the wielder's column. Blue alone struggles to defend Spellbook; Blue + a defensive splash is the natural shape.
+
+Wielder mobility: when the wielder moves (Shove, Disperse, Bodyswap), Spellbook moves with them; "this location" tracks wherever the wielder now is. The book is *carried*, not pinned.
+
+Theme: a scribe's notebook. The wielder observes enemy spells, rips a page, inscribes the spell. One page = one copy.
+
+**BR2 Forbidden Library** — Blue's *single big play* structure. ≥3 Insight is premium-tier (matches Counterspell). One-shot: copies the *next* opposing action resolving at this location to your *hand* (immediate use this encounter, distinct from Spellbook's discard destination), then destroys itself.
+
+The hand destination is the lever that justifies the premium cost. Spellbook copies into discard (cycles back later); Library copies into hand (castable right now). Use case: drop Library when an enemy persistent action is about to resolve here (Prayer, Curse, Counterspell), copy into hand, cast the copied action next turn for double-value.
+
+No wielder defending it; vulnerable to standard structure-removal.
+
+Theme: a forbidden book, opened once, the secret out. Protection breaks; library destroys itself.
+
+*Flagged for revisit:* the underlying "copy enemy action resolving here" verb overlaps Spellbook. The hand-destination is a real differentiator but worth iterating in a future pass on whether the variety is sharp enough at the gameplay level.
+
+**BR3 Archeological Expedition** — Blue's *patient gamble* persistent action. Plays into the action slot, sits face-up post-reveal, waits for its trigger.
+
+Trigger: at end of cleanup, if at least one action resolved at this location this turn, Expedition resolves. A random action from those resolved is selected (Pillar 10), a copy enters your graveyard, and Expedition itself goes to your graveyard.
+
+Copy-to-graveyard means *next-encounter access* — the card joins your deck for future fights via graveyard reshuffle at encounter end. Expedition is not an in-encounter weapon; it's a deck-building tool for the long run.
+
+Strategic risk-reward: blind acquisition is a **gamble**. Adding bad cards to your deck is one of the worst things a player can do. The opponent reads Expedition in the slot and can deliberately route low-value actions through this location to give the player chaff. Expedition pays off only when the player can constrain or predict valuable enemy actions resolving here.
+
+Theme: an archeological dig. You set out to dig; you keep going until you hit something; what you find is what you find.
+
+### Want web (Blue reward tier)
+
+- Spellbook → wants high-Insight wielder (Blue mage), defensive splash to protect the wielder, locations the opponent must commit actions at.
+- Forbidden Library → wants enemy persistent actions about to resolve here, hand-played follow-up next turn.
+- Archeological Expedition → wants opponent forced to resolve high-value actions at this location; counter-play against opponent's low-value-baiting tactics.
+- All three → benefit from cross-location pressure (forcing the opponent to resolve actions at locations the player can't avoid).
+
+### Open questions on Blue reward pool
+
+- **Spellbook page count.** 3 working assumption. Tunable in playtest.
+- **Forbidden Library similarity to Spellbook.** Flagged for revisit; verb overlaps and hand-destination may not be enough variety. May redesign trigger or effect in a future pass.
+- **Archeological Expedition trigger window.** End of cleanup (one check per turn). May tune to "end of any phase where an action resolved" if cleanup-only feels too telegraphed.
+- **Persistent actions and Expedition's trigger.** A Prayer/Curse that ticks once but stays in slot — does that count as "an action resolved here this turn"? Working assumption: no, only fully-resolved-and-leaving-play actions count.
+- **Cost scaling.** Spellbook ≥2I (premium-but-accessible); Library ≥3I (premium, matches Counterspell); Expedition ≥2I. Library is the most expensive reflecting its better destination (hand).
+
+---
+
 ## White starter pool — patience, marks, and self-sacrifice
 
 **Per-color flavor effect:** healing / restoration with positional targeting *and* the **mark** mechanic (Wayshrine bestows divine attention on a chosen creature).
