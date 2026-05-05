@@ -9,7 +9,7 @@ This is a long-running hobby project: the design and prototype of a single-playe
 - **Pass 1 (high-level model) is complete** as of 2026-04-29 and substantially expanded that day with twelve additional decisions covering action queue mechanics, ammo/ranged combat, equipment, conditional stat printing, color-identity sharpening, and more. The docs are large but coherent.
 - **v0 prototype scope is agreed** as of 2026-04-29 (see `PROTOTYPE.md`). Build session has not started.
 - **No code exists yet.** No JS framework chosen. No package.json. The repo is currently docs only.
-- **The next concrete deliverable** is the v0 build per `PROTOTYPE.md` — one playable encounter, one location, one stat (STR), ~8-card deck, dumbest-possible AI, single HTML file.
+- **The next concrete deliverable** is the v0 build per `PROTOTYPE.md` — one playable encounter, one location, one stat (Force), ~8-card deck, dumbest-possible AI, single HTML file.
 
 ## How the user prefers to work
 
@@ -18,7 +18,7 @@ This is a long-running hobby project: the design and prototype of a single-playe
 - **Flag implications proactively.** The user values when you notice consequences, tensions, or design-space-openings the user didn't explicitly call out. Don't just acknowledge — *think with them*.
 - **Ask sharp follow-ups.** When the user's idea has gaps or ambiguities, list specific questions rather than guessing. The user often answers in batches across messages.
 - **Honor "let me sleep on it."** The user sometimes ends sessions mid-thought. Capture state quickly so the next session can pick up.
-- **Don't lock in stat names yet.** Current stat names (STR / DEX / VIT / INT / FAITH) are D&D-style placeholders inherited from early sessions. Final naming will follow once theme work is further along. Leading direction: abstract-evocative (Force / Edge / Bulwark / Insight / Resolve, or similar). Don't push for renaming until the user is ready.
+- **Stat names are locked in as Force / Tempo / Insight / Resolve / Spite** (Red / Green / Blue / White / Black). Earlier doc passes used D&D placeholders STR / DEX / INT / FAITH / VIT — those have been retired. The current names are abstract-evocative and carry color flavor directly into the stat label. The user may occasionally slip and use D&D names because of years of conditioning; treat those as the equivalent canonical name and gently use the canonical version in your reply.
 - **The user thinks in MTG references.** Magic: The Gathering is a fluent shared vocabulary. Slay the Spire too. Use these freely as shorthand. But also note: the user has explicitly *rejected* MTG-style stack/priority/response interaction and MTG-style color-as-deck-commitment. The MTG references are about phases, zones, and card-type vocabulary — not about play flow.
 
 ## Key design principles to internalize
@@ -27,14 +27,15 @@ These are the things that most often get lost in translation. Read `DESIGN.md` f
 
 1. **The map *is* the battlefield.** When the player triggers an encounter, adjacent overworld nodes become locations on the battle board. The shape of the encounter changes based on where the player is.
 2. **Symmetric roles, asymmetric agency.** Player and boss are both summoners playing the same card-game rules. Differences are in *movement* (player as pawn, boss as spreading wave from exit) and *power growth* (player from neutral encounter rewards, boss from designer-tuned head-start tempo).
-3. **No interaction, but timing matters.** Both sides commit cards face-down to a *play queue*; cards flip and resolve in DEX order at end of phase. There is no MTG-style stack/response chain.
+3. **No interaction, but timing matters.** Both sides commit cards face-down to a *play queue*; cards flip and resolve in Tempo order at end of phase. There is no MTG-style stack/response chain.
 4. **Stats are vocabularies, not deck identities.** The player can't pre-commit to a "color." Decks are emergent multi-color blends. Cross-stat synergy is a primary design goal, not a tradeoff.
 5. **Stats live on permanents and on terrain.** Per-location per-side stat totals sum from both sources. Combat removes only the volatile portion (permanents). Terrain is a permanent local floor.
-6. **Stats triple-duty:** combat math (STR/DEX/VIT) + global economy (INT → draw, FAITH → hand size) + local cost-paying (every card has a stat-presence cost requirement at its location).
-7. **Costs include comparative-vs-opponent inequalities** (e.g., "more STR here than your opponent"), not just absolute thresholds.
+6. **Stats triple-duty:** combat math (Force/Tempo/Spite) + global economy (Insight → draw, Resolve → hand size) + local cost-paying (every card has a stat-presence cost requirement at its location).
+7. **Costs include comparative-vs-opponent inequalities** (e.g., "more Force here than your opponent"), not just absolute thresholds.
 8. **Effects default-local; wider scope is a printed premium.** "Here" is the default scope; "supply line" / "everywhere" cost card text to extend.
 9. **Three persistent-spell archetypes:** Prayer (White, multi-turn channel), Curse (Black, migrates to enemy slot on reveal), Counterspell (Blue, clears all spells in slots at this location).
 10. **AI is a heuristic system, not a search-based or learned one.** Intelligence is split across three places: designer-authored deck composition (the biggest lever), per-card play hints (metadata), and a small global scoring function. The AI cheats transparently; difficulty comes from cheating, not from cleverness.
+11. **Encounters are unified.** There is **one** encounter system — every overworld move triggers a multi-location simultaneous-commit encounter. Within that encounter, locations may be hostile (AI present), neutral (a pre-authored on-board puzzle), or empty, possibly mixed across the encounter's locations. **Neutral encounters are not menus** — they are puzzles solved by committing player cards to the neutral location during the encounter. Per Pillar 10 (no on-resolve targeting), the reward-selection mechanic *itself* is positional: the player's commits are the targeting. The AI consumes neutral encounters by spreading into them on overworld turns (denying rewards to the player), and can also contest neutrals mid-encounter by playing cards in (racing or muddying the puzzle). See *Encounters: unified hostile/neutral framework* in DESIGN.md for the full model.
 
 ## Working with the documents
 

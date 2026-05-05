@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Game v0</title>
+<style>
+  :root {
+    --bg: #1a1a1f;
+    --panel: #25252d;
+    --panel-2: #2f2f38;
+    --border: #3a3a45;
+    --text: #e8e8ee;
+    --muted: #9999a8;
+    --accent: #f0c040;
+    --player: #4a8aef;
+    --ai: #ef5a5a;
+    --ok: #6fcf6f;
+    --warn: #efb060;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  #header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  #header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #header .phase-info { color: var(--muted); }
+  #header .turn-info { color: var(--accent); font-weight: 600; }
+
+  #board { flex: 1; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 12px; max-width: 1100px; margin: 0 auto; width: 100%; }
+
+  .summoner { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; transition: box-shadow 0.18s, border-color 0.18s; }
+  .summoner.player { border-left: 4px solid var(--player); }
+  .summoner.ai { border-left: 4px solid var(--ai); }
+  .summoner.has-priority { box-shadow: 0 0 0 2px var(--accent); }
+  .summoner .name { font-weight: 600; }
+  .summoner .hp { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .summoner .deck-info { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .priority-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--accent);
+    color: #1a1a1f;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: none;
+  }
+  .priority-badge.show { display: inline-block; }
+  .incoming-dmg {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(239, 90, 90, 0.2);
+    color: var(--ai);
+    display: none;
+  }
+  .incoming-dmg.show { display: inline-block; }
+
+  .location {
+    display: grid;
+    grid-template-columns: 80px 1fr 80px;
+    grid-template-rows: auto auto auto;
+    gap: 6px;
+    padding: 10px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .location-label { grid-column: 1 / 4; text-align: center; color: var(--muted); font-size: 12px; }
+
+  .side-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .ai-side { grid-column: 2 / 3; grid-row: 2 / 3; }
+  .player-side { grid-column: 2 / 3; grid-row: 3 / 4; }
+
+  .creature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .ai-side .creature-grid { /* AI: back row appears at top, front at bottom (closest to centerline) */ }
+  .player-side .creature-grid { /* Player: front at top, back at bottom */ }
+
+  .side-info {
+    display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;
+    padding: 6px; border-radius: 4px; background: var(--panel-2); font-size: 12px;
+  }
+  .side-info .label { color: var(--muted); font-size: 11px; }
+  .side-info .stat-total { font-weight: 700; color: var(--accent); }
+  .stat-row { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .stat-cell { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 2px 4px; border-radius: 3px; background: rgba(255,255,255,0.02); font-size: 11px; }
+  .stat-cell-label { color: var(--muted); font-weight: 600; letter-spacing: 0.5px; }
+  .stat-cell-value { font-weight: 700; }
+  .stat-cell.stat-str .stat-cell-value { color: var(--ai); }
+  .stat-cell.stat-dex .stat-cell-value { color: var(--ok); }
+  .stat-cell.stat-int .stat-cell-value { color: #60c0e0; }
+  .stat-pending { color: var(--muted); font-weight: 400; font-size: 10px; margin-left: 4px; }
+
+  .ai-info { grid-column: 1 / 2; grid-row: 2 / 3; }
+  .player-info { grid-column: 1 / 2; grid-row: 3 / 4; }
+  .ai-action-slot { grid-column: 3 / 4; grid-row: 2 / 3; }
+  .player-action-slot { grid-column: 3 / 4; grid-row: 3 / 4; }
+
+  .slot {
+    background: var(--panel-2);
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: default;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .slot.legal-target { border-color: var(--accent); background: rgba(240, 192, 64, 0.08); cursor: pointer; }
+  .slot.illegal-target { opacity: 0.5; }
+  .slot-label { user-select: none; }
+  .slot.has-card { padding: 4px; border-style: solid; }
+  .slot.has-card.pending { border-style: dashed; border-color: var(--accent); background: rgba(240, 192, 64, 0.06); }
+  .slot.can-cancel { cursor: pointer; }
+  .slot.can-select-move { cursor: pointer; }
+  .slot.can-select-move:hover { border-color: var(--player); }
+  .card.pending-card { opacity: 0.85; box-shadow: inset 0 0 0 1px rgba(240, 192, 64, 0.4); }
+  .card.moved { opacity: 0.7; }
+  .card.moved::after { content: "moved"; position: absolute; top: 2px; right: 2px; font-size: 9px; color: var(--muted); background: var(--panel-2); padding: 1px 3px; border-radius: 2px; }
+  .card { position: relative; }
+  .card.face-down { background: linear-gradient(135deg, #2a2a35 0%, #1f1f28 50%, #2a2a35 100%); border-style: dashed; }
+  .card.face-down .card-back { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 60px; font-size: 24px; color: var(--muted); font-weight: 700; }
+  @keyframes flip-in {
+    0% { transform: rotateY(180deg); opacity: 0.3; }
+    50% { transform: rotateY(90deg); opacity: 0; }
+    100% { transform: rotateY(0); opacity: 1; }
+  }
+  .card.just-revealed { animation: flip-in 0.55s ease-out; }
+
+  .structure-row { grid-column: 1 / 4; grid-row: 1 / 2; display: none; } /* not currently used; reserved */
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+    user-select: none;
+    width: 110px;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s;
+    font-size: 12px;
+  }
+  .card.in-slot { width: auto; min-height: auto; height: 100%; }
+  .card.creature { border-left: 3px solid var(--player); }
+  .card.creature.ai-owned { border-left: 3px solid var(--ai); }
+  .card.structure { border-left: 3px solid var(--ok); }
+  .card.action { border-left: 3px solid var(--warn); }
+  .card.selected { outline: 2px solid var(--accent); transform: translateY(-2px); }
+  .card.unplayable { opacity: 0.45; cursor: not-allowed; }
+  .card .name { font-weight: 600; line-height: 1.1; }
+  .card .meta { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .card .badge { font-size: 10px; padding: 1px 5px; background: var(--panel-2); border-radius: 3px; color: var(--muted); }
+  .card .badge.cost { background: rgba(240, 192, 64, 0.18); color: var(--accent); }
+  .card .badge.str { background: rgba(239, 90, 90, 0.18); color: var(--ai); }
+  .card .badge.dex { background: rgba(111, 207, 111, 0.18); color: var(--ok); }
+  .card .badge.int { background: rgba(96, 192, 224, 0.18); color: #60c0e0; }
+  .card .badge.hp { background: rgba(74, 138, 239, 0.18); color: var(--player); }
+  .card .text { color: var(--muted); font-size: 10px; line-height: 1.25; }
+  .card .preview { font-size: 10px; line-height: 1.25; margin-top: 2px; padding: 2px 4px; border-radius: 3px; background: rgba(239, 90, 90, 0.12); color: var(--ai); }
+  .card .preview.muted { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
+  .card .preview.die { background: rgba(239, 90, 90, 0.25); color: #ff8080; font-weight: 600; }
+
+  .structure-zone, .action-zone {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* Hand */
+  #hand-area { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  #hand-area .hand-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  #hand { display: flex; gap: 8px; flex-wrap: wrap; min-height: 100px; }
+
+  #ai-hand-info { padding: 6px 12px; color: var(--muted); font-size: 12px; text-align: right; }
+
+  /* Controls */
+  #controls { display: flex; justify-content: center; gap: 12px; padding: 8px; }
+  button {
+    background: var(--accent);
+    color: #1a1a1f;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  button:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+
+  #log {
+    max-width: 1100px;
+    margin: 0 auto 12px;
+    width: calc(100% - 24px);
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #log .entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: pre-wrap; }
+  #log .entry:last-child { border-bottom: none; }
+  #log .entry.combat { color: var(--ai); }
+  #log .entry.combat-header { color: var(--accent); font-weight: 600; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 4px; }
+  #log .entry.combat-detail { color: var(--text); padding-left: 8px; }
+  #log .entry.draw { color: var(--player); }
+  #log .entry.phase { color: var(--accent); font-weight: 600; }
+  #log .entry.cleanup { color: var(--muted); }
+  #log .entry.win { color: var(--ok); font-weight: 700; }
+  #log .entry.lose { color: var(--ai); font-weight: 700; }
+
+  #game-over {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7); z-index: 10;
+  }
+  #game-over.show { display: flex; }
+  #game-over .panel { background: var(--panel); padding: 24px 32px; border-radius: 8px; text-align: center; border: 1px solid var(--border); }
+  #game-over h2 { margin-top: 0; }
+  #game-over button { margin-top: 12px; }
+
+  .stat-pill { display: inline-block; padding: 1px 6px; border-radius: 3px; background: rgba(239, 90, 90, 0.18); color: var(--ai); font-size: 11px; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Game v0 — single-encounter prototype</h1>
+  <div>
+    <span class="phase-info" id="phase-info">Phase: -</span>
+    &nbsp;|&nbsp;
+    <span class="turn-info" id="turn-info">Turn 1</span>
+  </div>
+</div>
+
+<div id="ai-hand-info"></div>
+
+<div id="board">
+  <div class="summoner ai" id="ai-summoner">
+    <span class="name">AI</span>
+    <span class="hp" id="ai-hp">20</span>
+    <span class="incoming-dmg" id="ai-incoming"></span>
+    <span class="priority-badge" id="ai-priority-badge"></span>
+    <span class="deck-info" id="ai-deck-info"></span>
+  </div>
+
+  <div class="location" id="location">
+    <div class="location-label">Location: featureless arena</div>
+
+    <div class="side-info ai-info">
+      <div class="stat-row" id="ai-stat-row"></div>
+    </div>
+    <div class="ai-side">
+      <div class="creature-grid" id="ai-creatures"></div>
+    </div>
+    <div class="slot ai-action-slot" id="ai-action-slot">
+      <span class="slot-label">action</span>
+    </div>
+
+    <div class="side-info player-info">
+      <div class="stat-row" id="player-stat-row"></div>
+    </div>
+    <div class="player-side">
+      <div class="creature-grid" id="player-creatures"></div>
+    </div>
+    <div class="slot player-action-slot" id="player-action-slot">
+      <span class="slot-label">action</span>
+    </div>
+  </div>
+
+  <!-- Structure slot is shared visually below the location for v0; one per side -->
+  <div class="location" style="grid-template-columns: 1fr 1fr; padding: 6px;">
+    <div>
+      <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">AI Structure</div>
+      <div class="slot" id="ai-structure-slot"><span class="slot-label">structure</span></div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: var(--muted); margin-bottom: 4px;">Player Structure</div>
+      <div class="slot" id="player-structure-slot"><span class="slot-label">structure</span></div>
+    </div>
+  </div>
+
+  <div class="summoner player" id="player-summoner">
+    <span class="name">Player</span>
+    <span class="hp" id="player-hp">20</span>
+    <span class="incoming-dmg" id="player-incoming"></span>
+    <span class="priority-badge" id="player-priority-badge"></span>
+    <span class="deck-info" id="player-deck-info"></span>
+  </div>
+</div>
+
+<div id="hand-area">
+  <div class="hand-label">Your hand (click a card, then click a legal target slot to play)</div>
+  <div id="hand"></div>
+</div>
+
+<div id="controls">
+  <button id="btn-advance">End Main Phase</button>
+  <button id="btn-export" class="secondary" title="Click: copy state to clipboard. Shift-click: download as a .txt file.">Export State</button>
+  <button id="btn-restart" class="secondary">Restart</button>
+</div>
+
+<div id="log"></div>
+
+<div id="game-over">
+  <div class="panel">
+    <h2 id="game-over-title">Game Over</h2>
+    <p id="game-over-text"></p>
+    <button id="btn-go-restart">Play again</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------- Card definitions ----------
+// Each definition is a template; instances are created with createCard().
+// `aiHints` is per-card metadata used by the AI scoring function (DECISIONS.md, AI architecture).
+const CARD_DEFS = {
+  recruit: {
+    name: "Recruit",
+    type: "creature",
+    cost: 0,
+    str: 1,
+    dex: 0,
+    hp: 2,
+    text: "Free body. Cheap STR for the location.",
+    aiHints: { preferFront: true }
+  },
+  conscript: {
+    name: "Conscript",
+    type: "creature",
+    cost: 0,
+    str: 1,
+    dex: 0,
+    hp: 1,
+    text: "Free body. Fragile.",
+    aiHints: { preferFront: true }
+  },
+  soldier: {
+    name: "Soldier",
+    type: "creature",
+    cost: 1,
+    str: 2,
+    dex: 0,
+    hp: 3,
+    text: "Solid mid-cost striker.",
+    aiHints: { preferFront: true }
+  },
+  champion: {
+    name: "Champion",
+    type: "creature",
+    cost: 3,
+    str: 4,
+    dex: 0,
+    hp: 4,
+    text: "Big finisher. Needs ≥3 STR here.",
+    // Avoid contested columns (where the enemy has a creature in front to trade with).
+    // Prefer empty enemy columns so it can swing through to the summoner.
+    aiHints: { preferUncontestedColumn: true, preferFront: true }
+  },
+  banner: {
+    name: "Banner of War",
+    type: "structure",
+    cost: 1,
+    str: 2,
+    dex: 0,
+    hp: null,
+    text: "Structure. +2 STR presence here.",
+    aiHints: {}
+  },
+  skirmisher: {
+    name: "Skirmisher",
+    type: "creature",
+    cost: 0,
+    str: 1,
+    dex: 2,
+    hp: 2,
+    text: "Strikes early. Glass cannon.",
+    // Skirmisher likes empty enemy columns or low-HP enemy fronts (where its first-strike kills cleanly).
+    aiHints: { preferFront: true, preferLowHpFront: true }
+  },
+  mage: {
+    name: "Mage",
+    type: "creature",
+    cost: 0,
+    str: 0,
+    dex: 0,
+    int: 1,
+    hp: 1,
+    text: "Prints 1 INT here. No combat threat. Fragile.",
+    // Mage MUST go to back row, ideally behind a friendly front-row blocker.
+    aiHints: { preferBack: true, requireBlocker: true, fragileMustProtect: true }
+  },
+  spark: {
+    name: "Spark",
+    type: "action",
+    cost: 1,
+    costStat: "int",
+    str: 0,
+    dex: 1,
+    hp: null,
+    effect: "deal2",
+    text: "Deal 2 damage to a random enemy creature here. Needs ≥1 INT here.",
+    // Only worth playing when there's a worthwhile enemy creature target.
+    aiHints: { requiresEnemyCreature: true, preferKillableTarget: true }
+  },
+  counterspell: {
+    name: "Counterspell",
+    type: "action",
+    cost: 2,
+    costStat: "int",
+    str: 0,
+    dex: 2,
+    hp: null,
+    effect: "counterspell",
+    text: "Send all actions in spell slots to the graveyard (including this). Needs ≥2 INT here.",
+    // Counterspell is a gamble — only worth it when there's an opposing action to target.
+    // (In v1, the AI doesn't see the player's pending plays, so this is harder to judge.)
+    aiHints: { requiresOpposingAction: true }
+  }
+};
+
+// 13-card v1 deck — mixed STR/DEX/INT to exercise the cost system and DEX-ordered combat.
+function buildStartingDeck() {
+  return [
+    "recruit", "recruit", "conscript",
+    "soldier", "soldier",
+    "champion",
+    "banner", "banner",
+    "skirmisher",
+    "mage", "mage",
+    "spark",
+    "counterspell"
+  ];
+}
+
+// ---------- State ----------
+function createCard(defKey, owner) {
+  const def = CARD_DEFS[defKey];
+  return {
+    instId: nextInstId(),
+    defKey,
+    owner,
+    name: def.name,
+    type: def.type,
+    cost: def.cost,
+    costStat: def.costStat || "str", // which stat the cost is checked against ("str", "int", etc.)
+    str: def.str || 0,
+    dex: def.dex || 0,
+    int: def.int || 0,
+    hpMax: def.hp,
+    hp: def.hp, // current durability for creatures
+    effect: def.effect,
+    text: def.text,
+    aiHints: def.aiHints || {},
+    revealed: true
+  };
+}
+
+let _instCounter = 0;
+function nextInstId() { return ++_instCounter; }
+
+function freshSide(deckKeys, owner) {
+  return {
+    hp: 20,
+    deck: shuffle(deckKeys.map(k => createCard(k, owner))),
+    hand: [],
+    discard: [],
+    graveyard: [],
+    // committed state — what's actually in play
+    creatures: { fl: null, fr: null, bl: null, br: null },
+    structure: null,
+    action: null,
+    // pending state — placed during this main phase but not yet committed
+    pending: {
+      creatures: { fl: null, fr: null, bl: null, br: null },
+      structure: null,
+      action: null
+    },
+    // creatures that have already used their once-per-turn move this main phase (instId set)
+    movedThisTurn: new Set()
+  };
+}
+
+function freshState() {
+  return {
+    turn: 1,
+    phase: "setup",
+    activeSide: "player",
+    // Which side has priority this turn — acts first in combat. v0 alternates each turn since
+    // no DEX exists; the design's full hierarchy (DEX > location > position > local DEX total
+    // > alternation) collapses to alternation when nothing prints DEX.
+    firstSide: "player",
+    sides: {
+      player: freshSide(buildStartingDeck(), "player"),
+      ai: freshSide(buildStartingDeck(), "ai")
+    },
+    selectedCardId: null, // hand-card selection for placement
+    selectedCommittedId: null, // committed-creature selection for movement
+    gameOver: null, // null | "playerWin" | "aiWin" | "draw"
+    log: []
+  };
+}
+
+let state = freshState();
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ---------- Logging ----------
+function logEntry(msg, kind = "") {
+  state.log.push({ msg, kind });
+  if (state.log.length > 200) state.log.shift();
+}
+
+// ---------- Stat totals ----------
+// Committed-only stat total for `stat` (e.g., "str", "dex", "int"). Pending plays do NOT count.
+// This is what cost requirements check against.
+function committedStatTotal(side, stat) {
+  const s = state.sides[side];
+  let t = 0;
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (s.creatures[pos]) t += s.creatures[pos][stat] || 0;
+  }
+  if (s.structure) t += s.structure[stat] || 0;
+  return t;
+}
+
+// Visible stat total: committed + pending. Used for display.
+function visibleStatTotal(side, stat) {
+  const s = state.sides[side];
+  let t = committedStatTotal(side, stat);
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (s.pending.creatures[pos]) t += s.pending.creatures[pos][stat] || 0;
+  }
+  if (s.pending.structure) t += s.pending.structure[stat] || 0;
+  return t;
+}
+
+// Convenience aliases (older code calls these — keep them for clarity).
+function committedStrTotal(side) { return committedStatTotal(side, "str"); }
+function visibleStrTotal(side) { return visibleStatTotal(side, "str"); }
+
+// ---------- Card play legality ----------
+function canPay(side, card) {
+  // Cost is checked against committed presence only. Pending placements do not yet contribute.
+  const stat = card.costStat || "str";
+  const present = committedStatTotal(side, stat);
+  return present >= (card.cost || 0);
+}
+
+// A slot is occupied if either committed or pending has something there.
+function slotOccupied(side, kind, pos) {
+  const s = state.sides[side];
+  if (kind === "creature") return !!(s.creatures[pos] || s.pending.creatures[pos]);
+  if (kind === "structure") return !!(s.structure || s.pending.structure);
+  if (kind === "action") return !!(s.action || s.pending.action);
+  return false;
+}
+
+// Creatures can be placed into any empty slot. There is no front-fills-first rule —
+// players are free to deploy wherever they want; combat exposure (back-row creatures take
+// damage in any column with no front-row blocker) teaches the consequences directly.
+function legalTargetsForCard(side, card) {
+  const targets = [];
+  if (card.type === "creature") {
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (slotOccupied(side, "creature", pos)) continue;
+      targets.push({ kind: "creature", pos });
+    }
+  } else if (card.type === "structure") {
+    if (!slotOccupied(side, "structure")) targets.push({ kind: "structure" });
+  } else if (card.type === "action") {
+    if (!slotOccupied(side, "action")) targets.push({ kind: "action" });
+  }
+  return targets;
+}
+
+// Place a card from hand into the side's pending slots. Does NOT commit yet — that happens at end-of-main.
+function placeCard(side, card, target) {
+  const s = state.sides[side];
+  const idx = s.hand.findIndex(c => c.instId === card.instId);
+  if (idx === -1) return false;
+  s.hand.splice(idx, 1);
+
+  if (card.type === "creature") {
+    s.pending.creatures[target.pos] = card;
+  } else if (card.type === "structure") {
+    s.pending.structure = card;
+  } else if (card.type === "action") {
+    s.pending.action = card;
+  }
+  // No log line on pending placement — this is private/preparation.
+  return true;
+}
+
+// Reverse a pending placement: return the pending card to the side's hand.
+function cancelPendingPlacement(side, kind, pos) {
+  const s = state.sides[side];
+  let card = null;
+  if (kind === "creature") {
+    card = s.pending.creatures[pos];
+    s.pending.creatures[pos] = null;
+  } else if (kind === "structure") {
+    card = s.pending.structure;
+    s.pending.structure = null;
+  } else if (kind === "action") {
+    card = s.pending.action;
+    s.pending.action = null;
+  }
+  if (card) s.hand.push(card);
+  return card;
+}
+
+// At end of main phase, commit all pending placements into the committed slots.
+// AI commits go down face-down (revealed=false); player's own cards remain visible to the player.
+// The reveal phase (next step) flips AI cards to face-up.
+function commitPendingPlays() {
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    const startsFaceDown = (sideName === "ai");
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (s.pending.creatures[pos]) {
+        const card = s.pending.creatures[pos];
+        if (startsFaceDown) card.revealed = false;
+        s.creatures[pos] = card;
+        s.pending.creatures[pos] = null;
+        if (sideName === "player") {
+          logEntry(`You commit ${card.name} to ${pos}.`);
+        } else {
+          logEntry(`AI commits a card to ${pos} (face-down).`);
+        }
+      }
+    }
+    if (s.pending.structure) {
+      const card = s.pending.structure;
+      if (startsFaceDown) card.revealed = false;
+      s.structure = card;
+      s.pending.structure = null;
+      if (sideName === "player") logEntry(`You commit ${card.name} (structure).`);
+      else logEntry(`AI commits a structure (face-down).`);
+    }
+    if (s.pending.action) {
+      const card = s.pending.action;
+      if (startsFaceDown) card.revealed = false;
+      s.action = card;
+      s.pending.action = null;
+      if (sideName === "player") logEntry(`You commit ${card.name} (action).`);
+      else logEntry(`AI commits an action (face-down).`);
+    }
+  }
+}
+
+// Flip every face-down committed card to face-up. Triggers any "is revealed" effects (none in v1).
+function revealAllFaceDown() {
+  let revealedAny = false;
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = s.creatures[pos];
+      if (c && !c.revealed) { c.revealed = true; revealedAny = true; if (sideName === "ai") logEntry(`Revealed: ${c.name} at ${sideName} ${pos}.`); }
+    }
+    if (s.structure && !s.structure.revealed) { s.structure.revealed = true; revealedAny = true; if (sideName === "ai") logEntry(`Revealed: ${s.structure.name} (AI structure).`); }
+    if (s.action && !s.action.revealed) { s.action.revealed = true; revealedAny = true; if (sideName === "ai") logEntry(`Revealed: ${s.action.name} (AI action).`); }
+  }
+  return revealedAny;
+}
+
+// Move a committed creature to an adjacent empty slot at the same location.
+// One move per creature per turn. Allowed in any direction (front<->back same column, left<->right same row).
+function moveCommittedCreature(side, fromPos, toPos) {
+  const s = state.sides[side];
+  const creature = s.creatures[fromPos];
+  if (!creature) return false;
+  if (s.movedThisTurn.has(creature.instId)) return false;
+  if (slotOccupied(side, "creature", toPos)) return false;
+  if (!isAdjacent(fromPos, toPos)) return false;
+
+  // Check: moving a creature *into* a back position is fine even with empty front
+  // (it's no different from a back creature staying after its front died — this isn't a placement).
+  // Moving a creature *out* of a front position is also fine, but a back creature in the same column
+  // is now exposed; that's an intentional consequence of moving.
+
+  s.creatures[fromPos] = null;
+  s.creatures[toPos] = creature;
+  s.movedThisTurn.add(creature.instId);
+  logEntry(`${side === "player" ? "You" : "AI"} moves ${creature.name} ${fromPos} → ${toPos}.`);
+  return true;
+}
+
+function isAdjacent(a, b) {
+  const adj = {
+    fl: ["fr", "bl"],
+    fr: ["fl", "br"],
+    bl: ["fl", "br"],
+    br: ["fr", "bl"]
+  };
+  return adj[a] && adj[a].includes(b);
+}
+
+// Which card types can be committed into a slot during the current phase?
+// Permanents (creatures, structures) only commit during main. Actions can be committed during
+// any phase that is a commit window — in v1 that's main and combat-reveal.
+function isCommitWindowFor(cardType) {
+  if (cardType === "creature" || cardType === "structure") {
+    return state.phase === "main";
+  }
+  if (cardType === "action") {
+    return state.phase === "main" || state.phase === "combat-reveal";
+  }
+  return false;
+}
+
+// ---------- Combat preview ----------
+// Returns:
+//   attackers:   instId -> { targetLabel, damage, killsTarget }
+//   willDie:     Set of instIds that die in simulated combat
+//   summonerHits: { player, ai }
+//
+// Uses the same DEX hierarchy as actual combat. Pending plays merge into committed for the sim.
+// Simulates queued actions before creature combat (deterministic effects only; random-target
+// effects like Spark are simulated by picking *some* target so the player sees a representative
+// outcome — explicitly noted as random in the card text).
+function computeCombatPreview() {
+  function snapshot(side) {
+    const s = state.sides[side];
+    const cs = {};
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = s.creatures[pos] || s.pending.creatures[pos] || null;
+      cs[pos] = c ? { instId: c.instId, name: c.name, str: c.str || 0, dex: c.dex || 0, hp: c.hp } : null;
+    }
+    const action = s.action || s.pending.action || null;
+    return {
+      creatures: cs,
+      hp: s.hp,
+      action: action ? { instId: action.instId, name: action.name, dex: action.dex || 0, effect: action.effect } : null
+    };
+  }
+  const sim = { player: snapshot("player"), ai: snapshot("ai") };
+
+  // Local DEX totals on the simulated board (committed + pending) for side-priority tiebreak.
+  function simLocalDex(side) {
+    const cs = sim[side].creatures;
+    let t = 0;
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (cs[pos]) t += cs[pos].dex || 0;
+    }
+    // Structures contribute too, but the snapshot doesn't capture them yet for DEX.
+    // For v1 with no structures printing DEX this is fine; revisit if it matters.
+    return t;
+  }
+  const localDex = { player: simLocalDex("player"), ai: simLocalDex("ai") };
+  function sidePriorityRank(side) {
+    if (localDex.player > localDex.ai) return side === "player" ? 0 : 1;
+    if (localDex.ai > localDex.player) return side === "ai" ? 0 : 1;
+    return side === state.firstSide ? 0 : 1;
+  }
+
+  // Simulate queued actions (DEX order) before creature combat.
+  // Effects supported in preview: counterspell (clears opposing action), deal2 (damages a creature).
+  const actionCandidates = [];
+  for (const sideName of ["player", "ai"]) {
+    if (sim[sideName].action) actionCandidates.push({ side: sideName, action: sim[sideName].action });
+  }
+  actionCandidates.sort((a, b) => {
+    if (a.action.dex !== b.action.dex) return b.action.dex - a.action.dex;
+    return a.side === state.firstSide ? -1 : 1;
+  });
+  for (const ac of actionCandidates) {
+    // The action may have been countered by an earlier-resolving counterspell — re-check sim slot.
+    if (sim[ac.side].action !== ac.action) continue;
+    if (ac.action.effect === "counterspell") {
+      const opp = sim[other(ac.side)];
+      if (opp.action) opp.action = null;
+    } else if (ac.action.effect === "deal2") {
+      const enemy = sim[other(ac.side)];
+      const targets = ["fl", "fr", "bl", "br"]
+        .map(pos => ({ pos, c: enemy.creatures[pos] }))
+        .filter(x => x.c);
+      if (targets.length > 0) {
+        const pick = targets[0]; // deterministic for preview; actual is random
+        pick.c.hp -= 2;
+        if (pick.c.hp <= 0) {
+          enemy.creatures[pick.pos] = null;
+        }
+      }
+    }
+    // Action consumed.
+    sim[ac.side].action = null;
+  }
+
+  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+  const candidates = [];
+  for (const sideName of ["player", "ai"]) {
+    for (const pos of ["fl", "fr"]) {
+      const c = sim[sideName].creatures[pos];
+      if (!c) continue;
+      if (c.str <= 0) continue;
+      candidates.push({
+        side: sideName,
+        pos,
+        creature: c,
+        sortKey: [-(c.dex || 0), sidePriorityRank(sideName), POS_RANK[pos]]
+      });
+    }
+  }
+  candidates.sort((a, b) => {
+    for (let i = 0; i < a.sortKey.length; i++) {
+      if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+    }
+    return 0;
+  });
+
+  const attackers = {};
+  const willDie = new Set();
+  const summonerHits = { player: 0, ai: 0 };
+
+  for (const cand of candidates) {
+    // Re-fetch from sim — may have been killed by a faster attacker.
+    const live = sim[cand.side].creatures[cand.pos];
+    if (!live || live.instId !== cand.creature.instId) continue;
+    const enemySim = sim[other(cand.side)];
+    const frontPos = cand.pos;
+    const backPos = cand.pos === "fl" ? "bl" : "br";
+    let target = enemySim.creatures[frontPos];
+    let targetPos = frontPos;
+    if (!target) {
+      target = enemySim.creatures[backPos];
+      targetPos = backPos;
+    }
+    const dmg = live.str;
+    if (target) {
+      target.hp -= dmg;
+      const killed = target.hp <= 0;
+      attackers[live.instId] = {
+        targetLabel: `${target.name} (${other(cand.side)} ${targetPos})`,
+        damage: dmg,
+        killsTarget: killed
+      };
+      if (killed) {
+        willDie.add(target.instId);
+        enemySim.creatures[targetPos] = null;
+      }
+    } else {
+      enemySim.hp -= dmg;
+      summonerHits[other(cand.side)] += dmg;
+      attackers[live.instId] = {
+        targetLabel: `${other(cand.side) === "player" ? "your" : "AI"} summoner`,
+        damage: dmg,
+        killsTarget: false,
+        hitsSummoner: true
+      };
+    }
+  }
+
+  return { attackers, willDie, summonerHits };
+}
+
+// ---------- Phases ----------
+function runUpkeep() {
+  state.phase = "upkeep";
+  logEntry(`— Upkeep, turn ${state.turn} —`, "phase");
+  // Reset per-turn move trackers — committed creatures may move once per main this turn.
+  state.sides.player.movedThisTurn = new Set();
+  state.sides.ai.movedThisTurn = new Set();
+  // No other upkeep effects in v0.
+}
+
+function runDraw() {
+  state.phase = "draw";
+  logEntry(`— Draw —`, "phase");
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    const target = 5;
+    while (s.hand.length < target) {
+      if (s.deck.length === 0) {
+        if (s.discard.length === 0) break; // truly out
+        s.deck = shuffle(s.discard);
+        s.discard = [];
+        logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+      }
+      const card = s.deck.shift();
+      s.hand.push(card);
+    }
+  }
+  logEntry(`Drew up to hand size 5.`, "draw");
+}
+
+function runMain() {
+  state.phase = "main";
+  logEntry(`— Main phase: play cards, then end. —`, "phase");
+  // Player plays via UI; AI plays after player ends main
+}
+
+// AI placement using scored heuristics. Per DECISIONS.md (AI architecture): per-card hints + a
+// small global scoring function picks the highest-scoring (card, target) pair and commits it.
+// Cost checks use COMMITTED state only (no bootstrap from same-turn pending placements — same
+// rule the player follows). The AI greedily places until no positive-scoring play remains.
+function aiPlaceMain() {
+  const ai = state.sides.ai;
+  let safety = 50;
+  while (safety-- > 0) {
+    const best = aiPickBestPlay();
+    if (!best) break;
+    placeCard("ai", best.card, best.target);
+  }
+}
+
+// Returns the highest-scoring legal (card, target) pair, or null if no play scores >= 0.
+// Scoring is intentionally simple — global rules + per-card hints, all hand-tuned.
+function aiPickBestPlay() {
+  const ai = state.sides.ai;
+  let best = null;
+  for (const card of ai.hand) {
+    if (!canPay("ai", card)) continue;
+    const targets = legalTargetsForCard("ai", card);
+    if (targets.length === 0) continue;
+    for (const target of targets) {
+      const score = aiScorePlay(card, target);
+      if (score === null) continue; // disqualified
+      if (!best || score > best.score) best = { card, target, score };
+    }
+  }
+  return best;
+}
+
+// Score a (card, target) play for the AI. Higher = better. Returns null to disqualify the play
+// entirely (e.g., Counterspell with no opposing action — unconditionally a waste).
+function aiScorePlay(card, target) {
+  const hints = card.aiHints || {};
+  let score = 0;
+
+  // Base score by card cost — pricier cards are more valuable when payable.
+  score += (card.cost || 0) * 2;
+
+  // Type-specific heuristics.
+  if (card.type === "creature") {
+    return scoreCreaturePlay(card, target, hints, score);
+  }
+  if (card.type === "structure") {
+    return scoreStructurePlay(card, target, hints, score);
+  }
+  if (card.type === "action") {
+    return scoreActionPlay(card, target, hints, score);
+  }
+  return score;
+}
+
+function scoreCreaturePlay(card, target, hints, baseScore) {
+  let score = baseScore;
+  const pos = target.pos;
+  const isFront = (pos === "fl" || pos === "fr");
+  const isBack = !isFront;
+  const sameColumnFront = pos === "bl" ? "fl" : (pos === "br" ? "fr" : pos);
+
+  // Front/back preference.
+  if (hints.preferFront && isFront) score += 5;
+  if (hints.preferFront && isBack) score -= 2;
+  if (hints.preferBack && isBack) score += 5;
+  if (hints.preferBack && isFront) score -= 4; // Mage in front is bad
+
+  // Mage / fragile creature wants a friendly front-row blocker in its column.
+  if (hints.requireBlocker && isBack) {
+    const frontCard = state.sides.ai.creatures[sameColumnFront] || state.sides.ai.pending.creatures[sameColumnFront];
+    if (frontCard) score += 6; // protected
+    else score -= 4;            // exposed back row
+  }
+  if (hints.requireBlocker && isFront) score -= 6; // worse than even unprotected back
+
+  // Champion-style: avoid columns where the enemy has a creature ready to block / trade.
+  if (hints.preferUncontestedColumn && isFront) {
+    const enemyFront = state.sides.player.creatures[pos]; // mirror column
+    if (enemyFront) score -= 4; // contested — Champion trade
+    else score += 3;            // can swing through
+  }
+
+  // Skirmisher likes columns where the enemy's front is low-HP (clean kill on first strike).
+  if (hints.preferLowHpFront && isFront) {
+    const enemyFront = state.sides.player.creatures[pos];
+    if (enemyFront && (enemyFront.hp || 0) <= (card.str || 0)) score += 4;
+  }
+
+  // Tiny preference: leftmost first to keep placements deterministic-ish for testing.
+  if (pos === "fl" || pos === "bl") score += 0.5;
+
+  return score;
+}
+
+function scoreStructurePlay(card, target, hints, baseScore) {
+  // Structures are always reasonable to play if they print stats. No real positioning.
+  return baseScore + 3;
+}
+
+function scoreActionPlay(card, target, hints, baseScore) {
+  let score = baseScore;
+
+  if (hints.requiresEnemyCreature) {
+    const player = state.sides.player;
+    const hasEnemy = ["fl","fr","bl","br"].some(p => player.creatures[p]);
+    if (!hasEnemy) return null; // disqualify — Spark with no targets is wasted
+    score += 4;
+    if (hints.preferKillableTarget) {
+      // +bonus if any enemy creature would die to this damage (Spark deals 2)
+      const wouldKill = ["fl","fr","bl","br"].some(p => {
+        const c = player.creatures[p];
+        return c && (c.hp || 0) <= 2;
+      });
+      if (wouldKill) score += 3;
+    }
+  }
+
+  if (hints.requiresOpposingAction) {
+    // The AI peeks at the player's pending action slot — transparent cheating per the AI
+    // architecture (DECISIONS.md). Without this, the AI plays Counterspell blind and almost
+    // always whiffs. Cheating gives Counterspell roughly the same value as if the AI were
+    // a thoughtful player who guesses well.
+    const player = state.sides.player;
+    const playerHasAction = !!(player.action || player.pending.action);
+    if (!playerHasAction) return null; // disqualify — Counterspell with no target
+    score += 8;
+  }
+
+  return score;
+}
+
+function runCombat() {
+  state.phase = "combat";
+  logEntry(`— Combat —`, "phase");
+  logEntry(`Priority: ${state.firstSide === "player" ? "you" : "AI"} have priority on DEX ties.`, "phase");
+
+  // Actions have already resolved at the end of the phase they were committed in (main or
+  // combat-reveal). No further action resolution here — only creature combat.
+  if (state.gameOver) return;
+
+  // Build the combat order using the DEX hierarchy from DECISIONS.md:
+  //  1. DEX descending (higher acts first)
+  //  2. Within DEX tier: per location, left-to-right (only one location in v1)
+  //  3. Within tier: by position, front-to-back, left-to-right per side
+  //  4. Side priority on ties: higher local DEX total acts first; if tied, state.firstSide
+  const orderedAttackers = computeCombatOrder();
+
+  let currentSideHeaderLogged = null;
+  for (const { side, pos, creature } of orderedAttackers) {
+    if (state.gameOver) return;
+    if (currentSideHeaderLogged !== side) {
+      logEntry(`${side === "player" ? "Your" : "AI"} attacks:`, "combat-header");
+      currentSideHeaderLogged = side;
+    }
+    // Re-fetch from state — the creature may have died from an earlier attack this phase.
+    const liveAttacker = state.sides[side].creatures[pos];
+    if (!liveAttacker || liveAttacker.instId !== creature.instId) {
+      logEntry(`  ${creature.name} (${pos}): killed before its swing — does not attack.`, "combat-detail");
+      continue;
+    }
+    if ((liveAttacker.str || 0) <= 0) {
+      logEntry(`  ${liveAttacker.name} (${pos}): no STR — does not attack.`, "combat-detail");
+      continue;
+    }
+    resolveAttack(side, pos, liveAttacker);
+  }
+  checkGameOver();
+}
+
+// Compute the ordered list of attackers for this combat phase.
+// Returns an array of { side, pos, creature, dex, sortKey } sorted by resolution order.
+function computeCombatOrder() {
+  // Position rank within a side: front-row first (left, right), back row doesn't attack in v1.
+  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+
+  // Local DEX total per side at this location — used for tiebreak.
+  const localDexTotal = {
+    player: committedStatTotal("player", "dex"),
+    ai: committedStatTotal("ai", "dex")
+  };
+  // Side-priority resolver: higher local DEX total wins; ties go to state.firstSide.
+  function sidePriorityRank(side) {
+    if (localDexTotal.player > localDexTotal.ai) return side === "player" ? 0 : 1;
+    if (localDexTotal.ai > localDexTotal.player) return side === "ai" ? 0 : 1;
+    return side === state.firstSide ? 0 : 1;
+  }
+
+  const candidates = [];
+  for (const sideName of ["player", "ai"]) {
+    for (const pos of ["fl", "fr"]) { // back-row doesn't attack in v1
+      const c = state.sides[sideName].creatures[pos];
+      if (!c) continue;
+      if ((c.str || 0) <= 0) continue;
+      candidates.push({
+        side: sideName,
+        pos,
+        creature: c,
+        dex: c.dex || 0,
+        sortKey: [
+          -(c.dex || 0),         // DEX descending
+          sidePriorityRank(sideName), // 0 = first, 1 = second
+          POS_RANK[pos]          // front before back, left before right
+        ]
+      });
+    }
+  }
+  // Stable sort by composite key.
+  candidates.sort((a, b) => {
+    for (let i = 0; i < a.sortKey.length; i++) {
+      if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+    }
+    return 0;
+  });
+  return candidates;
+}
+
+function resolveAction(side) {
+  const s = state.sides[side];
+  if (!s.action) return;
+  const action = s.action;
+  // Default zone for resolved actions is discard (cycles back via reshuffle).
+  // Counterspell overrides this for itself AND for any actions it removes from slots —
+  // those go to graveyard, which does NOT cycle this encounter.
+  let exitZone = "discard";
+
+  if (action.effect === "deal2") {
+    // Deal 2 damage to a random enemy creature here, if any.
+    const enemy = state.sides[other(side)];
+    const targets = ["fl", "fr", "bl", "br"]
+      .map(pos => ({ pos, c: enemy.creatures[pos] }))
+      .filter(x => x.c);
+    if (targets.length === 0) {
+      logEntry(`  ${action.name} (${side}) fizzles — no targets.`, "combat-detail");
+    } else {
+      const pick = targets[Math.floor(Math.random() * targets.length)];
+      pick.c.hp -= 2;
+      logEntry(`  ${action.name} (${side}) → ${pick.c.name} (${other(side)} ${pick.pos}) for 2.`, "combat-detail");
+      if (pick.c.hp <= 0) {
+        logEntry(`    ${pick.c.name} is destroyed.`, "combat-detail");
+        enemy.graveyard.push(pick.c);
+        enemy.creatures[pick.pos] = null;
+      }
+    }
+  } else if (action.effect === "counterspell") {
+    // Send all actions in spell slots (both sides) to the graveyard. Includes this Counterspell.
+    const opp = state.sides[other(side)];
+    if (opp.action) {
+      logEntry(`  ${action.name} (${side}) counters ${opp.action.name} (${other(side)}) — to graveyard.`, "combat-detail");
+      opp.graveyard.push(opp.action);
+      opp.action = null;
+    } else {
+      logEntry(`  ${action.name} (${side}) finds no opposing action — fizzles, but still exits to graveyard.`, "combat-detail");
+    }
+    // Counterspell itself exits to graveyard, not discard — it does not cycle.
+    exitZone = "graveyard";
+  }
+  s[exitZone].push(action);
+  s.action = null;
+}
+
+// Resolve all queued actions in DEX order. Higher DEX resolves first; ties broken by side priority.
+function resolveAllActions() {
+  const candidates = [];
+  for (const sideName of ["player", "ai"]) {
+    const action = state.sides[sideName].action;
+    if (action) candidates.push({ side: sideName, action, dex: action.dex || 0 });
+  }
+  if (candidates.length === 0) return;
+  candidates.sort((a, b) => {
+    if (a.dex !== b.dex) return b.dex - a.dex; // higher DEX first
+    // Side priority tiebreak — same rule as creatures.
+    if (a.side === state.firstSide) return -1;
+    return 1;
+  });
+  if (candidates.length > 0) {
+    logEntry(`Actions resolve:`, "combat-header");
+  }
+  for (const cand of candidates) {
+    if (state.gameOver) return;
+    // Re-check that the action is still in the slot — Counterspell may have removed it.
+    if (state.sides[cand.side].action !== cand.action) {
+      logEntry(`  ${cand.action.name} (${cand.side}) was countered before resolving.`, "combat-detail");
+      continue;
+    }
+    resolveAction(cand.side);
+  }
+}
+
+function other(side) { return side === "player" ? "ai" : "player"; }
+
+function resolveAttack(side, pos, attacker) {
+  // Front-row only attack in v0. If a back-row creature, it does not attack.
+  if (pos !== "fl" && pos !== "fr") return;
+
+  const enemy = state.sides[other(side)];
+  const enemyFront = pos; // mirrored column
+  const enemyBack = pos === "fl" ? "bl" : "br";
+
+  let target = enemy.creatures[enemyFront];
+  let targetPos = enemyFront;
+  if (!target) {
+    target = enemy.creatures[enemyBack];
+    targetPos = enemyBack;
+  }
+
+  const dmg = attacker.str;
+  if (target) {
+    target.hp -= dmg;
+    logEntry(`  ${attacker.name} (${pos}) → ${target.name} (${other(side)} ${targetPos}) for ${dmg}.`, "combat-detail");
+    if (target.hp <= 0) {
+      logEntry(`    ${target.name} is destroyed.`, "combat-detail");
+      enemy.graveyard.push(target);
+      enemy.creatures[targetPos] = null;
+    }
+  } else {
+    enemy.hp -= dmg;
+    logEntry(`  ${attacker.name} (${pos}) → ${other(side)} summoner for ${dmg}. (${other(side)} HP: ${enemy.hp})`, "combat-detail");
+  }
+}
+
+function runCleanup() {
+  state.phase = "cleanup";
+  logEntry(`— Cleanup —`, "phase");
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    if (s.hand.length > 0) {
+      logEntry(`${sideName === "player" ? "You" : "AI"} discards hand (${s.hand.length} card${s.hand.length === 1 ? "" : "s"}).`, "cleanup");
+      s.discard.push(...s.hand);
+      s.hand = [];
+    }
+  }
+  // Flip priority for next turn (alternation tiebreak in v0).
+  state.firstSide = other(state.firstSide);
+  state.turn += 1;
+}
+
+function checkGameOver() {
+  const p = state.sides.player.hp;
+  const a = state.sides.ai.hp;
+  if (p <= 0 && a <= 0) {
+    state.gameOver = "draw";
+    logEntry(`Both summoners reach 0 HP — draw!`, "lose");
+  } else if (p <= 0) {
+    state.gameOver = "aiWin";
+    logEntry(`Your summoner falls. AI wins.`, "lose");
+  } else if (a <= 0) {
+    state.gameOver = "playerWin";
+    logEntry(`AI summoner falls. You win!`, "win");
+  }
+}
+
+// ---------- Turn flow ----------
+function startNewTurn() {
+  if (state.gameOver) return;
+  runUpkeep();
+  runDraw();
+  runMain();
+  render();
+}
+
+// Phase 1 of player advancement: end main, AI places, both sides commit (AI face-down),
+// reveal AI cards, resolve any actions committed in main (in DEX order), then enter combat-reveal.
+function endMainPhase() {
+  if (state.phase !== "main") return;
+  if (state.gameOver) return;
+  // Clear any pending UI selections.
+  state.selectedCardId = null;
+  state.selectedCommittedId = null;
+  // AI places into pending (cost-checks against committed only; can't see player's pending).
+  aiPlaceMain();
+  // Both sides commit. AI cards are face-down at this point.
+  commitPendingPlays();
+  // Enter the reveal phase. AI cards visible as backs, then flip to face-up after a beat.
+  state.phase = "reveal";
+  logEntry(`— Reveal —`, "phase");
+  render();
+  setTimeout(() => {
+    if (state.gameOver) return;
+    revealAllFaceDown();
+    // Actions committed during main resolve at end-of-main (after reveal). Their DEX order
+    // determines who fires first; Counterspell here can preempt lower-DEX opposing actions.
+    resolveAllActions();
+    if (state.gameOver) {
+      render();
+      showGameOver();
+      return;
+    }
+    state.phase = "combat-reveal";
+    logEntry(`Combat previews shown. Commit anytime actions, then resolve.`, "phase");
+    render();
+  }, 700);
+}
+
+// Phase 2 of player advancement: commit any combat-reveal-phase actions, resolve them,
+// then run creature combat, then cleanup, then next turn auto-rolls.
+function resolveCombatPhase() {
+  if (state.phase !== "combat-reveal") return;
+  if (state.gameOver) return;
+  // If the player committed an action during combat-reveal, it lives in pending. Commit it now.
+  // (No reveal beat needed — combat-reveal already had everything visible. AI doesn't commit
+  //  during combat-reveal in v1.)
+  commitPendingPlays();
+  // Actions committed during combat-reveal resolve now, in DEX order, before creature combat.
+  resolveAllActions();
+  if (state.gameOver) {
+    render();
+    showGameOver();
+    return;
+  }
+  state.phase = "combat-resolve";
+  render();
+  setTimeout(() => {
+    runCombat();
+    if (state.gameOver) {
+      render();
+      showGameOver();
+      return;
+    }
+    runCleanup();
+    if (state.gameOver) {
+      render();
+      showGameOver();
+      return;
+    }
+    render();
+    setTimeout(() => {
+      startNewTurn();
+    }, 800);
+  }, 400);
+}
+
+// Single advance handler — picks the right action based on current phase.
+function advancePhase() {
+  if (state.gameOver) return;
+  if (state.phase === "main") return endMainPhase();
+  if (state.phase === "combat-reveal") return resolveCombatPhase();
+}
+
+// ---------- UI: rendering ----------
+const $ = (id) => document.getElementById(id);
+
+// Most recent combat preview, computed at start of each render during main phase.
+let _combatPreview = null;
+
+function render() {
+  // Compute combat preview only during the reveal window — after both sides have committed
+  // and before damage applies. During interactive main the preview would be misleading because
+  // the AI hasn't committed yet.
+  _combatPreview = (state.phase === "combat-reveal") ? computeCombatPreview() : null;
+
+  // HP and deck info
+  $("player-hp").textContent = state.sides.player.hp;
+  $("ai-hp").textContent = state.sides.ai.hp;
+  $("player-deck-info").textContent = `deck ${state.sides.player.deck.length} · discard ${state.sides.player.discard.length} · grave ${state.sides.player.graveyard.length}`;
+  $("ai-deck-info").textContent = `deck ${state.sides.ai.deck.length} · discard ${state.sides.ai.discard.length} · grave ${state.sides.ai.graveyard.length}`;
+  $("ai-hand-info").textContent = `AI hand: ${state.sides.ai.hand.length} card${state.sides.ai.hand.length === 1 ? "" : "s"}`;
+
+  $("phase-info").textContent = `Phase: ${state.phase}`;
+  $("turn-info").textContent = `Turn ${state.turn}`;
+
+  // Priority highlight: which side acts first this turn.
+  for (const sideName of ["player", "ai"]) {
+    const summonerEl = $(sideName + "-summoner");
+    const badge = $(sideName + "-priority-badge");
+    if (state.firstSide === sideName) {
+      summonerEl.classList.add("has-priority");
+      badge.textContent = "First";
+      badge.classList.add("show");
+    } else {
+      summonerEl.classList.remove("has-priority");
+      badge.classList.remove("show");
+    }
+    // Incoming-damage indicator from combat preview.
+    const incoming = $(sideName + "-incoming");
+    const dmg = _combatPreview ? _combatPreview.summonerHits[sideName] : 0;
+    if (dmg > 0) {
+      incoming.textContent = `−${dmg} incoming`;
+      incoming.classList.add("show");
+    } else {
+      incoming.classList.remove("show");
+    }
+  }
+
+  // Stat row: show committed totals for STR / DEX / INT, with pending delta when applicable.
+  for (const sideName of ["player", "ai"]) {
+    const row = $(sideName + "-stat-row");
+    row.innerHTML = "";
+    const stats = ["str", "dex", "int"];
+    for (const stat of stats) {
+      const cmt = committedStatTotal(sideName, stat);
+      const vis = visibleStatTotal(sideName, stat);
+      const cell = document.createElement("div");
+      cell.className = "stat-cell stat-" + stat;
+      cell.innerHTML = `<div class="stat-cell-label">${stat.toUpperCase()}</div><div class="stat-cell-value">${cmt}${vis > cmt ? `<span class="stat-pending">+${vis - cmt}</span>` : ""}</div>`;
+      row.appendChild(cell);
+    }
+  }
+
+  renderCreatureGrid("player");
+  renderCreatureGrid("ai");
+  renderSimpleSlot("player", "structure");
+  renderSimpleSlot("ai", "structure");
+  renderSimpleSlot("player", "action");
+  renderSimpleSlot("ai", "action");
+
+  renderHand();
+  renderLog();
+  renderControls();
+}
+
+function renderCreatureGrid(side) {
+  const grid = $(side === "player" ? "player-creatures" : "ai-creatures");
+  grid.innerHTML = "";
+  // Player: front-row at top (closer to centerline visually).
+  // AI: front-row at bottom (closer to centerline) — render back row first.
+  let order;
+  if (side === "player") order = ["fl", "fr", "bl", "br"];
+  else order = ["bl", "br", "fl", "fr"];
+
+  const s = state.sides[side];
+
+  for (const pos of order) {
+    const committedCard = s.creatures[pos];
+    const pendingCard = s.pending.creatures[pos];
+    const cell = document.createElement("div");
+    cell.className = "slot";
+    cell.dataset.side = side;
+    cell.dataset.pos = pos;
+    cell.dataset.kind = "creature";
+
+    if (committedCard) {
+      cell.classList.add("has-card");
+      const cardEl = makeCardEl(committedCard, true);
+      // Highlight if this is the player's selected committed creature for movement.
+      if (side === "player" && state.selectedCommittedId === committedCard.instId) {
+        cardEl.classList.add("selected");
+      }
+      // Mark already-moved creatures (visual cue).
+      if (s.movedThisTurn.has(committedCard.instId)) {
+        cardEl.classList.add("moved");
+      }
+      cell.appendChild(cardEl);
+    } else if (pendingCard) {
+      cell.classList.add("has-card", "pending");
+      const cardEl = makeCardEl(pendingCard, true);
+      cardEl.classList.add("pending-card");
+      cell.appendChild(cardEl);
+    } else {
+      const lbl = document.createElement("span");
+      lbl.className = "slot-label";
+      lbl.textContent = pos;
+      cell.appendChild(lbl);
+    }
+
+    if (side === "player") {
+      const inMain = state.phase === "main";
+      const inCombatReveal = state.phase === "combat-reveal";
+      const movementAllowed = inMain || inCombatReveal; // movement spans both commit windows
+
+      // 1) Hand-card placement (main only — creatures can only be played in main).
+      if (inMain) {
+        const sel = state.selectedCardId ? findHandCard(state.selectedCardId) : null;
+        if (sel && sel.type === "creature" && !slotOccupied("player", "creature", pos) && canPay("player", sel)) {
+          cell.classList.add("legal-target");
+          cell.addEventListener("click", () => placeSelectedAt({ kind: "creature", pos }));
+        }
+
+        // 2) Pending placement cancel (main only — pending creature placements only exist in main).
+        if (pendingCard && !sel && !state.selectedCommittedId) {
+          cell.classList.add("can-cancel");
+          cell.addEventListener("click", () => {
+            cancelPendingPlacement("player", "creature", pos);
+            render();
+          });
+        }
+      }
+
+      // 3) Committed creature movement (main + combat-reveal).
+      //    - Click your own committed creature to select it for movement.
+      //    - With one selected, click an adjacent empty slot to move there.
+      if (movementAllowed && committedCard && !state.selectedCardId) {
+        if (state.selectedCommittedId === committedCard.instId) {
+          cell.addEventListener("click", () => {
+            state.selectedCommittedId = null;
+            render();
+          });
+        } else if (!s.movedThisTurn.has(committedCard.instId)) {
+          cell.classList.add("can-select-move");
+          cell.addEventListener("click", () => {
+            state.selectedCommittedId = committedCard.instId;
+            state.selectedCardId = null;
+            render();
+          });
+        }
+      }
+
+      // 4) Movement target: a committed creature is selected and this is an empty adjacent slot.
+      if (movementAllowed && state.selectedCommittedId && !committedCard && !pendingCard) {
+        const movingCreature = findCommittedCreature("player", state.selectedCommittedId);
+        if (movingCreature) {
+          const fromPos = findCreaturePos("player", movingCreature.instId);
+          if (fromPos && isAdjacent(fromPos, pos)) {
+            cell.classList.add("legal-target");
+            cell.addEventListener("click", () => {
+              moveCommittedCreature("player", fromPos, pos);
+              state.selectedCommittedId = null;
+              render();
+            });
+          }
+        }
+      }
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function findCommittedCreature(side, instId) {
+  const s = state.sides[side];
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (s.creatures[pos] && s.creatures[pos].instId === instId) return s.creatures[pos];
+  }
+  return null;
+}
+
+function findCreaturePos(side, instId) {
+  const s = state.sides[side];
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (s.creatures[pos] && s.creatures[pos].instId === instId) return pos;
+  }
+  return null;
+}
+
+function renderSimpleSlot(side, kind) {
+  const slotId = `${side}-${kind}-slot`;
+  const oldSlot = $(slotId);
+  // Clone-replace to wipe any prior event listeners.
+  const slot = oldSlot.cloneNode(false);
+  oldSlot.parentNode.replaceChild(slot, oldSlot);
+  slot.classList.remove("has-card", "legal-target", "illegal-target", "pending", "can-cancel");
+  const s = state.sides[side];
+  const committed = s[kind];
+  const pending = s.pending[kind];
+  if (committed) {
+    slot.classList.add("has-card");
+    slot.appendChild(makeCardEl(committed, true));
+  } else if (pending) {
+    slot.classList.add("has-card", "pending");
+    const el = makeCardEl(pending, true);
+    el.classList.add("pending-card");
+    slot.appendChild(el);
+    // Player can cancel a pending placement during the same commit window it was placed in.
+    if (side === "player" && isCommitWindowFor(kind) && !state.selectedCardId && !state.selectedCommittedId) {
+      slot.classList.add("can-cancel");
+      slot.addEventListener("click", () => {
+        cancelPendingPlacement("player", kind);
+        render();
+      });
+    }
+  } else {
+    const lbl = document.createElement("span");
+    lbl.className = "slot-label";
+    lbl.textContent = kind;
+    slot.appendChild(lbl);
+
+    // Empty slot is a legal placement target if the selected hand card matches and we're in
+    // a commit window for that card's type.
+    if (side === "player" && isCommitWindowFor(kind)) {
+      const sel = state.selectedCardId ? findHandCard(state.selectedCardId) : null;
+      if (sel && sel.type === kind && canPay("player", sel)) {
+        slot.classList.add("legal-target");
+        slot.addEventListener("click", () => placeSelectedAt({ kind }));
+      }
+    }
+  }
+}
+
+function makeCardEl(card, inSlot = false) {
+  const el = document.createElement("div");
+  el.className = `card ${card.type}`;
+  if (card.owner === "ai") el.classList.add("ai-owned");
+  if (inSlot) el.classList.add("in-slot");
+  if (state.selectedCardId === card.instId) el.classList.add("selected");
+
+  // Face-down rendering: show card back instead of identity. Only happens for AI committed cards
+  // in the brief reveal window between commitPendingPlays and revealAllFaceDown.
+  if (card.revealed === false) {
+    el.classList.add("face-down");
+    const back = document.createElement("div");
+    back.className = "card-back";
+    back.textContent = "?";
+    el.appendChild(back);
+    return el;
+  }
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "name";
+  nameEl.textContent = card.name;
+  el.appendChild(nameEl);
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  if (card.cost > 0) {
+    const b = document.createElement("span");
+    b.className = "badge cost";
+    b.textContent = `≥${card.cost} ${(card.costStat || "str").toUpperCase()}`;
+    meta.appendChild(b);
+  }
+  if (card.str > 0) {
+    const b = document.createElement("span");
+    b.className = "badge str";
+    b.textContent = `STR ${card.str}`;
+    meta.appendChild(b);
+  }
+  if (card.dex > 0) {
+    const b = document.createElement("span");
+    b.className = "badge dex";
+    b.textContent = `DEX ${card.dex}`;
+    meta.appendChild(b);
+  }
+  if (card.int > 0) {
+    const b = document.createElement("span");
+    b.className = "badge int";
+    b.textContent = `INT ${card.int}`;
+    meta.appendChild(b);
+  }
+  if (card.hpMax != null) {
+    const b = document.createElement("span");
+    b.className = "badge hp";
+    b.textContent = `HP ${card.hp}/${card.hpMax}`;
+    meta.appendChild(b);
+  }
+  el.appendChild(meta);
+
+  if (card.text) {
+    const t = document.createElement("div");
+    t.className = "text";
+    t.textContent = card.text;
+    el.appendChild(t);
+  }
+
+  // Combat preview lines (creatures in slots, during main phase).
+  if (inSlot && card.type === "creature" && _combatPreview) {
+    const atk = _combatPreview.attackers[card.instId];
+    if (atk) {
+      const previewEl = document.createElement("div");
+      previewEl.className = "preview";
+      let label = `→ ${atk.targetLabel} for ${atk.damage}`;
+      if (atk.killsTarget) label += " (kills)";
+      previewEl.textContent = label;
+      el.appendChild(previewEl);
+    } else if (card.owner === "player") {
+      // Player-owned creature with no attacker entry — explain why.
+      const why = (card.str <= 0) ? "no STR — won't attack" : "back row — won't attack";
+      const previewEl = document.createElement("div");
+      previewEl.className = "preview muted";
+      previewEl.textContent = why;
+      el.appendChild(previewEl);
+    }
+    if (_combatPreview.willDie.has(card.instId)) {
+      const dieEl = document.createElement("div");
+      dieEl.className = "preview die";
+      dieEl.textContent = "will die in combat";
+      el.appendChild(dieEl);
+    }
+  }
+
+  return el;
+}
+
+function renderHand() {
+  const hand = $("hand");
+  hand.innerHTML = "";
+  const inAnyCommitWindow = state.phase === "main" || state.phase === "combat-reveal";
+  for (const card of state.sides.player.hand) {
+    const el = makeCardEl(card, false);
+    const cardWindow = isCommitWindowFor(card.type);
+    const playable = cardWindow && canPay("player", card) && legalTargetsForCard("player", card).length > 0;
+    if (inAnyCommitWindow && !playable) el.classList.add("unplayable");
+    el.addEventListener("click", () => {
+      if (!inAnyCommitWindow) return;
+      if (!cardWindow) {
+        flashLog(`${card.name}: not playable in this phase.`);
+        return;
+      }
+      if (!playable) {
+        const stat = (card.costStat || "str").toUpperCase();
+        const have = committedStatTotal("player", card.costStat || "str");
+        if (!canPay("player", card)) {
+          flashLog(`${card.name}: need ≥${card.cost} ${stat} here (committed: ${have}).`);
+        } else {
+          flashLog(`${card.name}: no legal target slot.`);
+        }
+        return;
+      }
+      // toggle selection; clear any committed-creature selection
+      state.selectedCardId = (state.selectedCardId === card.instId) ? null : card.instId;
+      state.selectedCommittedId = null;
+      render();
+    });
+    hand.appendChild(el);
+  }
+}
+
+function renderLog() {
+  const log = $("log");
+  log.innerHTML = "";
+  for (const e of state.log.slice(-80)) {
+    const div = document.createElement("div");
+    div.className = "entry " + (e.kind || "");
+    div.textContent = e.msg;
+    log.appendChild(div);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderControls() {
+  const btn = $("btn-advance");
+  if (state.gameOver) {
+    btn.disabled = true;
+    btn.textContent = "Game Over";
+    return;
+  }
+  switch (state.phase) {
+    case "main":
+      btn.disabled = false;
+      btn.textContent = "End Main Phase";
+      break;
+    case "combat-reveal":
+      btn.disabled = false;
+      btn.textContent = "Resolve Combat";
+      break;
+    case "reveal":
+    case "combat-resolve":
+    case "cleanup":
+    case "upkeep":
+    case "draw":
+      btn.disabled = true;
+      btn.textContent = "…";
+      break;
+    default:
+      btn.disabled = true;
+      btn.textContent = "—";
+  }
+}
+
+function findHandCard(instId) {
+  return state.sides.player.hand.find(c => c.instId === instId) || null;
+}
+
+function placeSelectedAt(target) {
+  const card = findHandCard(state.selectedCardId);
+  if (!card) return;
+  if (!canPay("player", card)) return;
+  placeCard("player", card, target);
+  state.selectedCardId = null;
+  render();
+}
+
+function flashLog(msg) {
+  logEntry(msg, "cleanup");
+  renderLog();
+}
+
+// ---------- Game over ----------
+function showGameOver() {
+  $("game-over-title").textContent =
+    state.gameOver === "playerWin" ? "You win" :
+    state.gameOver === "aiWin" ? "You lose" : "Draw";
+  $("game-over-text").textContent =
+    `Final HP — Player ${state.sides.player.hp} · AI ${state.sides.ai.hp}. Turn ${state.turn}.`;
+  $("game-over").classList.add("show");
+}
+
+function hideGameOver() {
+  $("game-over").classList.remove("show");
+}
+
+// ---------- Init / wiring ----------
+function start() {
+  state = freshState();
+  hideGameOver();
+  logEntry(`v0 prototype — single encounter, one stat (STR), no fog of war, dumbest-possible AI.`);
+  startNewTurn();
+}
+
+// ---------- Export ----------
+function buildExport() {
+  const ts = new Date().toISOString();
+  const lines = [];
+  lines.push(`=== Game v1 export (${ts}) ===`);
+  lines.push(`Turn ${state.turn} · Phase: ${state.phase} · Priority: ${state.firstSide}`);
+  lines.push(`Player HP: ${state.sides.player.hp} · AI HP: ${state.sides.ai.hp}`);
+  lines.push(`Player STR/DEX/INT (committed): ${committedStatTotal("player","str")}/${committedStatTotal("player","dex")}/${committedStatTotal("player","int")}`);
+  lines.push(`AI STR/DEX/INT (committed):     ${committedStatTotal("ai","str")}/${committedStatTotal("ai","dex")}/${committedStatTotal("ai","int")}`);
+  lines.push(``);
+
+  // Compact human-readable board.
+  function describeSide(name) {
+    const s = state.sides[name];
+    const out = [];
+    out.push(`  ${name.toUpperCase()}:`);
+    out.push(`    Hand (${s.hand.length}): ${s.hand.map(c => c.name).join(", ") || "—"}`);
+    out.push(`    Deck ${s.deck.length} · Discard ${s.discard.length} · Graveyard ${s.graveyard.length}`);
+    const cs = ["fl","fr","bl","br"].map(p => {
+      const c = s.creatures[p];
+      const pc = s.pending.creatures[p];
+      if (c) return `${p}=${c.name}[STR${c.str || 0}/DEX${c.dex || 0}/INT${c.int || 0}/HP${c.hp}/${c.hpMax}${c.revealed === false ? " face-down" : ""}]`;
+      if (pc) return `${p}=(pending)${pc.name}`;
+      return `${p}=—`;
+    });
+    out.push(`    Creatures: ${cs.join("  ")}`);
+    out.push(`    Structure: ${s.structure ? s.structure.name : (s.pending.structure ? "(pending)"+s.pending.structure.name : "—")}`);
+    out.push(`    Action:    ${s.action ? s.action.name : (s.pending.action ? "(pending)"+s.pending.action.name : "—")}`);
+    return out.join("\n");
+  }
+  lines.push(describeSide("player"));
+  lines.push(describeSide("ai"));
+  lines.push(``);
+
+  // Full log.
+  lines.push(`=== Log ===`);
+  for (const e of state.log) {
+    lines.push(`[${e.kind || "info"}] ${e.msg}`);
+  }
+  lines.push(``);
+
+  // JSON snapshot for full reconstruction. Strip cyclic / Set fields.
+  function serializableSide(s) {
+    return {
+      hp: s.hp,
+      deck: s.deck.map(serializableCard),
+      hand: s.hand.map(serializableCard),
+      discard: s.discard.map(serializableCard),
+      graveyard: s.graveyard.map(serializableCard),
+      creatures: Object.fromEntries(["fl","fr","bl","br"].map(p => [p, s.creatures[p] ? serializableCard(s.creatures[p]) : null])),
+      structure: s.structure ? serializableCard(s.structure) : null,
+      action: s.action ? serializableCard(s.action) : null,
+      pending: {
+        creatures: Object.fromEntries(["fl","fr","bl","br"].map(p => [p, s.pending.creatures[p] ? serializableCard(s.pending.creatures[p]) : null])),
+        structure: s.pending.structure ? serializableCard(s.pending.structure) : null,
+        action: s.pending.action ? serializableCard(s.pending.action) : null
+      },
+      movedThisTurn: Array.from(s.movedThisTurn || [])
+    };
+  }
+  function serializableCard(c) {
+    return {
+      instId: c.instId, defKey: c.defKey, name: c.name, type: c.type,
+      cost: c.cost, costStat: c.costStat, str: c.str, dex: c.dex, int: c.int,
+      hp: c.hp, hpMax: c.hpMax, effect: c.effect, revealed: c.revealed
+    };
+  }
+  const snapshot = {
+    turn: state.turn,
+    phase: state.phase,
+    firstSide: state.firstSide,
+    gameOver: state.gameOver,
+    sides: {
+      player: serializableSide(state.sides.player),
+      ai: serializableSide(state.sides.ai)
+    }
+  };
+  lines.push(`=== JSON snapshot ===`);
+  lines.push(JSON.stringify(snapshot, null, 2));
+  return lines.join("\n");
+}
+
+function exportToClipboard() {
+  const text = buildExport();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => flashLog("Game state copied to clipboard."),
+      () => fallbackExport(text)
+    );
+  } else {
+    fallbackExport(text);
+  }
+}
+
+function fallbackExport(text) {
+  // Older browsers without clipboard API: drop into a textarea and let user copy.
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.top = "10px";
+  ta.style.left = "10px";
+  ta.style.width = "80vw";
+  ta.style.height = "60vh";
+  ta.style.zIndex = "1000";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  flashLog("Clipboard not available — manually copy the text shown, then click anywhere to dismiss.");
+  const dismiss = () => { ta.remove(); document.removeEventListener("click", dismiss, true); };
+  setTimeout(() => document.addEventListener("click", dismiss, true), 100);
+}
+
+function exportToFile() {
+  const text = buildExport();
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `game-export-turn${state.turn}-${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  flashLog("Game state downloaded.");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("btn-advance").addEventListener("click", advancePhase);
+  $("btn-restart").addEventListener("click", start);
+  $("btn-go-restart").addEventListener("click", start);
+  $("btn-export").addEventListener("click", (e) => {
+    if (e.shiftKey) exportToFile();
+    else exportToClipboard();
+  });
+  start();
+});
+</script>
+
+</body>
+</html>

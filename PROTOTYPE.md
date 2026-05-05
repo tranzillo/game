@@ -169,7 +169,7 @@ The version that tests the **biggest-known UX risk**: rendering 1–N location c
 
 Increments past v2 are sketched here so we have a sense of the path, but each one will get its own concrete spec when we approach it.
 
-- **v3:** Overworld map with neutral and contested nodes. Encounter triggered by overworld movement. Player traverses a minimum-viable map (~6–8 nodes, hand-authored) from start to a single boss node. AI doesn't yet spread; cards are placed at nodes by the level designer, not generated.
+- **v3:** Overworld map with hand-authored neutral and contested nodes. Encounter triggered by overworld movement. Player traverses a minimum-viable map (~6–8 nodes) from start to a single boss node. AI doesn't yet spread; AI cards are placed at nodes by the level designer, not generated. **First neutral-encounter implementations** — 3-5 hand-authored neutral-puzzle archetypes (siren, forge, wishing well, etc.) appear at neutral nodes; the unified hostile/neutral encounter framework (see DESIGN.md) becomes the actual encounter engine. Neutral cards live as third-party permanents on the board; engagement-cost rule active; AI in-encounter contesting of neutrals via adjacency rule.
 - **v4:** AI summoner spreads from the boss node each overworld turn. Real spread-and-supply-line behavior. Difficulty curves emerge from the simulation rather than hand-authored placements.
 - **v5:** Persistence across encounters. Player structures stay on the map. Supply-line scope effects start to mean something.
 - **v6:** Full stat list (add INT, FAITH, VIT). Card pool grows substantially. Color identities start to feel distinct.

@@ -1,0 +1,3187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Game v2</title>
+<style>
+  :root {
+    --bg: #1a1a1f;
+    --panel: #25252d;
+    --panel-2: #2f2f38;
+    --border: #3a3a45;
+    --text: #e8e8ee;
+    --muted: #9999a8;
+    --accent: #f0c040;
+    --player: #4a8aef;
+    --ai: #ef5a5a;
+    --ok: #6fcf6f;
+    --warn: #efb060;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  #header { padding: 8px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  #header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  #header .phase-info { color: var(--muted); }
+  #header .turn-info { color: var(--accent); font-weight: 600; }
+
+  #board { flex: 1; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; padding: 12px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+  .summoner { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; transition: box-shadow 0.18s, border-color 0.18s; }
+  .summoner.player { border-left: 4px solid var(--player); }
+  .summoner.ai { border-left: 4px solid var(--ai); }
+  .summoner.has-priority { box-shadow: 0 0 0 2px var(--accent); }
+  .summoner .name { font-weight: 600; }
+  .summoner .durability { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .summoner .deck-info { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .priority-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--accent);
+    color: #1a1a1f;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    display: none;
+  }
+  .priority-badge.show { display: inline-block; }
+  .incoming-dmg {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(239, 90, 90, 0.2);
+    color: var(--ai);
+    display: none;
+  }
+  .incoming-dmg.show { display: inline-block; }
+
+  /* Locations row: one column per location, side-by-side, each its own .location card. */
+  #locations-row {
+    display: grid;
+    grid-template-columns: repeat(var(--loc-count, 2), 1fr);
+    gap: 12px;
+  }
+
+  .location {
+    display: grid;
+    grid-template-columns: 70px 1fr 70px;
+    grid-template-rows: auto auto auto auto auto;
+    /* rows: label / ai-structure / ai-side / player-side / player-structure */
+    gap: 6px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .location-label { grid-column: 1 / 4; text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; }
+
+  .ai-structure-row    { grid-column: 1 / 4; grid-row: 2 / 3; display: grid; grid-template-columns: 70px 1fr 70px; gap: 6px; align-items: center; }
+  .player-structure-row { grid-column: 1 / 4; grid-row: 5 / 6; display: grid; grid-template-columns: 70px 1fr 70px; gap: 6px; align-items: center; }
+  .structure-row-label { color: var(--muted); font-size: 10px; text-align: center; }
+  .structure-slot { min-height: 60px; }
+
+  .ai-side     { grid-column: 2 / 3; grid-row: 3 / 4; }
+  .player-side { grid-column: 2 / 3; grid-row: 4 / 5; }
+
+  .creature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .side-info {
+    display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center;
+    padding: 4px; border-radius: 4px; background: var(--panel-2); font-size: 12px;
+  }
+  .stat-row { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .stat-cell { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 2px 4px; border-radius: 3px; background: rgba(255,255,255,0.02); font-size: 11px; }
+  .stat-cell-label { color: var(--muted); font-weight: 600; letter-spacing: 0.5px; }
+  .stat-cell-value { font-weight: 700; }
+  .stat-cell.stat-force .stat-cell-value { color: var(--ai); }
+  .stat-cell.stat-tempo .stat-cell-value { color: var(--ok); }
+  .stat-cell.stat-insight .stat-cell-value { color: #60c0e0; }
+  .stat-pending { color: var(--muted); font-weight: 400; font-size: 10px; margin-left: 4px; }
+
+  .ai-info     { grid-column: 1 / 2; grid-row: 3 / 4; }
+  .player-info { grid-column: 1 / 2; grid-row: 4 / 5; }
+  .ai-action-slot     { grid-column: 3 / 4; grid-row: 3 / 4; }
+  .player-action-slot { grid-column: 3 / 4; grid-row: 4 / 5; }
+
+  .slot {
+    background: var(--panel-2);
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: default;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .slot.legal-target { border-color: var(--accent); background: rgba(240, 192, 64, 0.08); cursor: pointer; }
+  .slot.illegal-target { opacity: 0.5; }
+  .slot-label { user-select: none; }
+  .slot.has-card { padding: 4px; border-style: solid; }
+  .slot.has-card.pending { border-style: dashed; border-color: var(--accent); background: rgba(240, 192, 64, 0.06); }
+  .slot.can-cancel { cursor: pointer; }
+  .slot.can-select-move { cursor: pointer; }
+  .slot.can-select-move:hover { border-color: var(--player); }
+  .card.pending-card { opacity: 0.85; box-shadow: inset 0 0 0 1px rgba(240, 192, 64, 0.4); }
+  .card.moved { opacity: 0.7; }
+  .card.moved::after { content: "moved"; position: absolute; top: 2px; right: 2px; font-size: 9px; color: var(--muted); background: var(--panel-2); padding: 1px 3px; border-radius: 2px; }
+  .card { position: relative; }
+  .card.face-down { background: linear-gradient(135deg, #2a2a35 0%, #1f1f28 50%, #2a2a35 100%); border-style: dashed; }
+  /* Player's own committed-but-not-yet-flipped cards: visible but distinct, so the player knows
+     they haven't flipped up yet (and any flip-up triggers haven't fired). */
+  .card.pre-flip { box-shadow: inset 0 0 0 2px rgba(74, 138, 239, 0.5); opacity: 0.92; }
+  .card.pre-flip::before { content: "face-down"; position: absolute; bottom: 2px; right: 2px; font-size: 9px; color: var(--player); background: var(--panel-2); padding: 1px 3px; border-radius: 2px; }
+  .card.face-down .card-back { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 60px; font-size: 24px; color: var(--muted); font-weight: 700; }
+  @keyframes flip-in {
+    0% { transform: rotateY(180deg); opacity: 0.3; }
+    50% { transform: rotateY(90deg); opacity: 0; }
+    100% { transform: rotateY(0); opacity: 1; }
+  }
+  .card.just-revealed { animation: flip-in 0.55s ease-out; }
+
+  .structure-row { grid-column: 1 / 4; grid-row: 1 / 2; display: none; } /* not currently used; reserved */
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px;
+    cursor: pointer;
+    user-select: none;
+    width: 110px;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s;
+    font-size: 12px;
+  }
+  .card.in-slot { width: auto; min-height: auto; height: 100%; }
+  .card.creature { border-left: 3px solid var(--player); }
+  .card.creature.ai-owned { border-left: 3px solid var(--ai); }
+  .card.structure { border-left: 3px solid var(--ok); }
+  .card.action { border-left: 3px solid var(--warn); }
+  .card.selected { outline: 2px solid var(--accent); transform: translateY(-2px); }
+  .card.unplayable { opacity: 0.45; cursor: not-allowed; }
+  .card .name { font-weight: 600; line-height: 1.1; }
+  .card .meta { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .card .badge { font-size: 10px; padding: 1px 5px; background: var(--panel-2); border-radius: 3px; color: var(--muted); }
+  .card .badge.cost { background: rgba(240, 192, 64, 0.18); color: var(--accent); }
+  .card .badge.force { background: rgba(239, 90, 90, 0.18); color: var(--ai); }
+  .card .badge.tempo { background: rgba(111, 207, 111, 0.18); color: var(--ok); }
+  .card .badge.insight { background: rgba(96, 192, 224, 0.18); color: #60c0e0; }
+  .card .badge.durability { background: rgba(74, 138, 239, 0.18); color: var(--player); }
+  .card .text { color: var(--muted); font-size: 10px; line-height: 1.25; }
+  .card .preview { font-size: 10px; line-height: 1.25; margin-top: 2px; padding: 2px 4px; border-radius: 3px; background: rgba(239, 90, 90, 0.12); color: var(--ai); }
+  .card .preview.muted { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
+  .card .preview.die { background: rgba(239, 90, 90, 0.25); color: #ff8080; font-weight: 600; }
+
+  .structure-zone, .action-zone {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* Hand */
+  #hand-area { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  #hand-area .hand-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  #hand { display: flex; gap: 8px; flex-wrap: wrap; min-height: 100px; }
+
+  #ai-hand-info { padding: 6px 12px; color: var(--muted); font-size: 12px; text-align: right; }
+
+  /* Controls */
+  #controls { display: flex; justify-content: center; gap: 12px; padding: 8px; }
+  button {
+    background: var(--accent);
+    color: #1a1a1f;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  button:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+
+  #log {
+    max-width: 1100px;
+    margin: 0 auto 12px;
+    width: calc(100% - 24px);
+    max-height: 200px;
+    overflow-y: auto;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  #log .entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: pre-wrap; }
+  #log .entry:last-child { border-bottom: none; }
+  #log .entry.combat { color: var(--ai); }
+  #log .entry.combat-header { color: var(--accent); font-weight: 600; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 4px; }
+  #log .entry.combat-detail { color: var(--text); padding-left: 8px; }
+  #log .entry.draw { color: var(--player); }
+  #log .entry.phase { color: var(--accent); font-weight: 600; }
+  #log .entry.cleanup { color: var(--muted); }
+  #log .entry.win { color: var(--ok); font-weight: 700; }
+  #log .entry.lose { color: var(--ai); font-weight: 700; }
+
+  #game-over {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7); z-index: 10;
+  }
+  #game-over.show { display: flex; }
+  #game-over .panel { background: var(--panel); padding: 24px 32px; border-radius: 8px; text-align: center; border: 1px solid var(--border); }
+  #game-over h2 { margin-top: 0; }
+  #game-over button { margin-top: 12px; }
+
+  .stat-pill { display: inline-block; padding: 1px 6px; border-radius: 3px; background: rgba(239, 90, 90, 0.18); color: var(--ai); font-size: 11px; margin-right: 4px; }
+
+  /* ---------- v3 overworld view ---------- */
+  #overworld {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    padding: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .overworld-svg { width: 100%; max-width: 800px; height: auto; }
+  .ow-edge { stroke: var(--border); stroke-width: 2; }
+  .ow-node { stroke: var(--border); stroke-width: 2; fill: var(--panel-2); transition: fill 0.12s, stroke 0.12s; }
+  .ow-node-start    { fill: #444; }
+  .ow-node-hostile  { fill: rgba(239, 90, 90, 0.3); stroke: var(--ai); }
+  .ow-node-neutral  { fill: rgba(96, 192, 224, 0.25); stroke: #60c0e0; }
+  .ow-node-boss     { fill: rgba(240, 192, 64, 0.25); stroke: var(--accent); stroke-width: 3; }
+  .ow-node-status-completed { opacity: 0.4; }
+  .ow-node-pawn  { stroke: var(--player); stroke-width: 4; }
+  .ow-node-legal { filter: drop-shadow(0 0 6px var(--accent)); }
+  .ow-node-legal:hover { fill: rgba(240, 192, 64, 0.35); }
+  .ow-node-label { font-size: 22px; font-weight: 700; fill: var(--text); pointer-events: none; user-select: none; }
+  .ow-node-name  { font-size: 11px; fill: var(--muted); pointer-events: none; user-select: none; }
+  .ow-node-group { cursor: default; }
+  .overworld-help {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 13px; color: var(--text); text-align: center;
+  }
+  .overworld-help .muted { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Game v2 — multi-location prototype</h1>
+  <div>
+    <span class="phase-info" id="phase-info">Phase: -</span>
+    &nbsp;|&nbsp;
+    <span class="turn-info" id="turn-info">Turn 1</span>
+  </div>
+</div>
+
+<div id="ai-hand-info"></div>
+
+<div id="board">
+  <div class="summoner ai" id="ai-summoner">
+    <span class="name">AI</span>
+    <span class="durability" id="ai-durability">20</span>
+    <span class="incoming-dmg" id="ai-incoming"></span>
+    <span class="priority-badge" id="ai-priority-badge"></span>
+    <span class="deck-info" id="ai-deck-info"></span>
+  </div>
+
+  <!-- Locations row: render() fills this container with one .location column per LOCATION_COUNT. -->
+  <div id="locations-row"></div>
+
+  <div class="summoner player" id="player-summoner">
+    <span class="name">Player</span>
+    <span class="durability" id="player-durability">20</span>
+    <span class="incoming-dmg" id="player-incoming"></span>
+    <span class="priority-badge" id="player-priority-badge"></span>
+    <span class="deck-info" id="player-deck-info"></span>
+  </div>
+</div>
+
+<div id="hand-area">
+  <div class="hand-label">Your hand (click a card, then click a legal target slot to play)</div>
+  <div id="hand"></div>
+</div>
+
+<div id="controls">
+  <button id="btn-advance">End Main Phase</button>
+  <button id="btn-leave-encounter" class="secondary" title="Leave the neutral encounter and return to the overworld.">Leave Encounter</button>
+  <button id="btn-export" class="secondary" title="Click: copy state to clipboard. Shift-click: download as a .txt file.">Export State</button>
+  <button id="btn-restart" class="secondary">Restart Run</button>
+</div>
+
+<div id="log"></div>
+
+<div id="game-over">
+  <div class="panel">
+    <h2 id="game-over-title">Game Over</h2>
+    <p id="game-over-text"></p>
+    <button id="btn-go-restart">Play again</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------- Card definitions ----------
+// Each definition is a template; instances are created with createCard().
+// `aiHints` is per-card metadata used by the AI scoring function (DECISIONS.md, AI architecture).
+const CARD_DEFS = {
+  recruit: {
+    name: "Recruit",
+    type: "creature",
+    cost: 0,
+    force: 1,
+    tempo: 0,
+    durability: 2,
+    text: "Free body. Cheap Force for the location.",
+    aiHints: { preferFront: true }
+  },
+  conscript: {
+    name: "Conscript",
+    type: "creature",
+    cost: 0,
+    force: 1,
+    tempo: 0,
+    durability: 1,
+    text: "Free body. Fragile.",
+    aiHints: { preferFront: true }
+  },
+  soldier: {
+    name: "Soldier",
+    type: "creature",
+    cost: 1,
+    force: 2,
+    tempo: 0,
+    durability: 3,
+    text: "Solid mid-cost striker.",
+    aiHints: { preferFront: true }
+  },
+  champion: {
+    name: "Champion",
+    type: "creature",
+    cost: 3,
+    force: 4,
+    tempo: 0,
+    durability: 4,
+    text: "Big finisher. Needs ≥3 Force here.",
+    // Avoid contested columns (where the enemy has a creature in front to trade with).
+    // Prefer empty enemy columns so it can swing through to the summoner.
+    aiHints: { preferUncontestedColumn: true, preferFront: true }
+  },
+  banner: {
+    name: "Banner of War",
+    type: "structure",
+    cost: 1,
+    force: 2,
+    tempo: 0,
+    durability: null,
+    text: "Structure. +2 Force presence here.",
+    aiHints: {}
+  },
+  skirmisher: {
+    name: "Skirmisher",
+    type: "creature",
+    cost: 0,
+    force: 1,
+    tempo: 2,
+    durability: 2,
+    text: "Strikes early. Glass cannon.",
+    // Skirmisher likes empty enemy columns or low-Durability enemy fronts (where its first-strike kills cleanly).
+    aiHints: { preferFront: true, preferLowHpFront: true }
+  },
+  mage: {
+    name: "Mage",
+    type: "creature",
+    cost: 0,
+    force: 0,
+    tempo: 0,
+    insight: 1,
+    durability: 1,
+    text: "Prints 1 Insight here. No combat threat. Fragile.",
+    // Mage MUST go to back row, ideally behind a friendly front-row blocker.
+    aiHints: { preferBack: true, requireBlocker: true, fragileMustProtect: true }
+  },
+  spark: {
+    name: "Spark",
+    type: "action",
+    cost: 1,
+    costStat: "insight",
+    force: 0,
+    tempo: 1,
+    durability: null,
+    effect: "deal2",
+    text: "Deal 2 damage here. Needs ≥1 Insight here.",
+    // Per damage fall-through rule: hits a random enemy creature here, or the opposing summoner
+    // if no enemy creatures here. Card text doesn't need to print "to the summoner" — implicit.
+    aiHints: { damagePreferTarget: true }
+  },
+  counterspell: {
+    name: "Counterspell",
+    type: "action",
+    cost: 2,
+    costStat: "insight",
+    force: 0,
+    tempo: 2,
+    durability: null,
+    effect: "counterspell",
+    text: "Send all actions in spell slots to the graveyard (including this). Needs ≥2 Insight here.",
+    // Counterspell is a gamble — only worth it when there's an opposing action to target.
+    // (In v1, the AI doesn't see the player's pending plays, so this is harder to judge.)
+    aiHints: { requiresOpposingAction: true }
+  },
+  // SCOPE EXAMPLE (v2): the first card to use the "at all your locations" scope rule.
+  // Demonstrates that wider scope is a printed premium — Heralding Spark costs more Insight than
+  // Spark and only deals 1 (not 2), but hits at every location instead of just here.
+  // Per the universal damage fall-through rule, an empty enemy location → 1 damage to opposing
+  // summoner (one fall-through instance per empty location). Implicit, not printed.
+  heraldingSpark: {
+    name: "Heralding Spark",
+    type: "action",
+    cost: 2,
+    costStat: "insight",
+    force: 0,
+    tempo: 1,
+    durability: null,
+    effect: "deal1all",
+    text: "Deal 1 damage at each of your locations. Needs ≥2 Insight here.",
+    aiHints: { damageAllLocations: true }
+  },
+
+  // ---------- v3 neutral encounter cards ----------
+  // Neutral cards live on the OTHER side of the board (alongside any AI cards), distinguished from
+  // AI cards only by their owner tag ("neutral"). They occupy the same slot grid as AI cards.
+  // Per the unified-encounter framework, neutral cards do NOT contribute to either side's stat
+  // totals. They have triggered behaviors that fire at phase boundaries (end of cleanup, start of
+  // upkeep, etc.), and deliver a reward when the player engages by committing creatures to the same
+  // location.
+
+  // Siren — Blue/coastal neutral. Deck-thin reward. The player commits a creature here; at end of
+  // cleanup the siren takes itself + a non-neutral creature here out of the run permanently.
+  siren: {
+    name: "Siren",
+    type: "creature",       // structurally a creature (occupies a creature slot)
+    cost: 0,                // never paid — neutral cards are spawned by the location
+    costStat: "force",
+    force: 0,               // does not fight
+    tempo: 0,
+    insight: 0,
+    durability: 4,          // hard to destroy; the puzzle is meant to be engaged with
+    effect: "siren",        // resolved at end of cleanup
+    text: "At end of cleanup, this removes itself and another non-neutral creature here from the run.",
+    aiHints: {}
+  },
+
+  // Forge — Red/mountain neutral. Stat-bump reward. At start of upkeep, the highest-Force friendly
+  // creature here gains +1 Force permanently in the run deck. Forge loses 1 Durability per tick.
+  forge: {
+    name: "Forge",
+    type: "structure",      // structurally a structure (no attack, occupies the structure slot)
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: 5,
+    effect: "forge",        // resolved at start of upkeep
+    text: "At start of upkeep, the highest-Force friendly creature here gains +1 Force permanently. Then this loses 1 Durability.",
+    aiHints: {}
+  },
+
+  // ---------- v3 flip-up trigger demo cards ----------
+  // These cards exist to exercise the flip-up trigger engine + tokens + Inert. Their effects are
+  // intentionally simple and NOT design candidates — real-game cards will have higher-leverage
+  // flip-up triggers that interact with mechanic families (Lurk, Coward, etc). These are demos.
+
+  // Combat Engineer (Green creature). Demonstrates token spawning via flip-up.
+  combatEngineer: {
+    name: "Combat Engineer",
+    type: "creature",
+    cost: 1,
+    costStat: "force",
+    force: 1,
+    tempo: 1,
+    durability: 2,
+    onFlipUp: "spawnSandbag",
+    text: "On flip-up: drop a Sandbag in an empty front-row slot here.",
+    aiHints: { preferBack: true } // engineer wants to live; drop her behind a sandbag
+  },
+
+  // Sandbag (Inert token). Spawned by Combat Engineer's flip-up. Has Durability for damage-soaking
+  // but no Force/Tempo/Insight, can't be buffed. Tokens vanish on death (no graveyard entry).
+  sandbag: {
+    name: "Sandbag",
+    type: "creature",
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: 3,
+    inert: true,
+    text: "Inert. A wall of sand.",
+    aiHints: {}
+  },
+
+  // Herald (White creature). Demonstrates self/friendly buff trigger that lands fully at any
+  // moment (no opposing target needed).
+  herald: {
+    name: "Herald",
+    type: "creature",
+    cost: 0,
+    costStat: "force",
+    force: 1,
+    tempo: 0,
+    durability: 2,
+    onFlipUp: "buffFriendlyForceHere",
+    text: "On flip-up: a friendly creature here gains +1 Force until end of turn.",
+    aiHints: { preferFront: true }
+  },
+
+  // Sapper (Red creature). Demonstrates board-targeting damage trigger. Will fizzle on round 1 of
+  // a fresh encounter (no enemy presence yet) but lands on subsequent re-flips via stealth or as a
+  // mid-encounter commit.
+  sapper: {
+    name: "Sapper",
+    type: "creature",
+    cost: 0,
+    costStat: "force",
+    force: 1,
+    tempo: 1,
+    durability: 1,
+    onFlipUp: "damage1Here",
+    text: "On flip-up: deal 1 damage here.",
+    aiHints: { preferFront: true }
+  }
+};
+
+// 13-card v1 deck — mixed Force/Tempo/Insight to exercise the cost system and Tempo-ordered combat.
+// ---------- Multi-location config ----------
+// v3: each encounter is a SINGLE LOCATION (the destination node). Multi-location-per-encounter
+// returns in a later prototype increment. v2's location-count-agnostic code paths still work;
+// LOCATION_COUNT is just set to 1 for v3 encounters. The location's biome label comes from the
+// node the encounter is rooted at — see loadEncounterFromNode below.
+const LOCATION_COUNT = 1;
+let LOC_NAMES = ["Encounter"]; // overwritten per-encounter when an encounter is loaded
+
+// ---------- v3 overworld config ----------
+// Hand-authored map: 6 nodes from start to boss with a two-path branching structure.
+// Each path has one neutral encounter and one hostile encounter, in different orders, so the
+// player picks not which content but which sequence of content to face.
+const WORLD_DEFS = {
+  nodes: [
+    { id: "start", x: 1, y: 2, biome: "Crossroads",  kind: "start", contents: null,
+      label: "Crossroads (start)" },
+    // Top branch: neutral first, then hostile.
+    { id: "B",     x: 2, y: 1, biome: "Coastal",     kind: "neutral", contents: { neutralKey: "siren" },
+      label: "Singing Cliffs" },
+    { id: "E",     x: 3, y: 1, biome: "Mountain",    kind: "hostile", contents: { aiPlacements: [
+        { defKey: "soldier", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "soldier", slot: { kind: "creature", pos: "fr" } },
+        { defKey: "banner",  slot: { kind: "structure" } }
+      ]}, label: "Iron Pass" },
+    // Bottom branch: hostile first, then neutral.
+    { id: "C",     x: 2, y: 3, biome: "Forest",      kind: "hostile", contents: { aiPlacements: [
+        { defKey: "recruit", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "skirmisher", slot: { kind: "creature", pos: "fr" } }
+      ]}, label: "Wooded Skirmish" },
+    { id: "D",     x: 3, y: 3, biome: "Mountain",    kind: "neutral", contents: { neutralKey: "forge" },
+      label: "Smith's Fire" },
+    { id: "boss",  x: 4, y: 2, biome: "Throne",      kind: "boss",    contents: { aiPlacements: [
+        { defKey: "champion", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "soldier",  slot: { kind: "creature", pos: "fr" } },
+        { defKey: "mage",     slot: { kind: "creature", pos: "br" } },
+        { defKey: "banner",   slot: { kind: "structure" } }
+      ]}, label: "The Throne" }
+  ],
+  edges: [
+    ["start", "B"], ["start", "C"],
+    ["B", "E"], ["C", "D"],
+    ["E", "boss"], ["D", "boss"]
+  ],
+  startNode: "start",
+  bossNode: "boss"
+};
+
+function buildStartingDeck() {
+  // 14-card v2 deck — adds Heralding Spark (the first scope-printed card: "at all your locations").
+  return [
+    "recruit", "conscript",
+    "soldier", "soldier",
+    "champion",
+    "banner", "banner",
+    "skirmisher",
+    "mage",
+    "spark",
+    "counterspell",
+    "heraldingSpark",
+    // v3 flip-up demo cards (engine demos, not card-design candidates):
+    "combatEngineer",
+    "herald",
+    "sapper"
+  ];
+}
+
+// ---------- State ----------
+function createCard(defKey, owner) {
+  const def = CARD_DEFS[defKey];
+  return {
+    instId: nextInstId(),
+    defKey,
+    owner,
+    name: def.name,
+    type: def.type,
+    cost: def.cost,
+    costStat: def.costStat || "force", // which stat the cost is checked against ("force", "insight", etc.)
+    force: def.force || 0,
+    tempo: def.tempo || 0,
+    insight: def.insight || 0,
+    durabilityMax: def.durability,
+    durability: def.durability, // current durability for creatures
+    effect: def.effect,
+    onFlipUp: def.onFlipUp,    // optional flip-up trigger effect key (see fireFlipUpTrigger)
+    inert: def.inert || false, // Inert keyword: cannot gain Force/Tempo/Insight/Resolve
+    text: def.text,
+    aiHints: def.aiHints || {},
+    revealed: true
+  };
+}
+
+let _instCounter = 0;
+function nextInstId() { return ++_instCounter; }
+
+// Build a fresh per-location slot bundle. Each location holds its own creatures/structure/action,
+// plus pending versions during a commit window, plus a per-location movement-tracker.
+function freshLocation() {
+  return {
+    creatures: { fl: null, fr: null, bl: null, br: null },
+    structure: null,
+    action: null,
+    pending: {
+      creatures: { fl: null, fr: null, bl: null, br: null },
+      structure: null,
+      action: null
+    },
+    movedThisTurn: new Set()
+  };
+}
+
+function freshSide(deckKeys, owner) {
+  const locations = [];
+  for (let i = 0; i < LOCATION_COUNT; i++) locations.push(freshLocation());
+  return {
+    durability: 20,
+    deck: shuffle(deckKeys.map(k => createCard(k, owner))),
+    hand: [],          // hand is global to the side
+    discard: [],       // discard is global to the side
+    graveyard: [],     // graveyard is global to the side
+    locations          // per-location committed/pending state lives here
+  };
+}
+
+// Convenience accessor: side.locations[loc].
+function L(sideName, loc) { return state.sides[sideName].locations[loc]; }
+
+// ---------- v3 run / overworld state ----------
+// state.runDeck is the persistent player deck across encounters. It's a list of "deck entries":
+// { defKey, mods: { force?: +N, ... } } so neutral encounters can permanently modify cards
+// (Forge: +1 Force) or remove them (Siren: removed from this list entirely).
+// A fresh card instance is created from each entry at encounter start.
+function buildRunDeck() {
+  return buildStartingDeck().map(defKey => ({ defKey, mods: {} }));
+}
+
+// Apply per-instance mods baked into the deck entry to a card object.
+function applyRunMods(card, mods) {
+  if (!mods) return card;
+  if (mods.force) {
+    card.force = (card.force || 0) + mods.force;
+  }
+  if (mods.tempo) {
+    card.tempo = (card.tempo || 0) + mods.tempo;
+  }
+  if (mods.insight) {
+    card.insight = (card.insight || 0) + mods.insight;
+  }
+  if (mods.durability && card.durability != null) {
+    card.durability += mods.durability;
+    card.durabilityMax = (card.durabilityMax || 0) + mods.durability;
+  }
+  return card;
+}
+
+function freshState() {
+  return {
+    // Run-scoped (persists across encounters):
+    runDeck: buildRunDeck(),     // player's persistent deck (entries with per-card mods)
+    runDurability: 20,            // player Durability persists across encounters
+    world: makeFreshWorld(),     // overworld nodes/edges/pawn
+    view: "overworld",            // "overworld" or "encounter"
+    runOver: null,                // null | "playerWin" | "playerLose"
+    // Encounter-scoped (rebuilt at each encounter-load; null when on the overworld):
+    turn: 1,
+    phase: "setup",
+    activeSide: "player",
+    firstSide: "player",
+    sides: null,                  // { player, ai } — built per encounter
+    currentNodeId: null,          // which node we're encountering at
+    encounterKind: null,          // "hostile" | "neutral" | "boss"
+    selectedCardId: null,
+    selectedCommittedId: null,
+    gameOver: null,               // encounter-scoped result before run-scoped runOver is updated
+    log: []
+  };
+}
+
+// Build a fresh world from WORLD_DEFS. Node status tracks per-node progress.
+function makeFreshWorld() {
+  return {
+    nodes: WORLD_DEFS.nodes.map(n => ({ ...n, status: n.kind === "start" ? "completed" : "unvisited" })),
+    edges: WORLD_DEFS.edges.map(e => [...e]),
+    pawnAt: WORLD_DEFS.startNode,
+    startNode: WORLD_DEFS.startNode,
+    bossNode: WORLD_DEFS.bossNode
+  };
+}
+
+// Find a node by id.
+function getNode(nodeId) {
+  return state.world.nodes.find(n => n.id === nodeId);
+}
+
+// Returns ids of nodes adjacent to the pawn that are legal targets to move to.
+function legalMovesFromPawn() {
+  const pawn = state.world.pawnAt;
+  const adj = [];
+  for (const [a, b] of state.world.edges) {
+    if (a === pawn) adj.push(b);
+    else if (b === pawn) adj.push(a);
+  }
+  // For v3, allow movement to any adjacent node regardless of status. Backtracking through
+  // completed nodes is permitted — encounters at completed nodes are no longer triggered, the
+  // player just walks through.
+  return adj;
+}
+
+// Build a fresh player side from the persistent run deck.
+function freshPlayerSide() {
+  const cards = state.runDeck.map(entry => {
+    const c = createCard(entry.defKey, "player");
+    applyRunMods(c, entry.mods);
+    // Track which run-deck entry this instance came from so we can mutate the deck on Forge etc.
+    c.runDeckEntry = entry;
+    return c;
+  });
+  const locations = [];
+  for (let i = 0; i < LOCATION_COUNT; i++) locations.push(freshLocation());
+  return {
+    durability: state.runDurability,  // carried over from previous encounters
+    deck: shuffle(cards),
+    hand: [],
+    discard: [],
+    graveyard: [],
+    locations
+  };
+}
+
+// Build a fresh AI side. AI deck is the same starting deck for v3 (designer-tuned per-node decks
+// arrive in v4+). Cards in the AI's slots are pre-placed from the node's contents and don't draw
+// from this deck — but the deck still exists for reinforcements during the encounter.
+function freshAiSide() {
+  const cards = buildStartingDeck().map(k => createCard(k, "ai"));
+  const locations = [];
+  for (let i = 0; i < LOCATION_COUNT; i++) locations.push(freshLocation());
+  return {
+    durability: 20,                   // boss only — for non-boss encounters this isn't used
+    deck: shuffle(cards),
+    hand: [],
+    discard: [],
+    graveyard: [],
+    locations
+  };
+}
+
+// Load an encounter for a given node. Builds state.sides, places the node's contents into the
+// AI side's slots (whether AI cards or neutral cards — they share slots), and switches view.
+function loadEncounterFromNode(nodeId) {
+  const node = getNode(nodeId);
+  state.sides = { player: freshPlayerSide(), ai: freshAiSide() };
+  state.currentNodeId = nodeId;
+  state.encounterKind = node.kind;
+  state.turn = 1;
+  state.phase = "setup";
+  state.firstSide = "player";
+  state.gameOver = null;
+  state.selectedCardId = null;
+  state.selectedCommittedId = null;
+  state.log = [];
+  // Per-encounter location label uses the node's display label.
+  LOC_NAMES = [node.label];
+
+  // Place node contents into the AI side's slot grid. AI cards land with owner="ai"; neutral
+  // cards land with owner="neutral". Both occupy the same slot grid (the "other side").
+  if (node.contents && node.contents.aiPlacements) {
+    for (const placement of node.contents.aiPlacements) {
+      const card = createCard(placement.defKey, "ai");
+      // Per the unified-encounter framework, AI cards are face-up at encounter start during
+      // overworld placement (the AI's own bookkeeping), then face-down to the player via the
+      // universal stealth on player arrival, then flip up at end of round 1 upkeep.
+      card.revealed = false;
+      placeIntoLocSlot(L("ai", 0), placement.slot, card);
+    }
+  }
+  if (node.contents && node.contents.neutralKey) {
+    const neutralCard = createCard(node.contents.neutralKey, "neutral");
+    neutralCard.revealed = false;
+    // Neutrals use the same slot model: type "creature" goes into a creature slot, "structure"
+    // into the structure slot. For v3 we hand-pick one default position per neutral type.
+    const slot = neutralCard.type === "creature"
+      ? { kind: "creature", pos: "fl" }
+      : { kind: "structure" };
+    placeIntoLocSlot(L("ai", 0), slot, neutralCard);
+  }
+
+  state.view = "encounter";
+  logEntry(`— Entering ${node.label} (${node.kind}) —`, "phase");
+  startNewTurn();
+}
+
+// Helper: place a card directly into a location's committed slot (bypasses the play queue).
+// Used during encounter-load to set up pre-placed AI / neutral cards.
+function placeIntoLocSlot(lc, slot, card) {
+  if (slot.kind === "creature") {
+    lc.creatures[slot.pos] = card;
+  } else if (slot.kind === "structure") {
+    lc.structure = card;
+  } else if (slot.kind === "action") {
+    lc.action = card;
+  }
+}
+
+// Move the pawn to a new node and trigger an encounter if the node is non-empty.
+// "Empty" nodes (start, or completed) just update pawn position without an encounter.
+function moveTo(nodeId) {
+  const target = getNode(nodeId);
+  if (!target) return;
+  if (!legalMovesFromPawn().includes(nodeId)) return;
+  state.world.pawnAt = nodeId;
+  // Completed nodes: walk through, no encounter.
+  if (target.status === "completed") {
+    render();
+    return;
+  }
+  // Otherwise, trigger an encounter at this node. loadEncounterFromNode handles its own rendering
+  // (renders once face-down for the arrival beat, then continues with startNewTurn after a delay).
+  loadEncounterFromNode(nodeId);
+}
+
+// End the current encounter and return to the overworld. Marks the node completed (or not, based
+// on result) and updates run-scoped state (Durability persists; player deck persists).
+function endEncounter(result) {
+  // result: "playerCleared" | "playerLeft" | "playerLost" | "bossKilled"
+  const node = getNode(state.currentNodeId);
+
+  // Persist player Durability into run state.
+  state.runDurability = state.sides.player.durability;
+
+  if (result === "playerLost") {
+    state.runOver = "playerLose";
+    state.view = "overworld";
+    state.sides = null;
+    state.currentNodeId = null;
+    state.encounterKind = null;
+    render();
+    return;
+  }
+  if (result === "bossKilled") {
+    node.status = "completed";
+    state.runOver = "playerWin";
+    state.view = "overworld";
+    state.sides = null;
+    state.currentNodeId = null;
+    state.encounterKind = null;
+    render();
+    return;
+  }
+  // Otherwise: player cleared (hostile) or chose to leave (neutral).
+  node.status = "completed";
+  state.view = "overworld";
+  state.sides = null;
+  state.currentNodeId = null;
+  state.encounterKind = null;
+  state.gameOver = null;
+  render();
+}
+
+// Check whether the current encounter has ended naturally and call endEncounter accordingly.
+// For v3:
+//   - Boss encounter: ends when boss-side has no creatures or structures left, OR when player Durability=0.
+//     (No retreat condition — boss never retreats; you must clear the board.)
+//   - Hostile encounter: ends when AI side has no creatures or structures (effectively "AI cleared").
+//   - Neutral encounter: ends when the neutral card has consumed itself OR when the player presses
+//     the leave-encounter button (handled separately in UI).
+function checkEncounterEnd() {
+  if (!state.sides) return;
+  if (state.sides.player.durability <= 0) {
+    logEntry(`Your summoner falls. Run lost.`, "lose");
+    endEncounter("playerLost");
+    return;
+  }
+  // Count non-player presence at all locations.
+  let aiCreatures = 0, neutralCards = 0, hasStructure = false;
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (!c) continue;
+      if (c.owner === "neutral") neutralCards++;
+      else aiCreatures++;
+    }
+    if (lc.structure) {
+      if (lc.structure.owner === "neutral") neutralCards++;
+      else hasStructure = true;
+    }
+  }
+  if (state.encounterKind === "boss") {
+    // Boss is cleared when no AI creatures / AI structures remain. (Neutral cards at the boss node
+    // would also have to be cleared — for v3 the boss has no neutrals.)
+    if (aiCreatures === 0 && !hasStructure) {
+      logEntry(`The boss is defeated! You win the run.`, "win");
+      endEncounter("bossKilled");
+    }
+    return;
+  }
+  if (state.encounterKind === "hostile") {
+    if (aiCreatures === 0 && !hasStructure) {
+      logEntry(`Hostile presence cleared. Encounter won.`, "win");
+      endEncounter("playerCleared");
+    }
+    return;
+  }
+  if (state.encounterKind === "neutral") {
+    // Neutral encounter ends when the neutral cards are gone (consumed by their own effects or
+    // destroyed by the player). The player can also choose to leave via the leave-encounter button.
+    if (neutralCards === 0 && aiCreatures === 0 && !hasStructure) {
+      logEntry(`Encounter ended.`, "phase");
+      endEncounter("playerLeft");
+    }
+    return;
+  }
+}
+
+let state = freshState();
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ---------- Logging ----------
+function logEntry(msg, kind = "") {
+  state.log.push({ msg, kind });
+  if (state.log.length > 200) state.log.shift();
+}
+
+// ---------- Stat totals ----------
+// ---------- Stat totals (per location) ----------
+
+// Committed-only stat total at a location. Pending plays do NOT count.
+// This is what cost requirements check against — costs are paid by the *target location's*
+// committed presence only.
+function committedStatTotal(side, loc, stat) {
+  const lc = L(side, loc);
+  let t = 0;
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (lc.creatures[pos]) t += lc.creatures[pos][stat] || 0;
+  }
+  if (lc.structure) t += lc.structure[stat] || 0;
+  return t;
+}
+
+// Visible stat total at a location: committed + pending. Used for display only.
+function visibleStatTotal(side, loc, stat) {
+  const lc = L(side, loc);
+  let t = committedStatTotal(side, loc, stat);
+  for (const pos of ["fl", "fr", "bl", "br"]) {
+    if (lc.pending.creatures[pos]) t += lc.pending.creatures[pos][stat] || 0;
+  }
+  if (lc.pending.structure) t += lc.pending.structure[stat] || 0;
+  return t;
+}
+
+// Sum a stat across all locations on a side (for global-economy effects later, e.g., Insight→draw).
+// Not used by per-location cost checks — those use committedStatTotal(side, loc, stat).
+function globalStatTotal(side, stat) {
+  let t = 0;
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) t += committedStatTotal(side, loc, stat);
+  return t;
+}
+
+// ---------- Card play legality ----------
+function canPay(side, loc, card) {
+  // Cost is checked against committed presence at the *target location only*. Per design:
+  // "every card has a stat-presence cost requirement at its location."
+  const stat = card.costStat || "force";
+  const present = committedStatTotal(side, loc, stat);
+  return present >= (card.cost || 0);
+}
+
+// True if the side has any location where this card could legally land (cost + open slot).
+// Used by hand-card "playable?" highlighting.
+function cardHasAnyLegalPlay(side, card) {
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    if (!canPay(side, loc, card)) continue;
+    if (legalTargetsForCard(side, loc, card).length > 0) return true;
+  }
+  return false;
+}
+
+// A slot is occupied if either committed or pending has something there.
+function slotOccupied(side, loc, kind, pos) {
+  const lc = L(side, loc);
+  if (kind === "creature") return !!(lc.creatures[pos] || lc.pending.creatures[pos]);
+  if (kind === "structure") return !!(lc.structure || lc.pending.structure);
+  if (kind === "action") return !!(lc.action || lc.pending.action);
+  return false;
+}
+
+// Legal placement targets for a card at a specific location.
+// (Cost is NOT checked here — caller does that, since cost depends on target location.)
+function legalTargetsForCard(side, loc, card) {
+  const targets = [];
+  if (card.type === "creature") {
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (slotOccupied(side, loc, "creature", pos)) continue;
+      targets.push({ loc, kind: "creature", pos });
+    }
+  } else if (card.type === "structure") {
+    if (!slotOccupied(side, loc, "structure")) targets.push({ loc, kind: "structure" });
+  } else if (card.type === "action") {
+    if (!slotOccupied(side, loc, "action")) targets.push({ loc, kind: "action" });
+  }
+  return targets;
+}
+
+// Place a card from hand into a side's pending slots at a specific location.
+function placeCard(side, card, target) {
+  const s = state.sides[side];
+  const idx = s.hand.findIndex(c => c.instId === card.instId);
+  if (idx === -1) return false;
+  s.hand.splice(idx, 1);
+  const lc = L(side, target.loc);
+  if (card.type === "creature") {
+    lc.pending.creatures[target.pos] = card;
+  } else if (card.type === "structure") {
+    lc.pending.structure = card;
+  } else if (card.type === "action") {
+    lc.pending.action = card;
+  }
+  return true;
+}
+
+// Reverse a pending placement at a specific location: return the pending card to the side's hand.
+function cancelPendingPlacement(side, loc, kind, pos) {
+  const lc = L(side, loc);
+  let card = null;
+  if (kind === "creature") {
+    card = lc.pending.creatures[pos];
+    lc.pending.creatures[pos] = null;
+  } else if (kind === "structure") {
+    card = lc.pending.structure;
+    lc.pending.structure = null;
+  } else if (kind === "action") {
+    card = lc.pending.action;
+    lc.pending.action = null;
+  }
+  if (card) state.sides[side].hand.push(card);
+  return card;
+}
+
+// At end of main phase, commit all pending placements into the committed slots, at every location.
+// AI commits go down face-down (revealed=false); player's own cards remain visible to the player.
+// The reveal phase (next step) flips AI cards to face-up.
+// At end of main, both sides commit pending → committed slots. Per the unified face-down rule,
+// ALL just-committed cards are face-down (revealed=false) until end of phase, regardless of side.
+// They then flip up via endOfPhaseRevealAndResolve in Tempo order.
+//
+// The fog-of-war asymmetry (the player can see their own committed cards, but AI's are hidden) is
+// a UI/render concern, not a game-state concern: the player's face-down cards are rendered face-up
+// to the owner (see makeCardEl), but their underlying `revealed` state is `false` until they flip.
+// This is what makes player flip-up triggers fire — they go through the same end-of-phase queue
+// as AI commits.
+function commitPendingPlays() {
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      for (const pos of ["fl", "fr", "bl", "br"]) {
+        if (lc.pending.creatures[pos]) {
+          const card = lc.pending.creatures[pos];
+          card.revealed = false;
+          lc.creatures[pos] = card;
+          lc.pending.creatures[pos] = null;
+          if (sideName === "player") {
+            logEntry(`You commit ${card.name} to ${LOC_NAMES[loc]} ${pos} (face-down).`);
+          } else {
+            logEntry(`AI commits a card to ${LOC_NAMES[loc]} ${pos} (face-down).`);
+          }
+        }
+      }
+      if (lc.pending.structure) {
+        const card = lc.pending.structure;
+        card.revealed = false;
+        lc.structure = card;
+        lc.pending.structure = null;
+        if (sideName === "player") logEntry(`You commit ${card.name} (structure, face-down) at ${LOC_NAMES[loc]}.`);
+        else logEntry(`AI commits a structure at ${LOC_NAMES[loc]} (face-down).`);
+      }
+      if (lc.pending.action) {
+        const card = lc.pending.action;
+        card.revealed = false;
+        lc.action = card;
+        lc.pending.action = null;
+        if (sideName === "player") logEntry(`You commit ${card.name} (action, face-down) at ${LOC_NAMES[loc]}.`);
+        else logEntry(`AI commits an action at ${LOC_NAMES[loc]} (face-down).`);
+      }
+    }
+  }
+}
+
+// Flip every face-down committed card to face-up at every location.
+function revealAllFaceDown() {
+  let revealedAny = false;
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      for (const pos of ["fl", "fr", "bl", "br"]) {
+        const c = lc.creatures[pos];
+        if (c && !c.revealed) {
+          c.revealed = true; revealedAny = true;
+          if (sideName === "ai") logEntry(`Revealed: ${c.name} at ${LOC_NAMES[loc]} ${pos}.`);
+        }
+      }
+      if (lc.structure && !lc.structure.revealed) {
+        lc.structure.revealed = true; revealedAny = true;
+        if (sideName === "ai") logEntry(`Revealed: ${lc.structure.name} (AI structure at ${LOC_NAMES[loc]}).`);
+      }
+      if (lc.action && !lc.action.revealed) {
+        lc.action.revealed = true; revealedAny = true;
+        if (sideName === "ai") logEntry(`Revealed: ${lc.action.name} (AI action at ${LOC_NAMES[loc]}).`);
+      }
+    }
+  }
+  return revealedAny;
+}
+
+// Move a committed creature within a single location's slot grid.
+// v2 holds cross-location movement for v3+ — movement is always within the same location.
+// One move per creature per turn. Allowed in any direction (front<->back same column, left<->right same row).
+function moveCommittedCreature(side, loc, fromPos, toPos) {
+  const lc = L(side, loc);
+  const creature = lc.creatures[fromPos];
+  if (!creature) return false;
+  if (lc.movedThisTurn.has(creature.instId)) return false;
+  if (slotOccupied(side, loc, "creature", toPos)) return false;
+  if (!isAdjacent(fromPos, toPos)) return false;
+
+  lc.creatures[fromPos] = null;
+  lc.creatures[toPos] = creature;
+  lc.movedThisTurn.add(creature.instId);
+  logEntry(`${side === "player" ? "You" : "AI"} moves ${creature.name} ${fromPos} → ${toPos} at ${LOC_NAMES[loc]}.`);
+  return true;
+}
+
+function isAdjacent(a, b) {
+  const adj = {
+    fl: ["fr", "bl"],
+    fr: ["fl", "br"],
+    bl: ["fl", "br"],
+    br: ["fr", "bl"]
+  };
+  return adj[a] && adj[a].includes(b);
+}
+
+// Which card types can be committed into a slot during the current phase?
+// Permanents (creatures, structures) only commit during main. Actions can be committed during
+// any phase that is a commit window — in v1 that's main and combat-reveal.
+function isCommitWindowFor(cardType) {
+  if (cardType === "creature" || cardType === "structure") {
+    return state.phase === "main";
+  }
+  if (cardType === "action") {
+    return state.phase === "main" || state.phase === "combat-reveal";
+  }
+  return false;
+}
+
+// ---------- Combat preview ----------
+// Returns:
+//   attackers:   instId -> { targetLabel, damage, killsTarget }
+//   willDie:     Set of instIds that die in simulated combat
+//   summonerHits: { player, ai }
+//
+// Combat is per-location: creatures at location L attack creatures at the same location L.
+// Cross-location attacks don't exist in v2. Per-location, we use the same Tempo hierarchy as v1.
+function computeCombatPreview() {
+  // Per-location snapshot of the side's creatures + the side's action at that location.
+  function snapshotLoc(side, loc) {
+    const lc = L(side, loc);
+    const cs = {};
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = lc.creatures[pos] || lc.pending.creatures[pos] || null;
+      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed } : null;
+    }
+    const action = lc.action || lc.pending.action || null;
+    return {
+      creatures: cs,
+      action: action ? { instId: action.instId, name: action.name, tempo: action.tempo || 0, effect: action.effect, revealed: action.revealed } : null
+    };
+  }
+  // Build per-location snapshots for both sides; summoner durabilities are global per side.
+  const sim = { player: { durability: state.sides.player.durability, locs: [] },
+                 ai:     { durability: state.sides.ai.durability,     locs: [] } };
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    sim.player.locs.push(snapshotLoc("player", loc));
+    sim.ai.locs.push(snapshotLoc("ai", loc));
+  }
+
+  // Per-location side-priority based on local Tempo (within a single location).
+  function simLocalTempo(side, loc) {
+    const cs = sim[side].locs[loc].creatures;
+    let t = 0;
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (cs[pos]) t += cs[pos].tempo || 0;
+    }
+    return t;
+  }
+  function sidePriorityRankAt(side, loc) {
+    const a = simLocalTempo("player", loc), b = simLocalTempo("ai", loc);
+    if (a > b) return side === "player" ? 0 : 1;
+    if (b > a) return side === "ai" ? 0 : 1;
+    return side === state.firstSide ? 0 : 1;
+  }
+
+  // Simulate queued actions per location before creature combat. Each location's actions resolve
+  // independently in its own Tempo order. Counterspell hits actions at the same location only
+  // (default scope is "here").
+  // Tracks summoner hits from spell fall-through during preview, fed into summonerHits below.
+  const spellFallThrough = { player: 0, ai: 0 };
+
+  // Helper: simulate a damage instance with fall-through. Mirrors dealDamageAtLoc in real resolve.
+  // Face-down cards are inert per the unified rule and not legal damage targets.
+  //
+  // PILLAR 10 / preview-honesty rule: if there are multiple legal random targets, we DO NOT pick
+  // one — we leave the sim board untouched. This prevents the preview from leaking the random
+  // pick by consequence (e.g., "combat preview shows my Recruit swinging through to summoner →
+  // therefore the Spark must have killed the Mage"). The player sees combat as it would play out
+  // *if the spell didn't fire*; they know the spell will fire but not which target it picks.
+  //
+  // Deterministic cases (0 targets → fall-through to summoner; 1 target → known pick) DO apply,
+  // because the outcome is knowable without random information.
+  function simDamageAtLoc(sourceSide, lx, dmg) {
+    const enemySide = other(sourceSide);
+    const enemyLoc = sim[enemySide].locs[lx];
+    const targets = ["fl", "fr", "bl", "br"]
+      .map(pos => ({ pos, c: enemyLoc.creatures[pos] }))
+      .filter(x => x.c && x.c.revealed !== false);
+    if (targets.length === 0) {
+      // Deterministic fall-through to summoner.
+      spellFallThrough[enemySide] += dmg;
+      return;
+    }
+    if (targets.length === 1) {
+      // Deterministic single-target pick.
+      const pick = targets[0];
+      pick.c.durability -= dmg;
+      if (pick.c.durability <= 0) enemyLoc.creatures[pick.pos] = null;
+      return;
+    }
+    // Multiple legal random targets: don't apply the damage. Combat preview reflects pre-spell
+    // board state so the random pick remains hidden until reveal.
+  }
+
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const actionCandidates = [];
+    for (const sideName of ["player", "ai"]) {
+      if (sim[sideName].locs[loc].action) actionCandidates.push({ side: sideName, action: sim[sideName].locs[loc].action });
+    }
+    actionCandidates.sort((a, b) => {
+      if (a.action.tempo !== b.action.tempo) return b.action.tempo - a.action.tempo;
+      return a.side === state.firstSide ? -1 : 1;
+    });
+    for (const ac of actionCandidates) {
+      if (sim[ac.side].locs[loc].action !== ac.action) continue;
+      if (ac.action.effect === "counterspell") {
+        const opp = sim[other(ac.side)].locs[loc];
+        if (opp.action) opp.action = null;
+      } else if (ac.action.effect === "deal2") {
+        simDamageAtLoc(ac.side, loc, 2);
+      } else if (ac.action.effect === "deal1all") {
+        // Scope-extended damage: 1 per location, with fall-through per empty location.
+        for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+          simDamageAtLoc(ac.side, l2, 1);
+        }
+      }
+      sim[ac.side].locs[loc].action = null;
+    }
+  }
+
+  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+  const attackers = {};
+  const willDie = new Set();
+  const summonerHits = { player: spellFallThrough.player, ai: spellFallThrough.ai };
+
+  // Per-location creature combat. Each location resolves in its own Tempo order; locations are
+  // simulated left-to-right but their orderings are independent.
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const candidates = [];
+    for (const sideName of ["player", "ai"]) {
+      for (const pos of ["fl", "fr"]) {
+        const c = sim[sideName].locs[loc].creatures[pos];
+        if (!c) continue;
+        if (c.force <= 0) continue;
+        candidates.push({
+          side: sideName, loc, pos, creature: c,
+          sortKey: [-(c.tempo || 0), sidePriorityRankAt(sideName, loc), POS_RANK[pos]]
+        });
+      }
+    }
+    candidates.sort((a, b) => {
+      for (let i = 0; i < a.sortKey.length; i++) {
+        if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+      }
+      return 0;
+    });
+
+    for (const cand of candidates) {
+      const live = sim[cand.side].locs[loc].creatures[cand.pos];
+      if (!live || live.instId !== cand.creature.instId) continue;
+      const enemyLoc = sim[other(cand.side)].locs[loc];
+      const frontPos = cand.pos;
+      const backPos = cand.pos === "fl" ? "bl" : "br";
+      let target = enemyLoc.creatures[frontPos];
+      let targetPos = frontPos;
+      if (!target) {
+        target = enemyLoc.creatures[backPos];
+        targetPos = backPos;
+      }
+      const dmg = live.force;
+      if (target) {
+        target.durability -= dmg;
+        const killed = target.durability <= 0;
+        attackers[live.instId] = {
+          targetLabel: `${target.name} (${other(cand.side)} ${LOC_NAMES[loc]} ${targetPos})`,
+          damage: dmg,
+          killsTarget: killed
+        };
+        if (killed) {
+          willDie.add(target.instId);
+          enemyLoc.creatures[targetPos] = null;
+        }
+      } else {
+        sim[other(cand.side)].durability -= dmg;
+        summonerHits[other(cand.side)] += dmg;
+        attackers[live.instId] = {
+          targetLabel: `${other(cand.side) === "player" ? "your" : "AI"} summoner`,
+          damage: dmg,
+          killsTarget: false,
+          hitsSummoner: true
+        };
+      }
+    }
+  }
+
+  return { attackers, willDie, summonerHits };
+}
+
+// ---------- Phases ----------
+// Upkeep is split into "start of upkeep" (per-turn resets and start-of-upkeep neutral effects like
+// Forge) and "end of upkeep" (flip-up at end of phase, encounter-end check). startNewTurn inserts
+// a render+delay between them so the player sees the upkeep beat with face-down cards before the
+// flip-up at end of phase.
+function runUpkeepStart() {
+  state.phase = "upkeep";
+  logEntry(`— Upkeep, turn ${state.turn} —`, "phase");
+  // Reset per-turn move trackers — committed creatures may move once per main this turn at each location.
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      L(sideName, loc).movedThisTurn = new Set();
+    }
+  }
+  // Start-of-upkeep neutral effects (e.g., Forge stat-bump).
+  resolveNeutralUpkeep();
+  checkGameOver();
+}
+
+// End-of-upkeep work: face-down cards flip up here, per the unified flip-up rule (any face-down
+// card flips up at end of current phase). On turn 1 this is the encounter-arrival reveal moment.
+// Uses the same Tempo-ordered reveal-and-resolve as end-of-main.
+function runUpkeepEnd() {
+  endOfPhaseRevealAndResolve();
+  checkGameOver();
+}
+
+// Fire neutral cards' upkeep effects across all locations.
+function resolveNeutralUpkeep() {
+  if (!state.sides) return;
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    // Forge can be the structure; can also imagine future neutrals occupying creature slots.
+    const candidates = [];
+    if (lc.structure && lc.structure.owner === "neutral") candidates.push({ card: lc.structure, where: "structure" });
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.owner === "neutral") candidates.push({ card: c, where: "creature", pos });
+    }
+    for (const cand of candidates) {
+      if (!cand.card.revealed) continue;       // face-down neutrals are inert (not yet revealed)
+      if (cand.card.effect === "forge") {
+        // Find the highest-Force friendly (player) creature here.
+        const friendlies = ["fl","fr","bl","br"]
+          .map(p => L("player", loc).creatures[p])
+          .filter(c => c);
+        if (friendlies.length === 0) continue;     // no friendly creature — nothing to bump
+        let best = friendlies[0];
+        for (const c of friendlies) if ((c.force || 0) > (best.force || 0)) best = c;
+        // Bump the run-deck entry's mods so the buff persists across encounters.
+        if (best.runDeckEntry) {
+          best.runDeckEntry.mods.force = (best.runDeckEntry.mods.force || 0) + 1;
+        }
+        // Also bump the in-play instance so the rest of this encounter sees it.
+        best.force = (best.force || 0) + 1;
+        logEntry(`  ${cand.card.name} (@${LOC_NAMES[loc]}) → ${best.name} gains +1 Force permanently.`, "win");
+        cand.card.durability -= 1;
+        if (cand.card.durability <= 0) {
+          logEntry(`    ${cand.card.name} is destroyed.`, "combat-detail");
+          if (cand.where === "structure") lc.structure = null;
+          else lc.creatures[cand.pos] = null;
+        }
+      }
+    }
+  }
+}
+
+function runDraw() {
+  state.phase = "draw";
+  logEntry(`— Draw —`, "phase");
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    const target = 5;
+    while (s.hand.length < target) {
+      if (s.deck.length === 0) {
+        if (s.discard.length === 0) break; // truly out
+        s.deck = shuffle(s.discard);
+        s.discard = [];
+        logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+      }
+      const card = s.deck.shift();
+      s.hand.push(card);
+    }
+  }
+  logEntry(`Drew up to hand size 5.`, "draw");
+}
+
+function runMain() {
+  state.phase = "main";
+  logEntry(`— Main phase: play cards, then end. —`, "phase");
+  // Player plays via UI; AI plays after player ends main
+}
+
+// Returns true if the AI has non-neutral presence (creature or structure) at any location in the
+// current encounter. Used to gate AI placement: per the unified-encounter framework, the AI may
+// only commit cards into a neutral location during an encounter if it has presence at *some other*
+// location in the same encounter (the in-encounter "AI contesting" rule mirroring overworld
+// adjacency). For v3's single-location encounters: a pure neutral encounter has no AI presence at
+// all, so the AI cannot place. A hostile or boss encounter has AI presence by definition.
+function aiHasPresenceInEncounter() {
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    if (lc.structure && lc.structure.owner === "ai") return true;
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.owner === "ai") return true;
+    }
+    // Pending plays count too — if the AI committed something earlier this turn, it's "present".
+    if (lc.pending.structure && lc.pending.structure.owner === "ai") return true;
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.pending.creatures[pos];
+      if (c && c.owner === "ai") return true;
+    }
+  }
+  return false;
+}
+
+// AI placement using scored heuristics. Per DECISIONS.md (AI architecture): per-card hints + a
+// small global scoring function picks the highest-scoring (card, location, target) tuple and commits it.
+// Cost checks use COMMITTED state at the *target location* only.
+//
+// Per the unified-encounter framework: the AI cannot place at a neutral encounter where it has no
+// other-location presence. v3 has single-location encounters, so this collapses to "AI does not
+// place if it has no presence at the encounter at all" — i.e., pure neutral encounters get no AI plays.
+function aiPlaceMain() {
+  if (!aiHasPresenceInEncounter()) return;
+  let safety = 80;
+  while (safety-- > 0) {
+    const best = aiPickBestPlay();
+    if (!best) break;
+    placeCard("ai", best.card, best.target);
+  }
+}
+
+// AI retreat: end-of-turn evaluation. Fires at end of cleanup if the AI has no living presence
+// AND failed to bring in reinforcements this turn. "Living presence" means *creatures* —
+// structures are infrastructure, not forces. A faction with only buildings left, that also
+// couldn't field anything new this turn, has effectively been beaten; the encounter ends.
+//
+// "No reinforcements this turn" is captured implicitly by checking at end-of-cleanup: by then,
+// the AI's main-phase placement opportunity is over, combat has resolved, and pending is empty.
+// If there are zero AI creatures committed at this moment, the AI had its full turn and managed
+// no living presence on the board. That's retreat.
+//
+// Retreat is a HOSTILE-encounter-only mechanic. It does not apply to:
+//   - Boss encounters (boss is a summoner with Durability; win via Durability=0, not retreat).
+//   - Neutral encounters (the AI was never present; there's nothing to retreat from. Neutral
+//     encounters end via player engagement consuming the neutral cards, or via the player
+//     pressing the Leave Encounter button).
+function checkAiRetreat() {
+  if (!state.sides) return false;
+  if (state.encounterKind !== "hostile") return false;
+  // Any AI creature anywhere (committed or pending) cancels retreat. Pending will be empty when
+  // called at end-of-cleanup, but the check is here for safety in case of mid-turn invocation.
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    for (const pos of ["fl","fr","bl","br"]) {
+      if (lc.creatures[pos] && lc.creatures[pos].owner === "ai") return false;
+      if (lc.pending.creatures[pos] && lc.pending.creatures[pos].owner === "ai") return false;
+    }
+  }
+  // No AI creatures present and no reinforcements pending. Retreat fires. Vanish any AI structures
+  // (the faction withdrew with them).
+  let vanished = 0;
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    if (lc.structure && lc.structure.owner === "ai") {
+      lc.structure = null;
+      vanished++;
+    }
+  }
+  logEntry(`The AI faction withdraws from ${LOC_NAMES[0]}. ${vanished > 0 ? `(${vanished} structure${vanished === 1 ? "" : "s"} vanish with them.)` : ""}`, "win");
+  endEncounter("playerCleared");
+  return true;
+}
+
+// Returns the highest-scoring legal (card, location, target) tuple, or null.
+function aiPickBestPlay() {
+  const ai = state.sides.ai;
+  let best = null;
+  for (const card of ai.hand) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      if (!canPay("ai", loc, card)) continue;
+      const targets = legalTargetsForCard("ai", loc, card);
+      if (targets.length === 0) continue;
+      for (const target of targets) {
+        const score = aiScorePlay(card, loc, target);
+        if (score === null) continue;
+        if (!best || score > best.score) best = { card, target, score };
+      }
+    }
+  }
+  return best;
+}
+
+// Score a (card, loc, target) play for the AI. Higher = better. Returns null to disqualify.
+function aiScorePlay(card, loc, target) {
+  const hints = card.aiHints || {};
+  let score = 0;
+  score += (card.cost || 0) * 2;
+  if (card.type === "creature") return scoreCreaturePlay(card, loc, target, hints, score);
+  if (card.type === "structure") return scoreStructurePlay(card, loc, target, hints, score);
+  if (card.type === "action") return scoreActionPlay(card, loc, target, hints, score);
+  return score;
+}
+
+function scoreCreaturePlay(card, loc, target, hints, baseScore) {
+  let score = baseScore;
+  const pos = target.pos;
+  const isFront = (pos === "fl" || pos === "fr");
+  const isBack = !isFront;
+  const sameColumnFront = pos === "bl" ? "fl" : (pos === "br" ? "fr" : pos);
+  const aiLoc = L("ai", loc);
+  const playerLoc = L("player", loc);
+
+  if (hints.preferFront && isFront) score += 5;
+  if (hints.preferFront && isBack) score -= 2;
+  if (hints.preferBack && isBack) score += 5;
+  if (hints.preferBack && isFront) score -= 4;
+
+  if (hints.requireBlocker && isBack) {
+    const frontCard = aiLoc.creatures[sameColumnFront] || aiLoc.pending.creatures[sameColumnFront];
+    if (frontCard) score += 6; else score -= 4;
+  }
+  if (hints.requireBlocker && isFront) score -= 6;
+
+  if (hints.preferUncontestedColumn && isFront) {
+    const enemyFront = playerLoc.creatures[pos];
+    if (enemyFront) score -= 4; else score += 3;
+  }
+
+  if (hints.preferLowHpFront && isFront) {
+    const enemyFront = playerLoc.creatures[pos];
+    if (enemyFront && (enemyFront.durability || 0) <= (card.force || 0)) score += 4;
+  }
+
+  // Slight preference: locations where the enemy is *more* committed get higher creature priority
+  // (push back at threats), and uncontested locations get slightly lower (no need to spend stats there).
+  let enemyPresenceHere = 0;
+  for (const p of ["fl","fr","bl","br"]) if (playerLoc.creatures[p]) enemyPresenceHere++;
+  score += enemyPresenceHere * 0.6;
+
+  if (pos === "fl" || pos === "bl") score += 0.5;
+  return score;
+}
+
+function scoreStructurePlay(card, loc, target, hints, baseScore) {
+  // Structures are always reasonable to play. Slight preference to spread structures across locations
+  // — having a structure already at this location is worth less than putting one where there isn't one.
+  let score = baseScore + 3;
+  if (L("ai", loc).structure || L("ai", loc).pending.structure) score -= 2;
+  return score;
+}
+
+function scoreActionPlay(card, loc, target, hints, baseScore) {
+  let score = baseScore;
+  const playerLoc = L("player", loc);
+
+  // Damage spell with "here" scope (Spark). Per the universal damage fall-through rule, this is
+  // ALWAYS a legal play — empty location → hits opposing summoner. Score reflects whether a creature
+  // target is more or less attractive than summoner-pressure.
+  if (hints.damagePreferTarget) {
+    const enemiesHere = ["fl","fr","bl","br"].map(p => playerLoc.creatures[p]).filter(c => c);
+    if (enemiesHere.length > 0) {
+      score += 4; // creature target present — damage lands on a creature
+      // Killable creature is best — clean removal.
+      const wouldKill = enemiesHere.some(c => (c.durability || 0) <= 2);
+      if (wouldKill) score += 3;
+    } else {
+      // No creature here — damage falls through to opposing summoner. Worth doing if the AI is
+      // ahead on summoner pressure or just chipping the player down.
+      score += 3; // slightly less attractive than killing a creature, but still real value
+    }
+  }
+
+  if (hints.requiresOpposingAction) {
+    // Counterspell is "here" — counters opposing actions at *this* location only. AI peeks at the
+    // player's pending action at this location (transparent cheat per DECISIONS.md).
+    const playerHasActionHere = !!(playerLoc.action || playerLoc.pending.action);
+    if (!playerHasActionHere) return null;
+    score += 8;
+  }
+
+  // Damage spell with scope = "at each of your locations" (Heralding Spark). Per fall-through, this
+  // ALWAYS lands SOMETHING — creatures get hit, empty locations leak damage to the summoner.
+  // Maximum value when most locations have targets *and* the empty ones can pressure the summoner.
+  if (hints.damageAllLocations) {
+    let creatureLocs = 0, emptyLocs = 0, killableHere = false;
+    for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+      const enemyLoc = L("player", l2);
+      const enemies = ["fl","fr","bl","br"].map(p => enemyLoc.creatures[p]).filter(c => c);
+      if (enemies.length > 0) {
+        creatureLocs++;
+        if (enemies.some(c => (c.durability || 0) <= 1)) killableHere = true;
+      } else {
+        emptyLocs++;
+      }
+    }
+    // Per-creature-loc bonus (chip damage), per-empty-loc bonus (summoner damage), kill bonus.
+    score += creatureLocs * 2 + emptyLocs * 1.5;
+    if (killableHere) score += 2;
+    // Always playable — never returns null.
+  }
+
+  return score;
+}
+
+function runCombat() {
+  state.phase = "combat";
+  logEntry(`— Combat —`, "phase");
+  logEntry(`Priority: ${state.firstSide === "player" ? "you" : "AI"} have priority on Tempo ties.`, "phase");
+
+  if (state.gameOver) return;
+
+  // Per-location combat: each location resolves its own combat sequence. We process locations
+  // left-to-right, but each location uses its own Tempo ordering.
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    if (state.gameOver) return;
+    const orderedAttackers = computeCombatOrder(loc);
+    if (orderedAttackers.length === 0) continue;
+    logEntry(`At ${LOC_NAMES[loc]}:`, "combat-header");
+    let currentSideHeaderLogged = null;
+    for (const { side, pos, creature } of orderedAttackers) {
+      if (state.gameOver) return;
+      if (currentSideHeaderLogged !== side) {
+        logEntry(`  ${side === "player" ? "Your" : "AI"} attacks:`, "combat-header");
+        currentSideHeaderLogged = side;
+      }
+      const liveAttacker = L(side, loc).creatures[pos];
+      if (!liveAttacker || liveAttacker.instId !== creature.instId) {
+        logEntry(`    ${creature.name} (${pos}): killed before its swing — does not attack.`, "combat-detail");
+        continue;
+      }
+      if ((liveAttacker.force || 0) <= 0) {
+        logEntry(`    ${liveAttacker.name} (${pos}): no Force — does not attack.`, "combat-detail");
+        continue;
+      }
+      resolveAttack(side, loc, pos, liveAttacker);
+    }
+  }
+  checkGameOver();
+}
+
+// Compute combat order at a single location. Per-location Tempo hierarchy:
+//   1. Tempo descending
+//   2. Side priority (higher local Tempo total at THIS location wins; ties go to state.firstSide)
+//   3. Position rank (front-row left, then front-row right; back row doesn't attack)
+function computeCombatOrder(loc) {
+  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+
+  const localTempoTotal = {
+    player: committedStatTotal("player", loc, "tempo"),
+    ai: committedStatTotal("ai", loc, "tempo")
+  };
+  function sidePriorityRank(side) {
+    if (localTempoTotal.player > localTempoTotal.ai) return side === "player" ? 0 : 1;
+    if (localTempoTotal.ai > localTempoTotal.player) return side === "ai" ? 0 : 1;
+    return side === state.firstSide ? 0 : 1;
+  }
+
+  const candidates = [];
+  for (const sideName of ["player", "ai"]) {
+    for (const pos of ["fl", "fr"]) {
+      const c = L(sideName, loc).creatures[pos];
+      if (!c) continue;
+      if ((c.force || 0) <= 0) continue;
+      candidates.push({
+        side: sideName, loc, pos, creature: c,
+        sortKey: [-(c.tempo || 0), sidePriorityRank(sideName), POS_RANK[pos]]
+      });
+    }
+  }
+  candidates.sort((a, b) => {
+    for (let i = 0; i < a.sortKey.length; i++) {
+      if (a.sortKey[i] !== b.sortKey[i]) return a.sortKey[i] - b.sortKey[i];
+    }
+    return 0;
+  });
+  return candidates;
+}
+
+// Resolve a single side's action at a single location. Default scope is "here" — Counterspell hits
+// only the action at this location (the opposing side's action at this same location).
+// Universal damage rule (per DECISIONS.md 2026-05-02): damage looks for a creature target at the
+// resolving location; if no valid target, it falls through to the opposing summoner. One fall-
+// through instance per location regardless of whether the source was single-target or multi-target.
+// `actionName` and `actionLocLabel` are used only for log clarity.
+// ---------- Tokens ----------
+// A token is a permanent generated mid-encounter by another card's effect (e.g., a flip-up trigger).
+// Tokens behave on the battlefield like any other permanent — they occupy slots, contribute stats,
+// can be destroyed by combat or effects — but they have NO representation in any zone outside the
+// battlefield. They aren't in any deck, hand, discard, graveyard, or exile. When destroyed they
+// cease to exist. (Per DESIGN.md "Tokens" section.)
+//
+// In code: tokens are normal card objects with `isToken: true`. They use the existing slot grid
+// and combat code unchanged. The differences are in lifecycle: tokens are NOT shuffled into the
+// run deck, NOT placed in graveyard on death — they just disappear.
+function createToken(defKey, owner) {
+  const card = createCard(defKey, owner);
+  card.isToken = true;
+  card.revealed = true; // Tokens enter face-up (skip the play queue / face-down beat).
+  return card;
+}
+
+// Try to spawn a token of `defKey` at the first empty slot matching the given filter, on the same
+// side as `owner` at the given location. Returns the token if placed, null if no empty slot was
+// found. Used by flip-up triggers and other generators.
+function spawnTokenAt(owner, loc, defKey, slotFilter) {
+  const lc = L(owner, loc);
+  const def = CARD_DEFS[defKey];
+  if (!def) return null;
+  // Default slot search: empty creature slots in front-then-back, left-then-right order.
+  const positions = slotFilter || ["fl", "fr", "bl", "br"];
+  if (def.type === "creature") {
+    for (const pos of positions) {
+      if (!lc.creatures[pos]) {
+        const tok = createToken(defKey, owner);
+        lc.creatures[pos] = tok;
+        return { card: tok, where: "creature", pos };
+      }
+    }
+  } else if (def.type === "structure") {
+    if (!lc.structure) {
+      const tok = createToken(defKey, owner);
+      lc.structure = tok;
+      return { card: tok, where: "structure" };
+    }
+  }
+  return null;
+}
+
+// ---------- Flip-up trigger dispatcher ----------
+// Called from endOfPhaseRevealAndResolve when a face-down creature/structure flips face-up.
+// The card may print an `onFlipUp` effect key — looked up by string and executed here. Flip-up
+// triggers fire after the card transitions revealed=false → revealed=true, so the card itself is
+// face-up and on the board for the trigger.
+//
+// Per the unified face-down rule, flip-up triggers fire EVERY time a card transitions face-down to
+// face-up — not just the first time. Stealth-and-re-flip combos rely on this.
+function fireFlipUpTrigger(side, loc, card) {
+  const effect = card.onFlipUp;
+  if (!effect) return;
+  if (effect === "spawnSandbag") {
+    // Combat Engineer: create a Sandbag token at an empty front-row slot here.
+    const result = spawnTokenAt(side, loc, "sandbag", ["fl", "fr"]);
+    if (result) {
+      logEntry(`  ${card.name} drops a Sandbag at ${LOC_NAMES[loc]} ${result.pos}.`, "combat-detail");
+    } else {
+      logEntry(`  ${card.name} can't drop a Sandbag — front row full.`, "combat-detail");
+    }
+  } else if (effect === "buffFriendlyForceHere") {
+    // Herald (engine demo): a friendly creature here gains +1 Force until end of turn.
+    // Per Pillar 10 (no resolve-time targeting), pick from the legal random pool. The pool is
+    // friendly face-up creatures here, EXCLUDING self. If self is the only candidate, the buff
+    // lands on self.
+    const lc = L(side, loc);
+    const candidates = ["fl","fr","bl","br"]
+      .map(pos => ({ pos, c: lc.creatures[pos] }))
+      .filter(x => x.c && x.c.revealed !== false && x.c !== card);
+    if (candidates.length === 0) {
+      // Self-only target.
+      grantUntilEndOfTurn(card, "force", 1);
+      logEntry(`  ${card.name} buffs itself +1 Force (no other friendly here).`, "combat-detail");
+    } else {
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      grantUntilEndOfTurn(pick.c, "force", 1);
+      logEntry(`  ${card.name} grants +1 Force to ${pick.c.name} (${side} ${LOC_NAMES[loc]} ${pick.pos}) until end of turn.`, "combat-detail");
+    }
+  } else if (effect === "damage1Here") {
+    // Sapper (engine demo): deal 1 damage here. Per universal damage rule: hits a face-up creature
+    // here at random (non-neutral preferred for player-cast effects? actually no — damage hits any
+    // creature including neutral ones since they're targetable per design). Falls through to
+    // opposing summoner if no valid target.
+    dealDamageAtLoc(side, loc, 1, card.name, ` (flip-up)`);
+  }
+}
+
+// Grant a temporary "until end of turn" stat buff to a card. The buff is applied to the in-play
+// instance only and does not persist into the run deck (unlike Forge's permanent +1 Force).
+// Tracked via state.endOfTurnReverts so cleanup can revert.
+//
+// Inert keyword (per DESIGN.md): cards with `inert: true` cannot gain Force/Tempo/Insight/Resolve
+// from any source. Buffs to those stats no-op. Durability is not on the no-grow list — Inert cards
+// can be healed/repaired.
+function grantUntilEndOfTurn(card, stat, amount) {
+  if (card.inert && ["force","tempo","insight","resolve"].includes(stat)) {
+    // Inert blocks the buff entirely. Don't track for revert.
+    return;
+  }
+  card[stat] = (card[stat] || 0) + amount;
+  if (!state.endOfTurnReverts) state.endOfTurnReverts = [];
+  state.endOfTurnReverts.push({ card, stat, amount });
+}
+
+// Called at end of cleanup to revert any "until end of turn" buffs.
+function revertEndOfTurnBuffs() {
+  if (!state.endOfTurnReverts) return;
+  for (const r of state.endOfTurnReverts) {
+    r.card[r.stat] = (r.card[r.stat] || 0) - r.amount;
+  }
+  state.endOfTurnReverts = [];
+}
+
+function dealDamageAtLoc(sourceSide, loc, dmg, actionName, actionLocLabel) {
+  const enemySide = other(sourceSide);
+  const enemyLoc = L(enemySide, loc);
+  // Build candidate pool with reveal status logged. Face-down cards are inert per the unified
+  // face-down rule and excluded from damage targets.
+  const allSlots = ["fl", "fr", "bl", "br"]
+    .map(pos => ({ pos, c: enemyLoc.creatures[pos] }))
+    .filter(x => x.c);
+  const targets = allSlots.filter(x => x.c.revealed !== false);
+  const excluded = allSlots.filter(x => x.c.revealed === false);
+  // Log the candidate pool so the random pick is auditable.
+  if (allSlots.length === 0) {
+    logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) targets at ${LOC_NAMES[loc]}: none (board empty).`, "combat-detail");
+  } else {
+    const inLabel = targets.map(x => `${x.c.name}(${x.pos})`).join(", ") || "—";
+    const exLabel = excluded.length ? ` | excluded face-down: ${excluded.map(x => `${x.c.name}(${x.pos})`).join(", ")}` : "";
+    logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) targets at ${LOC_NAMES[loc]}: [${inLabel}]${exLabel}`, "combat-detail");
+  }
+  if (targets.length === 0) {
+    // Fall-through: no face-up creatures here, damage hits the opposing summoner.
+    state.sides[enemySide].durability -= dmg;
+    logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) → ${enemySide} summoner for ${dmg}. (${enemySide} Durability: ${state.sides[enemySide].durability}) [fall-through]`, "combat-detail");
+    return;
+  }
+  const pick = targets[Math.floor(Math.random() * targets.length)];
+  pick.c.durability -= dmg;
+  const pickReason = targets.length === 1 ? "[only legal target]" : `[random pick from ${targets.length}]`;
+  logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) → ${pick.c.name} (${enemySide} ${LOC_NAMES[loc]} ${pick.pos}) for ${dmg}. ${pickReason}`, "combat-detail");
+  if (pick.c.durability <= 0) {
+    logEntry(`    ${pick.c.name} is destroyed.`, "combat-detail");
+    // Tokens don't go to graveyard — they have no representation in any zone outside the battlefield.
+    if (!pick.c.isToken) state.sides[enemySide].graveyard.push(pick.c);
+    enemyLoc.creatures[pick.pos] = null;
+  }
+}
+
+function resolveAction(side, loc) {
+  const lc = L(side, loc);
+  const s = state.sides[side];
+  if (!lc.action) return;
+  const action = lc.action;
+  let exitZone = "discard";
+
+  if (action.effect === "deal2") {
+    // Deal 2 damage to a random enemy creature *here* (or fall through to summoner).
+    dealDamageAtLoc(side, loc, 2, action.name, ` @${LOC_NAMES[loc]}`);
+  } else if (action.effect === "counterspell") {
+    // Counterspell: clear the opposing action at *this* location (default scope "here").
+    const oppLoc = L(other(side), loc);
+    if (oppLoc.action) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) counters ${oppLoc.action.name} (${other(side)}) — to graveyard.`, "combat-detail");
+      state.sides[other(side)].graveyard.push(oppLoc.action);
+      oppLoc.action = null;
+    } else {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) finds no opposing action here — fizzles, exits to graveyard.`, "combat-detail");
+    }
+    exitZone = "graveyard";
+  } else if (action.effect === "deal1all") {
+    // SCOPE EXAMPLE: deal 1 damage to a random enemy creature at EACH location.
+    // Per the universal fall-through rule, an empty location → 1 damage to the opposing summoner
+    // (one fall-through instance per empty location). A scope-effect on an empty board hits the
+    // summoner once *per empty location*.
+    for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+      dealDamageAtLoc(side, l2, 1, action.name, ``);
+    }
+  }
+  s[exitZone].push(action);
+  lc.action = null;
+}
+
+// Resolve all queued actions across all locations in Tempo order. Higher Tempo resolves first;
+// ties broken by side priority. Each (side, loc) action is its own candidate.
+function resolveAllActions() {
+  const candidates = [];
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const action = L(sideName, loc).action;
+      if (action) candidates.push({ side: sideName, loc, action, tempo: action.tempo || 0 });
+    }
+  }
+  if (candidates.length === 0) return;
+  candidates.sort((a, b) => {
+    if (a.tempo !== b.tempo) return b.tempo - a.tempo;
+    // Side-priority tiebreak — globally, by state.firstSide. (Per-location tiebreak via local
+    // Tempo totals would be more correct but adds complexity for little gain at v2 scale.)
+    if (a.side === state.firstSide && b.side !== state.firstSide) return -1;
+    if (b.side === state.firstSide && a.side !== state.firstSide) return 1;
+    // Same side, same Tempo — left-to-right by location.
+    return a.loc - b.loc;
+  });
+  logEntry(`Actions resolve:`, "combat-header");
+  for (const cand of candidates) {
+    if (state.gameOver) return;
+    // Re-check that the action is still in the slot — Counterspell at this location may have removed it.
+    if (L(cand.side, cand.loc).action !== cand.action) {
+      logEntry(`  ${cand.action.name} (${cand.side} @${LOC_NAMES[cand.loc]}) was countered before resolving.`, "combat-detail");
+      continue;
+    }
+    resolveAction(cand.side, cand.loc);
+  }
+}
+
+// Unified end-of-phase reveal-and-resolve. Per the design's Tempo-ordered reveal rule, face-down
+// cards flip up in Tempo order — and crucially, a higher-Tempo action that flips up resolves
+// BEFORE lower-Tempo cards have flipped up. This means a Spark (Tempo 1) flipping up first sees a
+// still-face-down Mage (Tempo 0) at the same location and cannot target it (face-down = inert).
+//
+// Each event is sorted by Tempo desc, then side priority, then location/position. Events are:
+//   - "flip" — a face-down creature/structure becomes face-up (no other effect in v3)
+//   - "action" — an action resolves (flipping it up if face-down, then executing its effect)
+function endOfPhaseRevealAndResolve() {
+  const events = [];
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      // Face-down creatures: flip events.
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (c && c.revealed === false) {
+          events.push({ kind: "flip", side: sideName, loc, where: "creature", pos, card: c, tempo: c.tempo || 0 });
+        }
+      }
+      // Face-down structures: flip events.
+      if (lc.structure && lc.structure.revealed === false) {
+        events.push({ kind: "flip", side: sideName, loc, where: "structure", card: lc.structure, tempo: lc.structure.tempo || 0 });
+      }
+      // Actions in slots: action-resolve events (they flip up as part of resolving).
+      if (lc.action) {
+        events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: lc.action.tempo || 0 });
+      }
+    }
+  }
+  if (events.length === 0) return;
+
+  // Sort by Tempo desc, then side priority on Tempo ties, then location, then position-in-grid.
+  const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3, structure: 4, action: 5 };
+  events.sort((a, b) => {
+    if (a.tempo !== b.tempo) return b.tempo - a.tempo;
+    if (a.side !== b.side) {
+      if (a.side === state.firstSide) return -1;
+      return 1;
+    }
+    if (a.loc !== b.loc) return a.loc - b.loc;
+    const ar = POS_RANK[a.pos || a.where] ?? 99;
+    const br = POS_RANK[b.pos || b.where] ?? 99;
+    return ar - br;
+  });
+
+  logEntry(`Reveal & resolve queue (priority: ${state.firstSide}, sorted Tempo desc → priority → location → position):`, "combat-header");
+  for (const ev of events) {
+    const where = ev.where === "creature" ? ev.pos : ev.where;
+    logEntry(`  · ${ev.side}/${LOC_NAMES[ev.loc]}/${where} — ${ev.card.name} (T${ev.tempo}) [${ev.kind}]`, "combat-detail");
+  }
+  for (const ev of events) {
+    if (state.gameOver) return;
+    if (ev.kind === "flip") {
+      // Re-check the slot — earlier action at this Tempo may have destroyed it.
+      const lc = L(ev.side, ev.loc);
+      const stillThere = ev.where === "creature" ? lc.creatures[ev.pos] === ev.card : lc.structure === ev.card;
+      if (!stillThere) {
+        logEntry(`  → ${ev.card.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos || ev.where}) skipped: removed before flipping.`, "combat-detail");
+        continue;
+      }
+      ev.card.revealed = true;
+      if (ev.side === "ai") {
+        const where = ev.where === "creature" ? `${LOC_NAMES[ev.loc]} ${ev.pos}` : `${LOC_NAMES[ev.loc]} (structure)`;
+        logEntry(`  → Revealed: ${ev.card.name} at ${where}.`, "combat-detail");
+      } else {
+        const where = ev.where === "creature" ? `${LOC_NAMES[ev.loc]} ${ev.pos}` : `${LOC_NAMES[ev.loc]} (structure)`;
+        logEntry(`  → Your ${ev.card.name} flips up at ${where}.`, "combat-detail");
+      }
+      // Fire the card's flip-up trigger if it has one. Triggers fire AFTER the card is face-up
+      // (so the card itself is on the board for any "this gains X" effects).
+      fireFlipUpTrigger(ev.side, ev.loc, ev.card);
+    } else if (ev.kind === "action") {
+      // Action might have been countered / removed already.
+      const lc = L(ev.side, ev.loc);
+      if (lc.action !== ev.card) {
+        logEntry(`  → ${ev.card.name} (${ev.side} @${LOC_NAMES[ev.loc]}) was countered before resolving.`, "combat-detail");
+        continue;
+      }
+      // Reveal it (if not already), then resolve.
+      if (ev.card.revealed === false) {
+        ev.card.revealed = true;
+        if (ev.side === "ai") logEntry(`  → Revealed: ${ev.card.name} (AI action at ${LOC_NAMES[ev.loc]}).`, "combat-detail");
+      }
+      resolveAction(ev.side, ev.loc);
+    }
+  }
+}
+
+function other(side) { return side === "player" ? "ai" : "player"; }
+
+function resolveAttack(side, loc, pos, attacker) {
+  if (pos !== "fl" && pos !== "fr") return;
+
+  const enemyLoc = L(other(side), loc);
+  const enemyFront = pos;
+  const enemyBack = pos === "fl" ? "bl" : "br";
+
+  let target = enemyLoc.creatures[enemyFront];
+  let targetPos = enemyFront;
+  if (!target) {
+    target = enemyLoc.creatures[enemyBack];
+    targetPos = enemyBack;
+  }
+
+  const dmg = attacker.force;
+  if (target) {
+    target.durability -= dmg;
+    logEntry(`    ${attacker.name} (${pos}) → ${target.name} (${other(side)} ${targetPos}) for ${dmg}.`, "combat-detail");
+    if (target.durability <= 0) {
+      logEntry(`      ${target.name} is destroyed.`, "combat-detail");
+      // Tokens vanish (no graveyard entry); regular creatures go to graveyard.
+      if (!target.isToken) state.sides[other(side)].graveyard.push(target);
+      enemyLoc.creatures[targetPos] = null;
+    }
+  } else {
+    state.sides[other(side)].durability -= dmg;
+    logEntry(`    ${attacker.name} (${pos}) → ${other(side)} summoner for ${dmg}. (${other(side)} Durability: ${state.sides[other(side)].durability})`, "combat-detail");
+  }
+}
+
+function runCleanup() {
+  state.phase = "cleanup";
+  logEntry(`— Cleanup —`, "phase");
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    if (s.hand.length > 0) {
+      logEntry(`${sideName === "player" ? "You" : "AI"} discards hand (${s.hand.length} card${s.hand.length === 1 ? "" : "s"}).`, "cleanup");
+      s.discard.push(...s.hand);
+      s.hand = [];
+    }
+  }
+  // Revert "until end of turn" buffs (Herald-style flip-up grants and similar).
+  revertEndOfTurnBuffs();
+  // v3: neutral effects that fire at end of cleanup (e.g., Siren consumption).
+  resolveNeutralCleanup();
+  // After cleanup effects fire, check whether the encounter has ended (e.g., siren consumed itself
+  // and was the only thing left).
+  checkGameOver();
+  // End-of-turn AI retreat evaluation: if the AI managed no living presence this turn (and didn't
+  // bring any in via main-phase reinforcement), the faction withdraws.
+  if (state.view === "encounter" && checkAiRetreat()) return;
+  // Flip priority for next turn (alternation tiebreak).
+  const oldPriority = state.firstSide;
+  state.firstSide = other(state.firstSide);
+  logEntry(`Priority flips: ${oldPriority} → ${state.firstSide} (alternation tiebreak).`, "cleanup");
+  state.turn += 1;
+}
+
+// Fire neutral cards' end-of-cleanup effects across all locations.
+function resolveNeutralCleanup() {
+  if (!state.sides) return;
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("ai", loc);
+    // Iterate over a snapshot of slots so card removals during the loop don't break iteration.
+    const candidates = [];
+    if (lc.structure && lc.structure.owner === "neutral") candidates.push({ card: lc.structure, where: "structure" });
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.owner === "neutral") candidates.push({ card: c, where: "creature", pos });
+    }
+    for (const cand of candidates) {
+      if (!cand.card.revealed) continue;
+      if (cand.card.effect === "siren") {
+        // Find a non-neutral creature here at random — pool is BOTH player and AI creatures.
+        // Per design, "another non-neutral creature here" excludes neutrals (so the siren never
+        // accidentally consumes a sister-siren).
+        const pool = [];
+        for (const ownerSide of ["player", "ai"]) {
+          for (const pos of ["fl","fr","bl","br"]) {
+            const c = L(ownerSide, loc).creatures[pos];
+            if (c && c.owner !== "neutral") pool.push({ side: ownerSide, pos, card: c });
+          }
+        }
+        if (pool.length === 0) {
+          logEntry(`  ${cand.card.name} (@${LOC_NAMES[loc]}) finds no creature to take — it lingers.`, "combat-detail");
+          continue;
+        }
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        // Remove the picked creature: from the slot, and if it's a player creature, from the run deck too.
+        L(pick.side, loc).creatures[pick.pos] = null;
+        if (pick.card.owner === "player" && pick.card.runDeckEntry) {
+          const idx = state.runDeck.indexOf(pick.card.runDeckEntry);
+          if (idx !== -1) state.runDeck.splice(idx, 1);
+          logEntry(`  ${cand.card.name} (@${LOC_NAMES[loc]}) takes ${pick.card.name} (yours) — removed from your deck for the rest of the run.`, "win");
+        } else {
+          logEntry(`  ${cand.card.name} (@${LOC_NAMES[loc]}) takes ${pick.card.name} (${pick.side}) — removed from this encounter.`, "combat-detail");
+        }
+        // Siren removes itself too.
+        if (cand.where === "creature") L("ai", loc).creatures[cand.pos] = null;
+        else L("ai", loc).structure = null;
+        logEntry(`    ${cand.card.name} sings itself out of existence.`, "combat-detail");
+      }
+    }
+  }
+}
+
+// v3 game-over check: handles per-event win/loss conditions (player death, boss death). Does NOT
+// check AI retreat — that's an end-of-turn evaluation, fired from runCleanup. This way mid-turn
+// creature deaths don't end the encounter prematurely (the AI might still reinforce next turn,
+// but we can't know that until cleanup).
+function checkGameOver() {
+  if (!state.sides) return;
+  const p = state.sides.player.durability;
+  if (p <= 0) {
+    state.gameOver = "playerLost";
+    logEntry(`Your summoner falls.`, "lose");
+    checkEncounterEnd();
+    return;
+  }
+  if (state.encounterKind === "boss") {
+    const a = state.sides.ai.durability;
+    if (a <= 0) {
+      state.gameOver = "bossKilled";
+      logEntry(`The boss summoner falls!`, "win");
+      checkEncounterEnd();
+      return;
+    }
+  }
+  // Catchall: check broader encounter-end conditions (e.g., neutral-only encounter is empty).
+  checkEncounterEnd();
+}
+
+// ---------- Turn flow ----------
+function startNewTurn() {
+  if (state.gameOver) return;
+  if (state.view !== "encounter" || !state.sides) return;
+  runUpkeepStart();
+  if (state.gameOver || state.view !== "encounter") { render(); return; }
+  // Render the upkeep beat with face-down cards still face-down. Then flip them up at end of
+  // upkeep per the unified rule, then continue to draw and main.
+  render();
+  setTimeout(() => {
+    if (state.view !== "encounter" || !state.sides) return;
+    runUpkeepEnd();
+    if (state.gameOver || state.view !== "encounter") { render(); return; }
+    runDraw();
+    if (state.view !== "encounter") { render(); return; }
+    runMain();
+    render();
+  }, 700);
+}
+
+// Phase 1 of player advancement: end main, AI places, both sides commit (AI face-down),
+// reveal AI cards, resolve any actions committed in main (in Tempo order), then enter combat-reveal.
+function endMainPhase() {
+  if (state.phase !== "main") return;
+  if (state.gameOver || state.view !== "encounter") return;
+  // Clear any pending UI selections.
+  state.selectedCardId = null;
+  state.selectedCommittedId = null;
+  // AI places into pending (cost-checks against committed only; can't see player's pending).
+  aiPlaceMain();
+  // Both sides commit. AI cards are face-down at this point.
+  commitPendingPlays();
+  // Enter the reveal phase. AI cards visible as backs, then flip to face-up after a beat.
+  state.phase = "reveal";
+  logEntry(`— Reveal —`, "phase");
+  render();
+  setTimeout(() => {
+    if (state.gameOver || state.view !== "encounter") return;
+    // Tempo-ordered interleaved reveal-and-resolve: each card's flip-up happens at its Tempo step,
+    // and actions resolve at their Tempo step (using the board state visible at that moment —
+    // lower-Tempo cards are still face-down and not legal targets).
+    endOfPhaseRevealAndResolve();
+    if (state.gameOver || state.view !== "encounter") {
+      render();
+      showGameOver();
+      return;
+    }
+    state.phase = "combat-reveal";
+    logEntry(`Combat previews shown. Commit anytime actions, then resolve.`, "phase");
+    render();
+  }, 700);
+}
+
+// Phase 2 of player advancement: commit any combat-reveal-phase actions, resolve them,
+// then run creature combat, then cleanup, then next turn auto-rolls.
+function resolveCombatPhase() {
+  if (state.phase !== "combat-reveal") return;
+  if (state.gameOver || state.view !== "encounter") return;
+  // If the player committed an action during combat-reveal, it lives in pending. Commit it now.
+  commitPendingPlays();
+  // Actions committed during combat-reveal resolve now via the unified Tempo-ordered reveal-and-
+  // resolve. Any face-down combat-reveal commits flip up here in Tempo order, with actions
+  // resolving at their Tempo step.
+  endOfPhaseRevealAndResolve();
+  if (state.gameOver || state.view !== "encounter") {
+    render();
+    showGameOver();
+    return;
+  }
+  state.phase = "combat-resolve";
+  render();
+  setTimeout(() => {
+    if (state.view !== "encounter") return;
+    runCombat();
+    if (state.gameOver || state.view !== "encounter") {
+      render();
+      showGameOver();
+      return;
+    }
+    runCleanup();
+    if (state.gameOver || state.view !== "encounter") {
+      render();
+      showGameOver();
+      return;
+    }
+    render();
+    setTimeout(() => {
+      if (state.view !== "encounter") return;
+      startNewTurn();
+    }, 800);
+  }, 400);
+}
+
+// Single advance handler — picks the right action based on current phase.
+function advancePhase() {
+  if (state.gameOver) return;
+  if (state.phase === "main") return endMainPhase();
+  if (state.phase === "combat-reveal") return resolveCombatPhase();
+}
+
+// ---------- UI: rendering ----------
+const $ = (id) => document.getElementById(id);
+
+// Most recent combat preview, computed at start of each render during main phase.
+let _combatPreview = null;
+
+function render() {
+  // v3: branch by view mode. Overworld vs encounter are visually distinct.
+  if (state.runOver) {
+    showGameOver();
+  }
+  if (state.view === "overworld") {
+    renderOverworld();
+    return;
+  }
+  // Encounter view (the existing v2 render path).
+  renderEncounter();
+}
+
+// Render the overworld view: map of nodes + edges, pawn marker, legal-move highlights.
+function renderOverworld() {
+  // Hide encounter-only widgets (durability, stat rows, hand, etc.) by clearing their containers.
+  $("locations-row").innerHTML = "";
+  $("hand").innerHTML = "";
+  $("ai-hand-info").textContent = "";
+  $("phase-info").textContent = "Overworld";
+  $("turn-info").textContent = `Run Durability: ${state.runDurability}`;
+  // Hide summoner widgets (player Durability shown via run Durability above instead).
+  $("player-summoner").style.display = "none";
+  $("ai-summoner").style.display = "none";
+
+  // Build the overworld panel.
+  const overworldEl = $("overworld") || createOverworldHost();
+  overworldEl.innerHTML = "";
+  overworldEl.appendChild(buildOverworldSvg());
+  overworldEl.appendChild(buildOverworldHelp());
+
+  renderLog();
+  renderControls();
+}
+
+// Render the encounter view (existing v2 layout). Called when state.view === "encounter".
+function renderEncounter() {
+  // Show summoner widgets again.
+  $("player-summoner").style.display = "";
+  $("ai-summoner").style.display = "";
+  // Hide overworld panel.
+  const overworldEl = $("overworld");
+  if (overworldEl) overworldEl.innerHTML = "";
+
+  // Combat preview is only meaningful during combat-reveal, after both sides have committed.
+  _combatPreview = (state.phase === "combat-reveal") ? computeCombatPreview() : null;
+
+  // Summoner durability and deck info (global per side).
+  $("player-durability").textContent = state.sides.player.durability;
+  $("ai-durability").textContent = state.encounterKind === "boss" ? state.sides.ai.durability : "—";
+  $("player-deck-info").textContent = `deck ${state.sides.player.deck.length} · discard ${state.sides.player.discard.length} · grave ${state.sides.player.graveyard.length}`;
+  $("ai-deck-info").textContent = `deck ${state.sides.ai.deck.length} · discard ${state.sides.ai.discard.length} · grave ${state.sides.ai.graveyard.length}`;
+  $("ai-hand-info").textContent = `AI hand: ${state.sides.ai.hand.length} card${state.sides.ai.hand.length === 1 ? "" : "s"}`;
+
+  const node = getNode(state.currentNodeId);
+  $("phase-info").textContent = `${node ? node.label + " · " : ""}Phase: ${state.phase}`;
+  $("turn-info").textContent = `Turn ${state.turn}`;
+
+  // Priority highlight + incoming-damage indicator on each summoner.
+  for (const sideName of ["player", "ai"]) {
+    const summonerEl = $(sideName + "-summoner");
+    const badge = $(sideName + "-priority-badge");
+    if (state.firstSide === sideName) {
+      summonerEl.classList.add("has-priority");
+      badge.textContent = "First";
+      badge.classList.add("show");
+    } else {
+      summonerEl.classList.remove("has-priority");
+      badge.classList.remove("show");
+    }
+    const incoming = $(sideName + "-incoming");
+    const dmg = _combatPreview ? _combatPreview.summonerHits[sideName] : 0;
+    if (dmg > 0) {
+      incoming.textContent = `−${dmg} incoming`;
+      incoming.classList.add("show");
+    } else {
+      incoming.classList.remove("show");
+    }
+  }
+
+  // Build the locations row from scratch each render — simpler than diffing for v2 scale.
+  const locsRow = $("locations-row");
+  locsRow.innerHTML = "";
+  locsRow.style.setProperty("--loc-count", LOCATION_COUNT);
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    locsRow.appendChild(buildLocationColumn(loc));
+  }
+
+  renderHand();
+  renderLog();
+  renderControls();
+}
+
+// Lazy-init the overworld DOM host (placed inside #board, above #locations-row).
+function createOverworldHost() {
+  const board = $("board");
+  const locsRow = $("locations-row");
+  const el = document.createElement("div");
+  el.id = "overworld";
+  board.insertBefore(el, locsRow);
+  return el;
+}
+
+// Build the overworld map as inline SVG: nodes as circles with labels, edges as lines, pawn marker.
+function buildOverworldSvg() {
+  const W = 800, H = 360;
+  const PAD = 60;
+  const nodes = state.world.nodes;
+  // Compute pixel positions from node x/y grid coords. Map x:[0..5], y:[0..4] to canvas.
+  const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  function px(n) {
+    const t = (n.x - xMin) / Math.max(1, xMax - xMin);
+    return PAD + t * (W - 2 * PAD);
+  }
+  function py(n) {
+    const t = (n.y - yMin) / Math.max(1, yMax - yMin);
+    return PAD + t * (H - 2 * PAD);
+  }
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "overworld-svg");
+
+  // Edges first (under nodes).
+  for (const [a, b] of state.world.edges) {
+    const na = getNode(a), nb = getNode(b);
+    const ln = document.createElementNS(ns, "line");
+    ln.setAttribute("x1", px(na));
+    ln.setAttribute("y1", py(na));
+    ln.setAttribute("x2", px(nb));
+    ln.setAttribute("y2", py(nb));
+    ln.setAttribute("class", "ow-edge");
+    svg.appendChild(ln);
+  }
+
+  const legalSet = new Set(legalMovesFromPawn());
+  for (const n of nodes) {
+    const cx = px(n), cy = py(n);
+    const g = document.createElementNS(ns, "g");
+    g.setAttribute("class", "ow-node-group");
+
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", 28);
+    let cls = "ow-node ow-node-" + n.kind + " ow-node-status-" + n.status;
+    if (legalSet.has(n.id)) cls += " ow-node-legal";
+    if (state.world.pawnAt === n.id) cls += " ow-node-pawn";
+    c.setAttribute("class", cls);
+    g.appendChild(c);
+
+    // Label
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", cx); t.setAttribute("y", cy + 4);
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("class", "ow-node-label");
+    t.textContent = (n.kind === "boss" ? "★" : n.kind === "neutral" ? "?" : n.kind === "hostile" ? "⚔" : "•");
+    g.appendChild(t);
+
+    // Label below
+    const tl = document.createElementNS(ns, "text");
+    tl.setAttribute("x", cx); tl.setAttribute("y", cy + 50);
+    tl.setAttribute("text-anchor", "middle");
+    tl.setAttribute("class", "ow-node-name");
+    tl.textContent = n.label;
+    g.appendChild(tl);
+
+    if (legalSet.has(n.id) && !state.runOver) {
+      g.style.cursor = "pointer";
+      g.addEventListener("click", () => moveTo(n.id));
+    }
+
+    svg.appendChild(g);
+  }
+
+  return svg;
+}
+
+function buildOverworldHelp() {
+  const help = document.createElement("div");
+  help.className = "overworld-help";
+  const node = getNode(state.world.pawnAt);
+  help.innerHTML = `
+    <div><strong>Overworld.</strong> Click any highlighted node adjacent to your pawn to advance.</div>
+    <div>You're at: <strong>${node ? node.label : "?"}</strong></div>
+    <div>Run Durability: <strong>${state.runDurability}</strong> &nbsp;·&nbsp; Run deck: <strong>${state.runDeck.length}</strong> cards</div>
+    <div class="muted">⚔ hostile · ? neutral encounter · ★ boss · • empty/start</div>
+  `;
+  return help;
+}
+
+// Build a single .location column for index `loc`. Internal layout: header label, AI structure
+// row, AI side (stat-row + creature grid + action slot), player side (mirror), player structure.
+function buildLocationColumn(loc) {
+  const col = document.createElement("div");
+  col.className = "location";
+  col.dataset.loc = String(loc);
+
+  // Location label (flavor name only — no location text in v2).
+  const label = document.createElement("div");
+  label.className = "location-label";
+  label.textContent = LOC_NAMES[loc] || `Location ${loc + 1}`;
+  col.appendChild(label);
+
+  // AI structure row (above the AI side).
+  const aiStructRow = document.createElement("div");
+  aiStructRow.className = "ai-structure-row";
+  const aiStructLabel = document.createElement("div");
+  aiStructLabel.className = "structure-row-label";
+  aiStructLabel.textContent = "AI structure";
+  aiStructRow.appendChild(aiStructLabel);
+  aiStructRow.appendChild(buildSimpleSlot("ai", loc, "structure"));
+  aiStructRow.appendChild(document.createElement("div")); // spacer right column
+  col.appendChild(aiStructRow);
+
+  // AI info (stat row).
+  const aiInfo = document.createElement("div");
+  aiInfo.className = "side-info ai-info";
+  aiInfo.appendChild(buildStatRow("ai", loc));
+  col.appendChild(aiInfo);
+
+  // AI side (creature grid 2x2, back row first so front row is closer to centerline).
+  const aiSide = document.createElement("div");
+  aiSide.className = "ai-side";
+  aiSide.appendChild(buildCreatureGrid("ai", loc));
+  col.appendChild(aiSide);
+
+  // AI action slot.
+  const aiAction = buildSimpleSlot("ai", loc, "action");
+  aiAction.classList.add("ai-action-slot");
+  col.appendChild(aiAction);
+
+  // Player info (stat row).
+  const playerInfo = document.createElement("div");
+  playerInfo.className = "side-info player-info";
+  playerInfo.appendChild(buildStatRow("player", loc));
+  col.appendChild(playerInfo);
+
+  // Player side (creature grid).
+  const playerSide = document.createElement("div");
+  playerSide.className = "player-side";
+  playerSide.appendChild(buildCreatureGrid("player", loc));
+  col.appendChild(playerSide);
+
+  // Player action slot.
+  const playerAction = buildSimpleSlot("player", loc, "action");
+  playerAction.classList.add("player-action-slot");
+  col.appendChild(playerAction);
+
+  // Player structure row (below the player side).
+  const playerStructRow = document.createElement("div");
+  playerStructRow.className = "player-structure-row";
+  const playerStructLabel = document.createElement("div");
+  playerStructLabel.className = "structure-row-label";
+  playerStructLabel.textContent = "Your structure";
+  playerStructRow.appendChild(playerStructLabel);
+  playerStructRow.appendChild(buildSimpleSlot("player", loc, "structure"));
+  playerStructRow.appendChild(document.createElement("div"));
+  col.appendChild(playerStructRow);
+
+  return col;
+}
+
+function buildStatRow(side, loc) {
+  const row = document.createElement("div");
+  row.className = "stat-row";
+  for (const stat of ["force", "tempo", "insight"]) {
+    const cmt = committedStatTotal(side, loc, stat);
+    const vis = visibleStatTotal(side, loc, stat);
+    const cell = document.createElement("div");
+    cell.className = "stat-cell stat-" + stat;
+    cell.innerHTML = `<div class="stat-cell-label">${stat.charAt(0).toUpperCase() + stat.slice(1)}</div><div class="stat-cell-value">${cmt}${vis > cmt ? `<span class="stat-pending">+${vis - cmt}</span>` : ""}</div>`;
+    row.appendChild(cell);
+  }
+  return row;
+}
+
+function buildCreatureGrid(side, loc) {
+  const grid = document.createElement("div");
+  grid.className = "creature-grid";
+  // Player: front-row at top (closer to centerline). AI: back row first so front row is at bottom.
+  const order = side === "player" ? ["fl", "fr", "bl", "br"] : ["bl", "br", "fl", "fr"];
+  const lc = L(side, loc);
+
+  for (const pos of order) {
+    const committedCard = lc.creatures[pos];
+    const pendingCard = lc.pending.creatures[pos];
+    const cell = document.createElement("div");
+    cell.className = "slot";
+    cell.dataset.side = side;
+    cell.dataset.loc = String(loc);
+    cell.dataset.pos = pos;
+    cell.dataset.kind = "creature";
+
+    if (committedCard) {
+      cell.classList.add("has-card");
+      const cardEl = makeCardEl(committedCard, true);
+      if (side === "player" && state.selectedCommittedId === committedCard.instId) {
+        cardEl.classList.add("selected");
+      }
+      if (lc.movedThisTurn.has(committedCard.instId)) cardEl.classList.add("moved");
+      cell.appendChild(cardEl);
+    } else if (pendingCard) {
+      cell.classList.add("has-card", "pending");
+      const cardEl = makeCardEl(pendingCard, true);
+      cardEl.classList.add("pending-card");
+      cell.appendChild(cardEl);
+    } else {
+      const lbl = document.createElement("span");
+      lbl.className = "slot-label";
+      lbl.textContent = pos;
+      cell.appendChild(lbl);
+    }
+
+    if (side === "player") {
+      const inMain = state.phase === "main";
+      const inCombatReveal = state.phase === "combat-reveal";
+      const movementAllowed = inMain || inCombatReveal;
+
+      // Hand-card placement (creatures only commit during main).
+      if (inMain) {
+        const sel = state.selectedCardId ? findHandCard(state.selectedCardId) : null;
+        if (sel && sel.type === "creature" && !slotOccupied("player", loc, "creature", pos) && canPay("player", loc, sel)) {
+          cell.classList.add("legal-target");
+          cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "creature", pos }));
+        }
+        // Pending creature cancel.
+        if (pendingCard && !sel && !state.selectedCommittedId) {
+          cell.classList.add("can-cancel");
+          cell.addEventListener("click", () => {
+            cancelPendingPlacement("player", loc, "creature", pos);
+            render();
+          });
+        }
+      }
+
+      // Committed-creature selection for movement (within this location only — v2 scope).
+      if (movementAllowed && committedCard && !state.selectedCardId) {
+        if (state.selectedCommittedId === committedCard.instId) {
+          cell.addEventListener("click", () => {
+            state.selectedCommittedId = null;
+            render();
+          });
+        } else if (!lc.movedThisTurn.has(committedCard.instId)) {
+          cell.classList.add("can-select-move");
+          cell.addEventListener("click", () => {
+            state.selectedCommittedId = committedCard.instId;
+            state.selectedCardId = null;
+            render();
+          });
+        }
+      }
+
+      // Movement target: empty adjacent slot at the same location as the selected creature.
+      if (movementAllowed && state.selectedCommittedId && !committedCard && !pendingCard) {
+        const found = findCommittedCreatureAndLoc("player", state.selectedCommittedId);
+        if (found && found.loc === loc) { // same-location moves only in v2
+          if (isAdjacent(found.pos, pos)) {
+            cell.classList.add("legal-target");
+            cell.addEventListener("click", () => {
+              moveCommittedCreature("player", loc, found.pos, pos);
+              state.selectedCommittedId = null;
+              render();
+            });
+          }
+        }
+      }
+    }
+    grid.appendChild(cell);
+  }
+  return grid;
+}
+
+// Locate a committed creature anywhere on a side. Returns { loc, pos, creature } or null.
+function findCommittedCreatureAndLoc(side, instId) {
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L(side, loc);
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.instId === instId) return { loc, pos, creature: c };
+    }
+  }
+  return null;
+}
+
+// Build a structure or action slot at a location. Returns the slot element.
+function buildSimpleSlot(side, loc, kind) {
+  const slot = document.createElement("div");
+  slot.className = "slot";
+  if (kind === "structure") slot.classList.add("structure-slot");
+  slot.dataset.side = side;
+  slot.dataset.loc = String(loc);
+  slot.dataset.kind = kind;
+
+  const lc = L(side, loc);
+  const committed = lc[kind];
+  const pending = lc.pending[kind];
+
+  if (committed) {
+    slot.classList.add("has-card");
+    slot.appendChild(makeCardEl(committed, true));
+  } else if (pending) {
+    slot.classList.add("has-card", "pending");
+    const el = makeCardEl(pending, true);
+    el.classList.add("pending-card");
+    slot.appendChild(el);
+    if (side === "player" && isCommitWindowFor(kind) && !state.selectedCardId && !state.selectedCommittedId) {
+      slot.classList.add("can-cancel");
+      slot.addEventListener("click", () => {
+        cancelPendingPlacement("player", loc, kind);
+        render();
+      });
+    }
+  } else {
+    const lbl = document.createElement("span");
+    lbl.className = "slot-label";
+    lbl.textContent = kind;
+    slot.appendChild(lbl);
+
+    // Legal target if the selected hand card matches type, can pay at this location, and we're in
+    // a commit window for that type.
+    if (side === "player" && isCommitWindowFor(kind)) {
+      const sel = state.selectedCardId ? findHandCard(state.selectedCardId) : null;
+      if (sel && sel.type === kind && canPay("player", loc, sel)) {
+        slot.classList.add("legal-target");
+        slot.addEventListener("click", () => placeSelectedAt({ loc, kind }));
+      }
+    }
+  }
+  return slot;
+}
+
+function makeCardEl(card, inSlot = false) {
+  const el = document.createElement("div");
+  el.className = `card ${card.type}`;
+  if (card.owner === "ai") el.classList.add("ai-owned");
+  if (inSlot) el.classList.add("in-slot");
+  if (state.selectedCardId === card.instId) el.classList.add("selected");
+
+  // Face-down rendering: show card back instead of identity for OPPOSING cards (AI). The player's
+  // own face-down cards still display face-up to the owner — fog-of-war hides AI plays from the
+  // player's view, not the player's own plays from themselves. (The underlying game state is the
+  // same — `revealed: false` — until the unified end-of-phase flip-up rule fires; this is just the
+  // owner-side render exception.)
+  if (card.revealed === false && card.owner !== "player") {
+    el.classList.add("face-down");
+    const back = document.createElement("div");
+    back.className = "card-back";
+    back.textContent = "?";
+    el.appendChild(back);
+    return el;
+  }
+  // Player's own face-down cards: render normally but with a subtle "pending reveal" outline so
+  // the player knows the card hasn't flipped up yet (and any flip-up triggers haven't fired).
+  if (card.revealed === false && card.owner === "player") {
+    el.classList.add("pre-flip");
+  }
+
+  const nameEl = document.createElement("div");
+  nameEl.className = "name";
+  nameEl.textContent = card.name;
+  el.appendChild(nameEl);
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  if (card.cost > 0) {
+    const b = document.createElement("span");
+    b.className = "badge cost";
+    b.textContent = `≥${card.cost} ${(card.costStat || "force").toUpperCase()}`;
+    meta.appendChild(b);
+  }
+  if (card.force > 0) {
+    const b = document.createElement("span");
+    b.className = "badge force";
+    b.textContent = `Force ${card.force}`;
+    meta.appendChild(b);
+  }
+  if (card.tempo > 0) {
+    const b = document.createElement("span");
+    b.className = "badge tempo";
+    b.textContent = `Tempo ${card.tempo}`;
+    meta.appendChild(b);
+  }
+  if (card.insight > 0) {
+    const b = document.createElement("span");
+    b.className = "badge insight";
+    b.textContent = `Insight ${card.insight}`;
+    meta.appendChild(b);
+  }
+  if (card.durabilityMax != null) {
+    const b = document.createElement("span");
+    b.className = "badge durability";
+    b.textContent = `Durability ${card.durability}/${card.durabilityMax}`;
+    meta.appendChild(b);
+  }
+  el.appendChild(meta);
+
+  if (card.text) {
+    const t = document.createElement("div");
+    t.className = "text";
+    t.textContent = card.text;
+    el.appendChild(t);
+  }
+
+  // Combat preview lines (creatures in slots, during main phase).
+  if (inSlot && card.type === "creature" && _combatPreview) {
+    const atk = _combatPreview.attackers[card.instId];
+    if (atk) {
+      const previewEl = document.createElement("div");
+      previewEl.className = "preview";
+      let label = `→ ${atk.targetLabel} for ${atk.damage}`;
+      if (atk.killsTarget) label += " (kills)";
+      previewEl.textContent = label;
+      el.appendChild(previewEl);
+    } else if (card.owner === "player") {
+      // Player-owned creature with no attacker entry — explain why.
+      const why = (card.force <= 0) ? "no Force — won't attack" : "back row — won't attack";
+      const previewEl = document.createElement("div");
+      previewEl.className = "preview muted";
+      previewEl.textContent = why;
+      el.appendChild(previewEl);
+    }
+    if (_combatPreview.willDie.has(card.instId)) {
+      const dieEl = document.createElement("div");
+      dieEl.className = "preview die";
+      dieEl.textContent = "will die in combat";
+      el.appendChild(dieEl);
+    }
+  }
+
+  return el;
+}
+
+function renderHand() {
+  const hand = $("hand");
+  hand.innerHTML = "";
+  const inAnyCommitWindow = state.phase === "main" || state.phase === "combat-reveal";
+  for (const card of state.sides.player.hand) {
+    const el = makeCardEl(card, false);
+    const cardWindow = isCommitWindowFor(card.type);
+    const playable = cardWindow && cardHasAnyLegalPlay("player", card);
+    if (inAnyCommitWindow && !playable) el.classList.add("unplayable");
+    el.addEventListener("click", () => {
+      if (!inAnyCommitWindow) return;
+      if (!cardWindow) {
+        flashLog(`${card.name}: not playable in this phase.`);
+        return;
+      }
+      if (!playable) {
+        // Provide a useful message: do we have *any* location with the cost paid?
+        const statName = (card.costStat || "force");
+        const statLabel = statName.charAt(0).toUpperCase() + statName.slice(1);
+        const haveByLoc = [];
+        let canPayAnywhere = false;
+        for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+          const have = committedStatTotal("player", loc, statName);
+          haveByLoc.push(`${LOC_NAMES[loc]}: ${have}`);
+          if (have >= (card.cost || 0)) canPayAnywhere = true;
+        }
+        if (!canPayAnywhere) {
+          flashLog(`${card.name}: need ≥${card.cost} ${statLabel} at the target location. Committed — ${haveByLoc.join(" · ")}.`);
+        } else {
+          flashLog(`${card.name}: no legal target slot at any location where the cost is paid.`);
+        }
+        return;
+      }
+      state.selectedCardId = (state.selectedCardId === card.instId) ? null : card.instId;
+      state.selectedCommittedId = null;
+      render();
+    });
+    hand.appendChild(el);
+  }
+}
+
+function renderLog() {
+  const log = $("log");
+  log.innerHTML = "";
+  for (const e of state.log.slice(-80)) {
+    const div = document.createElement("div");
+    div.className = "entry " + (e.kind || "");
+    div.textContent = e.msg;
+    log.appendChild(div);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderControls() {
+  const btn = $("btn-advance");
+  const leaveBtn = $("btn-leave-encounter");
+  // Overworld view: hide both phase buttons.
+  if (state.view === "overworld") {
+    btn.style.display = "none";
+    if (leaveBtn) leaveBtn.style.display = "none";
+    return;
+  }
+  // Encounter view.
+  btn.style.display = "";
+  if (leaveBtn) {
+    // Show leave button only for neutral encounters where engaging is optional.
+    leaveBtn.style.display = state.encounterKind === "neutral" ? "" : "none";
+    leaveBtn.disabled = !!state.gameOver;
+  }
+  if (state.gameOver) {
+    btn.disabled = true;
+    btn.textContent = "Game Over";
+    return;
+  }
+  switch (state.phase) {
+    case "main":
+      btn.disabled = false;
+      btn.textContent = "End Main Phase";
+      break;
+    case "combat-reveal":
+      btn.disabled = false;
+      btn.textContent = "Resolve Combat";
+      break;
+    case "reveal":
+    case "combat-resolve":
+    case "cleanup":
+    case "upkeep":
+    case "draw":
+      btn.disabled = true;
+      btn.textContent = "…";
+      break;
+    default:
+      btn.disabled = true;
+      btn.textContent = "—";
+  }
+}
+
+function findHandCard(instId) {
+  return state.sides.player.hand.find(c => c.instId === instId) || null;
+}
+
+function placeSelectedAt(target) {
+  const card = findHandCard(state.selectedCardId);
+  if (!card) return;
+  if (!canPay("player", target.loc, card)) return;
+  placeCard("player", card, target);
+  state.selectedCardId = null;
+  render();
+}
+
+function flashLog(msg) {
+  logEntry(msg, "cleanup");
+  renderLog();
+}
+
+// ---------- Game over ----------
+function showGameOver() {
+  // v3: distinguish run-end (won/lost the whole run) from encounter-end (returns to overworld).
+  // Encounter-end uses endEncounter() which doesn't show this modal — only the run-over shows it.
+  if (state.runOver === "playerWin") {
+    $("game-over-title").textContent = "You win the run";
+  } else if (state.runOver === "playerLose") {
+    $("game-over-title").textContent = "You fell";
+  } else {
+    return; // not a run-over event
+  }
+  $("game-over-text").textContent = `Run ended at ${getNode(state.world.pawnAt)?.label || "?"}. Run Durability: ${state.runDurability}.`;
+  $("game-over").classList.add("show");
+}
+
+function hideGameOver() {
+  $("game-over").classList.remove("show");
+}
+
+// ---------- Init / wiring ----------
+function start() {
+  state = freshState();
+  hideGameOver();
+  logEntry(`v3 prototype — overworld map, hand-authored encounters, neutral puzzles. Move the pawn to begin.`);
+  render();
+}
+
+// ---------- Export ----------
+function buildExport() {
+  const ts = new Date().toISOString();
+  const lines = [];
+  lines.push(`=== Game v2 export (${ts}) ===`);
+  lines.push(`Turn ${state.turn} · Phase: ${state.phase} · Priority: ${state.firstSide}`);
+  // AI Durability is meaningful only at the boss encounter (boss is a summoner). At non-boss
+  // hostile encounters there's no AI summoner — show — instead of a misleading number.
+  const aiDurabilityDisplay = state.encounterKind === "boss" ? state.sides.ai.durability : "—";
+  lines.push(`Player Durability: ${state.sides.player.durability} · AI Durability: ${aiDurabilityDisplay}`);
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    lines.push(`@ ${LOC_NAMES[loc]} — Player Force/Tempo/Insight (committed): ${committedStatTotal("player",loc,"force")}/${committedStatTotal("player",loc,"tempo")}/${committedStatTotal("player",loc,"insight")}`);
+    lines.push(`@ ${LOC_NAMES[loc]} — AI     Force/Tempo/Insight (committed): ${committedStatTotal("ai",loc,"force")}/${committedStatTotal("ai",loc,"tempo")}/${committedStatTotal("ai",loc,"insight")}`);
+  }
+  lines.push(``);
+
+  // Compact human-readable per-location, per-side board.
+  function describeSide(name) {
+    const s = state.sides[name];
+    const out = [];
+    out.push(`  ${name.toUpperCase()}:`);
+    out.push(`    Hand (${s.hand.length}): ${s.hand.map(c => c.name).join(", ") || "—"}`);
+    out.push(`    Deck ${s.deck.length} · Discard ${s.discard.length} · Graveyard ${s.graveyard.length}`);
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(name, loc);
+      out.push(`    @ ${LOC_NAMES[loc]}:`);
+      const cs = ["fl","fr","bl","br"].map(p => {
+        const c = lc.creatures[p];
+        const pc = lc.pending.creatures[p];
+        if (c) return `${p}=${c.name}[F${c.force || 0}/T${c.tempo || 0}/I${c.insight || 0}/D${c.durability}/${c.durabilityMax}${c.revealed === false ? " face-down" : ""}]`;
+        if (pc) return `${p}=(pending)${pc.name}`;
+        return `${p}=—`;
+      });
+      out.push(`      Creatures: ${cs.join("  ")}`);
+      out.push(`      Structure: ${lc.structure ? lc.structure.name : (lc.pending.structure ? "(pending)"+lc.pending.structure.name : "—")}`);
+      out.push(`      Action:    ${lc.action ? lc.action.name : (lc.pending.action ? "(pending)"+lc.pending.action.name : "—")}`);
+    }
+    return out.join("\n");
+  }
+  lines.push(describeSide("player"));
+  lines.push(describeSide("ai"));
+  lines.push(``);
+
+  // Full log.
+  lines.push(`=== Log ===`);
+  for (const e of state.log) {
+    lines.push(`[${e.kind || "info"}] ${e.msg}`);
+  }
+  lines.push(``);
+
+  // JSON snapshot for full reconstruction. Strip cyclic / Set fields.
+  function serializableLocation(lc) {
+    return {
+      creatures: Object.fromEntries(["fl","fr","bl","br"].map(p => [p, lc.creatures[p] ? serializableCard(lc.creatures[p]) : null])),
+      structure: lc.structure ? serializableCard(lc.structure) : null,
+      action: lc.action ? serializableCard(lc.action) : null,
+      pending: {
+        creatures: Object.fromEntries(["fl","fr","bl","br"].map(p => [p, lc.pending.creatures[p] ? serializableCard(lc.pending.creatures[p]) : null])),
+        structure: lc.pending.structure ? serializableCard(lc.pending.structure) : null,
+        action: lc.pending.action ? serializableCard(lc.pending.action) : null
+      },
+      movedThisTurn: Array.from(lc.movedThisTurn || [])
+    };
+  }
+  function serializableSide(s) {
+    return {
+      durability: s.durability,
+      deck: s.deck.map(serializableCard),
+      hand: s.hand.map(serializableCard),
+      discard: s.discard.map(serializableCard),
+      graveyard: s.graveyard.map(serializableCard),
+      locations: s.locations.map(serializableLocation)
+    };
+  }
+  function serializableCard(c) {
+    return {
+      instId: c.instId, defKey: c.defKey, name: c.name, type: c.type,
+      cost: c.cost, costStat: c.costStat, force: c.force, tempo: c.tempo, insight: c.insight,
+      durability: c.durability, durabilityMax: c.durabilityMax, effect: c.effect, revealed: c.revealed
+    };
+  }
+  const snapshot = {
+    turn: state.turn,
+    phase: state.phase,
+    firstSide: state.firstSide,
+    gameOver: state.gameOver,
+    locationNames: LOC_NAMES,
+    sides: {
+      player: serializableSide(state.sides.player),
+      ai: serializableSide(state.sides.ai)
+    }
+  };
+  lines.push(`=== JSON snapshot ===`);
+  lines.push(JSON.stringify(snapshot, null, 2));
+  return lines.join("\n");
+}
+
+function exportToClipboard() {
+  const text = buildExport();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => flashLog("Game state copied to clipboard."),
+      () => fallbackExport(text)
+    );
+  } else {
+    fallbackExport(text);
+  }
+}
+
+function fallbackExport(text) {
+  // Older browsers without clipboard API: drop into a textarea and let user copy.
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.top = "10px";
+  ta.style.left = "10px";
+  ta.style.width = "80vw";
+  ta.style.height = "60vh";
+  ta.style.zIndex = "1000";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  flashLog("Clipboard not available — manually copy the text shown, then click anywhere to dismiss.");
+  const dismiss = () => { ta.remove(); document.removeEventListener("click", dismiss, true); };
+  setTimeout(() => document.addEventListener("click", dismiss, true), 100);
+}
+
+function exportToFile() {
+  const text = buildExport();
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `game-export-turn${state.turn}-${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  flashLog("Game state downloaded.");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("btn-advance").addEventListener("click", advancePhase);
+  $("btn-restart").addEventListener("click", start);
+  $("btn-go-restart").addEventListener("click", start);
+  $("btn-leave-encounter").addEventListener("click", () => {
+    if (state.view !== "encounter") return;
+    if (state.encounterKind !== "neutral") return;
+    logEntry(`You leave the encounter without claiming the reward.`, "phase");
+    endEncounter("playerLeft");
+  });
+  $("btn-export").addEventListener("click", (e) => {
+    if (e.shiftKey) exportToFile();
+    else exportToClipboard();
+  });
+  start();
+});
+</script>
+
+</body>
+</html>
