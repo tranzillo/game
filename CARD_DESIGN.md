@@ -147,6 +147,13 @@ Examples:
 
 Conversion verbs imply *the taken creature joins your piles* by virtue of being a conversion verb — that's the conversion. Card text doesn't repeat it.
 
+**Costs follow the same default-implied rule.** A stat requirement of `≥1` of the relevant stat is the default and isn't printed on the card. Only exceptions are spelled out:
+- `≤` (less-than) requirements.
+- Comparisons against the other side's stats at the location.
+- Compound or alternative cost types.
+
+"Your stats here" is the default scope and isn't printed either. Only cross-side comparisons or scope-expansions get printed text.
+
 ## Anchoring constraints (starter pool)
 
 Locked rules from the starter framework. Every starter card must satisfy all:
@@ -339,6 +346,7 @@ Together they make Recruit feel like *Red's identity* (deckbuilding via Force-su
 | RR4 | Battle Driver | action | ≥1F | — | — | — | "Deal 1 damage to a creature on your side here. That creature gains +1 Force this turn." | proposed |
 | RR5 | Goblin Pike | equipment | ≥1F | — | — | — | "Equip. The wielder's attacks gain pierce 1." | proposed |
 | RR6 | Goblin Bombardment | action | ≥1F | — | — | — | "Sacrifice a goblin on your side here. Deal damage equal to your Force here." | proposed |
+| RR7 | Bounty | action | — | — | — | — | "Quest: the next creature on the other side destroyed in combat at this location is sent to your graveyard." | proposed |
 
 ### Card-by-card rationale
 
@@ -385,6 +393,16 @@ Together they make Recruit feel like *Red's identity* (deckbuilding via Force-su
 - Opens a category for all 5 colors (sacrifice a tribal creature for a color-flavored payoff).
 
 **Open question:** does the sacrifice happen *before* damage resolves? Per the resolve order: yes — sacrifice fires first (the creature is in the graveyard), then damage calculates Force-here using the post-sacrifice board. This is the cost-paid-then-effect model.
+
+**RR7 Bounty** — Red's first **Quest**. Quests are persistent actions that resolve when a printed condition is met, then exit to graveyard. Curse, Prayer, and Quest are the three printed persistent-action subtypes (rules-text concept "persistent action" is not printed terminology).
+
+Bounty's condition: the next time a creature on the other side is destroyed in combat at this location. On trigger, the destroyed creature is sent to the player's graveyard (acquired into deck via end-of-encounter reshuffle), and Bounty resolves and exits.
+
+**Combat-only trigger.** Spell damage killing an enemy creature here does not trigger Bounty. Pairs Bounty specifically with combat-focused decks.
+
+**Same-phase tie-handling.** When a single attack destroys multiple enemy creatures (cleave, AOE pierce, etc.), the *direct attack target* counts as destroyed first; splash damage targets count after. Bounty claims the direct-attack target.
+
+Cost and stat values deferred until tuning.
 
 ### Want web (Red reward tier)
 
@@ -550,7 +568,8 @@ All three express the same Blue verb — **copy, never steal** — with distinct
 |---|---|---|---|---|---|---|---|---|
 | BR1 | Spellbook | equipment | ≥2I | — | — | — | "3 pages. Equip. When an opposing action resolves at this location, this loses 1 page; a copy of that action enters your discard pile. When pages reach 0, this is destroyed." | proposed |
 | BR2 | Forbidden Library | structure | ≥3I | 0 | 0 | — | "When the next opposing action resolves at this location, copy it to your hand. Then this is destroyed." | proposed |
-| BR3 | Archeological Expedition | action | ≥2I | — | — | — | "Persistent. At end of cleanup, if at least one action resolved at this location this turn: copy a random one of them to your graveyard. Then this goes to your graveyard." | proposed |
+| BR3 | Archeological Expedition | action | ≥2I | — | — | — | "Add a copy of an action in the other side's graveyard to your graveyard." | proposed |
+| BR4 | Archive | action | ≥1I | — | — | — | "Move an action in the other side's discard pile to their graveyard." | proposed |
 
 ### Card-by-card rationale
 
@@ -572,15 +591,17 @@ Theme: a forbidden book, opened once, the secret out. Protection breaks; library
 
 *Flagged for revisit:* the underlying "copy enemy action resolving here" verb overlaps Spellbook. The hand-destination is a real differentiator but worth iterating in a future pass on whether the variety is sharp enough at the gameplay level.
 
-**BR3 Archeological Expedition** — Blue's *patient gamble* persistent action. Plays into the action slot, sits face-up post-reveal, waits for its trigger.
+**BR3 Archeological Expedition** — Blue's deck-acquisition action. One-shot: copies an action from the other side's graveyard into your graveyard. Random target per Pillar 10. Copy joins your deck for next encounter via graveyard reshuffle at encounter end — not an in-encounter weapon, a long-game deck-building tool.
 
-Trigger: at end of cleanup, if at least one action resolved at this location this turn, Expedition resolves. A random action from those resolved is selected (Pillar 10), a copy enters your graveyard, and Expedition itself goes to your graveyard.
+Setup-required: the other side has to have an action in their graveyard. Counterspell is the natural setup tool (sends countered actions to graveyard); Archive (BR4) is the dedicated setup tool — it moves opposing actions from discard to graveyard, *not for the effect, for the relocation*.
 
-Copy-to-graveyard means *next-encounter access* — the card joins your deck for future fights via graveyard reshuffle at encounter end. Expedition is not an in-encounter weapon; it's a deck-building tool for the long run.
+Theme: an archeological dig. What's already buried can be unearthed.
 
-Strategic risk-reward: blind acquisition is a **gamble**. Adding bad cards to your deck is one of the worst things a player can do. The opponent reads Expedition in the slot and can deliberately route low-value actions through this location to give the player chaff. Expedition pays off only when the player can constrain or predict valuable enemy actions resolving here.
+**BR4 Archive** — Blue disruption. Moves a random action from the other side's discard pile to their graveyard. Doesn't counter the effect (the action already resolved); it removes the card from the *cycling* loop. Discard pile reshuffles into deck on deck-empty; graveyard does not. So Archive ensures the targeted action is locked out of the rest of the encounter.
 
-Theme: an archeological dig. You set out to dig; you keep going until you hit something; what you find is what you find.
+Pairs with Archeological Expedition — Archive fills the other side's graveyard, Expedition mines it. Each works alone: Archive is pure disruption, Expedition copies whatever the other side has graveyard'd through other means (Counterspell, etc.).
+
+Theme: scholarly Blue's quiet sabotage — misfile the page so it can't be found again.
 
 ### Want web (Blue reward tier)
 

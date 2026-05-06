@@ -219,7 +219,7 @@ Mechanically:
 - Are **events**, not persistent objects. They have no durability.
 - Default behavior: played in any phase, resolve at end of that phase, then go to the **discard pile** (not the graveyard — see *Action resolution and the discard pile*, below).
 - An action occupies its slot from the moment it is committed (face-down) until it resolves and exits. While it occupies the slot, no other action can be played into that slot.
-- **Persistent action subtypes** (Prayer, Curse, the working-named "Counterspell" — see *Persistent Actions*, below) override the "leave at end of phase" rule and remain in the action slot across turns until they resolve or are removed.
+- **Persistent action subtypes** (Prayer, Curse, Quest, Reaction — see *Persistent Actions*, below) override the "leave at end of phase" rule and remain in the action slot across turns until they resolve or are removed.
 
 #### Action slots are a queue, not positioned slots
 
@@ -1339,6 +1339,20 @@ White does *not* generally interact with creature graveyards (no creature reanim
 
 This narrows White's graveyard interaction to a single, distinctive design space — fitting White's identity as patient and selective rather than opportunistic. It also gives White a real long-game payoff: structures destroyed by enemy effects don't stay destroyed forever in a White-leaning deck.
 
+#### Convert — White's deck-acquisition verb
+
+White's acquisition verb is **Convert**, mediated through **conversion marks** placed on creatures on the other side. A marked creature, if overhealed by its Force in a single turn, switches sides.
+
+**Mark mechanic:**
+- Cards print effects that *mark a creature on the other side for conversion* — printable on creatures (flip-up triggers), actions, equipment, structures.
+- Mark is visible to both sides.
+- Mark stacking is redundant; one mark is enough.
+- Mark duration: until conversion fires *or* the marked creature leaves play.
+
+**Convert quest** (persistent action) is the location-scoped variant: while in the action slot, the conversion condition applies to *all* creatures on the other side here. Any of them overhealed by their Force this turn switches sides; the quest then exits.
+
+**Cross-side healing is the load-bearing mechanic.** Most heal cards target friendly creatures, but White's Convert path requires cards that heal opposing creatures (a "missionary" subtheme). Card text like "heal a creature at this location" hits either side via Pillar 10 random selection — positional setup play makes the marked target the only legal target.
+
 ### Black — Spite — the color of costly engagement
 
 - **Identity:** every interaction with Black is transactional. Black creatures *want to be hit*; engagement is their weapon.
@@ -1722,25 +1736,26 @@ This creates a *contested neutral* dimension: the AI can move in to **race or de
 - **Racing:** the AI commits to a neutral location to share in / contest the reward. If the siren picks "another creature here" at random, an AI creature at the location is just as likely to be picked as a player creature — the player gets random partial reward at best.
 - **Denying:** the AI floods the neutral location to make the puzzle harder for the player. Slot pressure, stat dilution, anti-coordination plays. Some neutral cards' triggers become impossible to claim cleanly with the AI muddying the water.
 
-### Neutral cards are a third party on the board
+### Neutral cards live on the other side
 
-Neutral cards belong to *neither* player. Some specifics that fall out:
+There is no third-party mechanical category. Everything not from the player's deck — AI summoner cards, biome-native neutrals, anything else — sits on **the other side** relative to the player. Stat totals, targeting, and combat all read uniformly: your side vs the other side.
 
-- **Stat presence:** neutral cards do **not** contribute to either side's per-side per-location stat totals. They sit on the board as "neutral entities" — visually distinguishable from player and AI cards, mechanically neither.
-- **Targetability:** neutral cards *are* legal targets for both sides' effects (Pull, Counterspell, damage spells, dispersal, etc.). The player can blow up the siren before it triggers if they have the right answer. The AI can do the same. But neutral cards are typically **printed with high Durability** so they're hard to destroy — the puzzle is meant to be engaged with, not bypassed.
-- **Neutral-target text:** when a neutral card prints "another creature here," the implicit pool is **non-neutral creatures only** (player + AI creatures), not other neutral cards. A siren never accidentally consumes a sister-siren at the same location. (Per-card text may explicitly include neutral cards if a designer wants — the rule is a default, not absolute.)
-- **Combat:** neutral creatures with printed Force *do* attack — at whom is determined by the card text (typically attacks the nearest enemy on either side, or per its printed pattern). Most neutral encounter cards have Force 0 and exist as puzzle elements rather than combatants, but the option is open.
-- **Deathwish, flip-up, and other triggered abilities** all work on neutral cards normally — they're just permanents with no owner.
+The "neutral encounter is safe" property comes from **design discipline of neutral cards** (low or no Force, non-threatening attack patterns, puzzle-shaped effects), not from a separate mechanical category. A pure-neutral location is safe because the cards there are *designed to be opportunities, not threats* — not because neutrals are mechanically distinct from opposition.
+
+Some specifics that fall out:
+
+- **Stat presence:** neutral cards contribute their printed stats to the other side's per-location totals normally. The player's cost-checks and comparative costs read them as ordinary opposition presence.
+- **Targetability:** standard. Neutrals are legal targets for any effect that targets "the other side here" or similar. Typically printed with high Durability so they're engaged with rather than bypassed.
+- **Combat:** neutral creatures with printed Force attack normally per their attack pattern. Most are designed with Force 0 (non-combatant puzzle elements), but combatant neutrals are legal — just designed not to threaten the player's summoner.
+- **Mixed encounters (AI summoner + neutrals at the same location, or across the encounter's locations):** both sit on the other side together. The distinction between them is irrelevant to the player's mechanics — both contribute to other-side totals, both are legal targets.
 
 ### The neutral-encounter puzzle archetype matrix
 
 The full design space for neutral encounters is **(reward type) × (puzzle shape) × (biome / color flavor)**. A few canonical archetypes to anchor the vocabulary — these are sketches, not card-finalized prints:
 
-- **Siren (Blue, coastal/Insight)** — *Deck-thin reward.* Print: *"Durability 4. At end of cleanup, this removes itself and one other non-neutral creature here from the game."* Player commits a card to the location to feed it; siren removes itself + that card at cleanup. Smart play: dump a dead-card draw for permanent removal. AI-contested play: the AI parks a creature here to dilute the random pick. Counter-counter: the player commits *two* cards here to bias the random toward their unwanted card.
-- **Wishing Well (White, civic/Resolve)** — *Summoner heal reward.* Print: *"Durability 5. At end of cleanup, if a friendly creature is here, restore 2 Durability to that creature's owning summoner. Then this loses 1 Durability."* Player commits a creature; well heals their summoner; well slowly degrades over multiple encounters until destroyed. Ferry creatures here over multiple visits for sustained healing.
-- **Forge (Red, mountain/Force)** — *Stat-bump reward.* Print: *"Durability 6. At start of upkeep, the highest-Force friendly creature here gains +1 Force permanently. Then this loses 1 Durability."* Player commits a creature, ideally their biggest, to absorb the buff. Persists across encounters as long as Durability holds.
-- **Bramble Patch (Green, forest/Tempo)** — *Card-evolve reward.* Print: *"Durability 4. At end of cleanup, if a friendly creature is here, that creature's card permanently gains +1 Tempo. Then this is destroyed."* One-shot evolve, only to a Tempo-friendly target.
-- **Cursed Altar (Black, swamp/Spite)** — *Sacrifice-for-power reward.* Print: *"Durability 3. At end of cleanup, if a friendly creature is here, that creature is removed from the game. Then add a Demon card to your deck. Then this is destroyed."* Player offers a sacrifice for a deck-add. Strong pull for runs that have a creature they want to graduate out of the deck.
+- **Siren (Blue, coastal/Insight)** — *Deck-thin reward.* Print: *"At end of cleanup, this removes itself and one other creature here from the game."* Player commits a card to the location to feed it; siren removes itself + that card at cleanup. Smart play: dump a dead-card draw for permanent removal. AI-contested play: the AI parks a creature here to dilute the random pick. Counter-counter: the player commits *two* cards here to bias the random toward their unwanted card.
+- **Missionary's Sermon (White, cathedral/Resolve)** — *Convert-acquisition combo.* The encounter places a "missionary" neutral creature that heals creatures on the other side from itself, plus a Convert quest, both on the other side relative to the player. While both are on the other side, the missionary's heals land on the player's creatures and the Convert quest watches for player creatures overhealed by their Force in a turn → those creatures switch sides (leave the player's deck). Player agency layers: walk away (whiff); commit a weak card here for deliberate deck-thin via loss; acquire the Convert quest via copy/reroute (flips quest direction — now converts opposing creatures to your side); acquire the missionary via Recruit (flips heal direction); or acquire both for a repeatable Convert engine.
+- **Suppression Field (Blue, library/Insight)** — *Action-acquisition window.* The encounter places a suppression-flavored neutral creature (Stifle-like effect: suppresses action reveal/flip-up until end of turn) plus a face-down action on the other side (e.g., a permanent buff like "give a creature here +1 Durability permanently"). The suppression effect creates an extended window for the player to engage with the queued action. Player agency: acquire the action via Archive/Spellbook/Expedition during the window; acquire the suppression creature via Recruit; or kill the suppression creature so the action resolves, with positional setup ensuring the buff lands on a player creature via Pillar 10 random target.
 
 Per-biome, per-color, per-reward-type can be mixed. A *Cathedral Forge* (White+Red) is plausible — a stat-bump puzzle with a Resolve flavor (channels rather than instant). A *Cursed Bramble* (Green+Black) is a corrupted evolve that adds AND removes a card.
 
@@ -1820,12 +1835,14 @@ Implementation is deferred to v3 prototype work alongside the overworld map and 
 
 ## Persistent Actions
 
-A *persistent action* is an action subtype that occupies its action slot **across multiple turns**, rather than resolving and exiting at end of phase like a normal action. Three persistent-action archetypes have been designed:
+A *persistent action* is rules-text shorthand for an action that occupies its action slot **across multiple phases**, rather than resolving and exiting at end of phase like a normal action. The printed persistent subtypes are **Curse**, **Prayer**, **Quest**, and **Reaction** — each stays in the action slot, distinguished by resolution condition.
+
+The cut between Quest and Reaction is *agency*: a Quest's resolution condition is fulfilled by the caster's own actions; a Reaction's resolution condition is fulfilled by the opposition's actions. *(Reaction is a working name.)*
 
 ### Prayer (White / Resolve)
 
 - **Played** like any action, into an action slot at a location.
-- **Does not** leave the action slot on resolution. It **stays** until either fully resolved (channel complete) or removed.
+- **Does not** leave the action slot on flip-up. It **stays** until either fully resolved (channel complete) or removed.
 - **Has a printed `pray N` cost** — the channel-progress counter, initially N.
 - **Each turn, every Resolve-printing creature on the same side at the same location automatically contributes 1 to the prayer's progress** per Resolve point. (e.g., 4 Resolve at the location reduces remaining cost by 4 that turn.) Contribution is automatic; channeling is not a choice.
 - **Has a printed timing trigger** — "on upkeep," "after cleanup," "at end of main." This is *when* the prayer can resolve.
@@ -1836,6 +1853,7 @@ A *persistent action* is an action subtype that occupies its action slot **acros
 - **Cost-shape note:** Prayers have **no stat-presence requirement to cast** (see *White's cost-shape* under Color Identities). The channel cost is the cost. This is why a Prayer can be speculatively pre-positioned at a location with no Resolve yet present.
 - **Effects:** powerful, normally above the curve for one-shot actions — conditional removal, "summon a random card from your deck into play here," large board effects. The multi-turn channel is the cost-justification.
 - **Vulnerable to:** combat damage to the channeling creatures (interrupts that turn), Counterspell (kills the prayer outright).
+- **Miracle** *(working name, premium effect)* — resolves a Prayer at another location, bypassing its channeling requirements. Cross-location scope makes Miracle a high-impact play and a rescue tool for stalled or threatened Prayers.
 
 ### Curse (Black / Spite)
 
@@ -1853,16 +1871,6 @@ Curse effects split cleanly into two design lanes that both sidestep the random-
 - **Player-direct effects.** Effects that target the opposing summoner directly — hand disruption ("during upkeep, the opposing summoner discards a card"), draw modifiers, summoner-Durability drains. The summoner is always a unique legal target, so no random selection is needed. This is a fresh design space distinct from board interaction: Black attacks the *player*, not the *board*, across many turns of attrition.
 
 By contrast, **triggered single-target effects on the board** ("during upkeep, deal 1 damage to a creature here") would require a fresh random roll each tick, which feels unsatisfying for a multi-turn debuff. The design discipline is to avoid this class of curse effect.
-
-### Counterspell (Blue / Insight)
-
-- A signature Blue action of the *Spell* subtype. Working name; final naming Pass 2.
-- **On resolve:** all actions currently in action slots at this location are sent to the graveyard. (Counterspell exempts itself.)
-- This includes persistent actions (Prayers, Curses) regardless of how long they've been channeling — a Prayer 1-cost away from resolving still dies. A Curse that migrated 3 turns ago still dies.
-- **Timing:** Counterspell is itself an action that resolves in Tempo order. If counterspell reveals first this phase, it nukes everything pending at the location. If it reveals late, one-shot actions with higher Tempo have already resolved and left the slot — they're safe. But persistent actions in slots are killed regardless of when counterspell fires this turn, because they're *currently in the slot*.
-- **Hard counter to persistent-action strategies.** Black's Curses and White's Prayers must play around Blue presence; if Blue has counterspell available, persistent actions are vulnerable.
-- **Curse vs. counterspell timing:** if both are played the same turn at the same location, Tempo order resolves it. If counterspell reveals first, the curse dies before migration. If the curse reveals first and migrates, counterspell (now in Blue's own slot) still resolves and clears the migrated curse.
-- **Cost:** likely high Insight (specifics Pass 2). Itself prints minimal stats. As a Blue spell, subject to Blue's front-loaded cost-shape — needs an Insight mage at the location to cast.
 
 ### Quest (White-primary, all colors get a flavor)
 
@@ -1902,6 +1910,14 @@ The action-slot economy gets richer with Quests:
 - **Blue wants to clear all slots** with Counterspell.
 - **Green wants to bypass slot occupancy** via tempo — Hunt-Quests fire so fast they barely register as slot occupancy.
 
+### Reaction (working name)
+
+A **Reaction** is a persistent action whose resolution condition is fulfilled by the *opposition's* actions, not the caster's. Reaction sits in the slot waiting for an opposing event; when that event happens, the Reaction's effect fires and it exits to graveyard.
+
+Distinct from Quest by *agency*: Quest = caster fulfills the condition; Reaction = opposition fulfills it.
+
+**Stifle (Blue)** is the canonical Reaction.
+
 ### Action-slot economy as a meta-system
 
 Persistent actions turn the action slot into a *contested resource over time*. Four archetypes shape deck design and play decisions whenever action slots are involved (see the Quest table above for the full taxonomy):
@@ -1912,6 +1928,18 @@ Persistent actions turn the action slot into a *contested resource over time*. F
 - **Green** bypasses slot pressure with Hunt-Quests (fast-completion Quests that fire and exit before they meaningfully clog).
 
 Persistent actions also worsen the slot-cap pressure described in *Slots are the actual scarce resource*: White's and Black's preferred plays clog action slots for many turns, leaving fewer slots for one-shot follow-ups. **Equipment** is a complementary release valve here — it provides slotless plays even when the action slot is committed.
+
+## Counterspell (Blue / Insight)
+
+Counterspell is a Blue Spell-subtype action — *not* a persistent action. It resolves end-of-phase like any other action; its *effect* clears persistent actions from slots, but the Counterspell card itself is a one-shot. It's documented separately from Persistent Actions for clarity.
+
+- A signature Blue action of the *Spell* subtype. Working name; final naming Pass 2.
+- **On resolve:** send all actions here to the graveyard.
+- This includes persistent actions (Prayers, Curses, Quests) regardless of how long they've been channeling — a Prayer 1-cost away from resolving still dies. A Curse that migrated 3 turns ago still dies.
+- **Timing:** Counterspell is itself an action that resolves in Tempo order. If counterspell reveals first this phase, it nukes everything pending at the location. If it reveals late, one-shot actions with higher Tempo have already resolved and left the slot — they're safe. But persistent actions in slots are killed regardless of when counterspell fires this turn, because they're *currently in the slot*.
+- **Hard counter to persistent-action strategies.** Black's Curses and White's Prayers must play around Blue presence; if Blue has counterspell available, persistent actions are vulnerable.
+- **Curse vs. counterspell timing:** if both are played the same turn at the same location, Tempo order resolves it. If counterspell reveals first, the curse dies before migration. If the curse reveals first and migrates, counterspell (now in Blue's own slot) still resolves and clears the migrated curse.
+- **Cost:** likely high Insight (specifics Pass 2). Itself prints minimal stats. As a Blue spell, subject to Blue's front-loaded cost-shape — needs an Insight mage at the location to cast.
 
 ## Color home phases and the phase-doubling mechanic
 
