@@ -14,6 +14,59 @@ Format:
 
 ---
 
+## 2026-05-05 — Reroute (Green) mechanic locked: destination-modifier counter, temporal cost, type-agnostic
+
+**Decision (cluster):**
+
+1. **Reroute is a destination-modifier verb.** A Reroute effect places a **reroute counter** on a card on the other side. The card stays where it is, owned by its current side, behaves normally. When that card eventually leaves play *for any reason* (combat death, sacrifice, structure-removal, action resolution and exit, equipment going to junkyard, etc.), its destination is **redirected to the player's graveyard/junkyard/discard** instead of the other side's normal pile. The card joins the player's deck via end-of-encounter shuffle. **Permanent acquisition.**
+
+2. **Cost-shape is *temporal*.** The counter is placed *now* (typically gated by Tempo presence, ≥1T). The acquisition only fires *when the card leaves play* — which the player must wait for or cause. This is a unique cost-shape across the conversion verbs:
+   - *Recruit* (Red): stat-presence (Force-superiority).
+   - *Stealswap* (Black): material (the swap card itself moves to the other side).
+   - *Convert* (White): stat-presence (Resolve overheal + Force threshold).
+   - *Research* (Blue): resource (Insight presence).
+   - **Reroute (Green): temporal — patience as currency.**
+
+3. **The whiff condition is *the marked card surviving the encounter*.** If the card never leaves play, Reroute pays nothing. The AI is incentivized to *protect* marked cards; the player is incentivized to *kill* them. This creates emergent gameplay.
+
+4. **Reroute is type-agnostic.** The verb works the same way on creatures, equipment, structures, and actions. Different card types have different natural exit-rates (creatures die in combat often; structures rarely die; actions exit on resolve), but the *rule* is the same: when the marked card transitions to a pile, the destination redirects.
+
+5. **Reroute counter mechanics:**
+   - The counter is **default-duration on the target** — lives as long as the card is in play.
+   - Fires once when the card leaves play, then expires.
+   - Multiple Reroute counters on the same target are redundant in 1v1; one counter is enough.
+   - Counters are **visible state** to both sides.
+
+6. **Trigger interaction with leave-play events:** leave-play triggers (deathwish, demolition, etc.) fire *first* from the card's original-side perspective. Reroute redirects the *destination* after the triggers resolve. Triggers and destination are decoupled.
+
+7. **Two printable vectors initially established:**
+   - **Action vector:** an action card that places a reroute counter on a target on the other side here. Tempo presence cost (≥1T). Player commits the location; system picks among legal candidates per Pillar 10.
+   - **Structure vector:** a structure that prints *"When a card moves to this location, place a reroute counter on it."* Passive trap — any cross-location movement into the structure's location auto-marks. The structure's commit cost was paid up front; marking is free thereafter.
+   - Equipment vector and persistent action vector are possible reward-tier expansions.
+
+8. **Anti-Reroute counters:** Parliament-style biome (cards cannot change sides), counter-removal effects (White or Blue), punish-on-reroute cards (deal damage to rerouting summoner when fired). Mirrors anti-Stealswap distribution.
+
+9. **Cross-color synergy:** Red brings combat damage and sacrifice tools; Green brings the acquisition trigger. **Red-Green is a real combo color identity** — Red kills the marked creatures, Green collects them. This emerges naturally from the verb structure, not from designed cross-color cards.
+
+**Why:** The conversion-verb framework needed all five verbs filled in. Stealswap was the most fully-specified; Recruit had concrete cards but no formal mechanic doc; Convert and Reroute were gestures. Without Reroute formalized, Green couldn't deckbuild during the run, breaking the design's promise that *every color has a deckbuilding identity grounded in its mechanical theme*.
+
+The temporal-cost framing came out of the realization that Tempo is the time-color, and Green's acquisition naturally rides on *waiting and ambush* rather than on immediate exchange. Reroute as a counter-and-destination-modifier captures this: the card is *marked* now, *acquired* later. The verb is **fundamentally about patience**.
+
+The type-agnostic generalization came from honest reassessment — earlier I had assumed Reroute on actions/equipment/structures would be too strong and should be reward-tier. That assumption had no backing. The temporal cost balances the verb identically across card types; the natural exit-rate differs, but the verb structure is the same. Removing the false narrowing simplified the design.
+
+**Implications:**
+
+- **Green has a real deckbuilding identity** in the run loop, parallel to Red's Recruit, Black's Stealswap, Blue's three-vector copy, and White's Convert.
+- **The vector-pattern framework now has three concrete instances** (Stealswap creature/action variants; Blue's three-vector copy; Reroute action/structure). Future card design for any color follows the same pattern: same verb, distinct vectors with conditions/timings/scopes.
+- **Engine implications:** counters as persistent state on cards-in-play. Leave-play event ordering (triggers fire first, destination modifies after). Pile-destination redirect logic. Reroute is mechanically distinct from Stealswap (no immediate swap) and from Recruit (no Force-comparison).
+- **Cross-color combo identities are emerging organically.** Red-Green via Reroute + kill power. Blue-Black via debuff softening + copy capture. White-Red via Convert overheal + Force threshold. The color pie is producing real two-color archetypes from the verb mechanics alone.
+
+**Supersedes:** the gestural "temporal-cost Reroute" framing from the earlier conversion-verb model. Now formalized.
+
+**Revisit when:** Reroute card design surfaces a corner case the rules don't handle (e.g., a marked card that gets *un-marked* by a counter-removal effect mid-encounter; a Reroute on a card that's then stolen via Stealswap before it dies — which side's pile does it go to?), or when playtesting reveals temporal-cost balance is off (Reroute too strong because cards die freely; or too weak because the AI keeps marked cards alive).
+
+---
+
 ## 2026-05-05 — Blue's three action-acquisition vectors locked; vector pattern as a design framework
 
 **Decision (cluster):**

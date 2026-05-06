@@ -4,7 +4,7 @@ This is a living document. It will be messy and contradictory at times — that'
 
 When something is uncertain, write it down anyway and flag it under "Open Questions."
 
-> **Pass status:** Pass 1 (high-level model) complete as of 2026-04-26, amended substantially through 2026-05-05. The 2026-05-05 amendments lock: (a) the **Stealswap** mechanic with full rules (cost-shape = swap card itself, universal whiff rule, high-threat-printing as cost-balancer, Pillar-10 setup as win condition, deck-thinning-via-whiff as a real strategy); (b) **Blue's three action-acquisition vectors** — Spellbook (equipment), Forbidden Library (structure), Archeological Expedition (persistent action) — expressing Blue's *copy* verb across three card-type vectors with distinct conditions/scope/destinations. The vector pattern is now established as a generalizable design framework: each color's verb fans across multiple printable vectors. Earlier 2026-04-29 amendments still apply. The 2026-04-29 amendments cover: stats-as-resources, scope-of-effects, AI architecture, durability/violence distinction, color identities, persistent actions (Prayer, Curse, Counterspell), comparative costs, zombification, the *Spell* card type renamed *Action* with per-color flavor subtypes, double cost-check (cast and resolve), ephemeral face-down state, stealth mechanics + Tempo-spent principle, slot-as-scarce-resource framing, equipment as slotless modifier card type, attack patterns (cleave as pattern, not keyword), Red's identity as the *now* color, Blue/White's cost-shape distinction, the no-on-resolve-targeting pillar (effects pick at random from legal candidates), the action queue model + permanents-positional vs actions-temporal distinction, actions resolve to discard pile (cycling on deck-empty) with exile as premium one-shot keyword, the Tempo ordering hierarchy (Tempo → location → position → side priority via local Tempo total + alternating fallback), White's second mechanical idea (healing + divine shield protection), Blue's two-archetype control suite (Counterspell + Stifle), Curse design discipline (static board auras or player-direct effects), front-row vs back-row combat semantics with front row as a blocker for the back row, ranged combat with ammo as the first consumable resource, equipment as modifier vs replacement (the "sets" class, e.g., bow sets ranged power), and the *activation actions* design class (actions that interact with permanents, replacing the "activated abilities on creatures" idea). See DECISIONS.md for full reasoning. Sections marked _Pass 2_ are intentionally deferred until the high-level model is validated by a vertical-slice prototype.
+> **Pass status:** Pass 1 (high-level model) complete as of 2026-04-26, amended substantially through 2026-05-05. The 2026-05-05 amendments lock: (a) the **Stealswap** mechanic with full rules (cost-shape = swap card itself, universal whiff rule, high-threat-printing as cost-balancer, Pillar-10 setup as win condition, deck-thinning-via-whiff as a real strategy); (b) **Blue's three action-acquisition vectors** — Spellbook (equipment), Forbidden Library (structure), Archeological Expedition (persistent action) — expressing Blue's *copy* verb across three card-type vectors with distinct conditions/scope/destinations; (c) **Reroute (Green)** with full rules — destination-modifier counter placed on opposing cards; fires when target leaves play; cost-shape is *temporal* (patience as currency); type-agnostic (works on creatures, equipment, structures, actions); two starter vectors (action and structure trap). The vector pattern is now established as a generalizable design framework: each color's verb fans across multiple printable vectors. Earlier 2026-04-29 amendments still apply. The 2026-04-29 amendments cover: stats-as-resources, scope-of-effects, AI architecture, durability/violence distinction, color identities, persistent actions (Prayer, Curse, Counterspell), comparative costs, zombification, the *Spell* card type renamed *Action* with per-color flavor subtypes, double cost-check (cast and resolve), ephemeral face-down state, stealth mechanics + Tempo-spent principle, slot-as-scarce-resource framing, equipment as slotless modifier card type, attack patterns (cleave as pattern, not keyword), Red's identity as the *now* color, Blue/White's cost-shape distinction, the no-on-resolve-targeting pillar (effects pick at random from legal candidates), the action queue model + permanents-positional vs actions-temporal distinction, actions resolve to discard pile (cycling on deck-empty) with exile as premium one-shot keyword, the Tempo ordering hierarchy (Tempo → location → position → side priority via local Tempo total + alternating fallback), White's second mechanical idea (healing + divine shield protection), Blue's two-archetype control suite (Counterspell + Stifle), Curse design discipline (static board auras or player-direct effects), front-row vs back-row combat semantics with front row as a blocker for the back row, ranged combat with ammo as the first consumable resource, equipment as modifier vs replacement (the "sets" class, e.g., bow sets ranged power), and the *activation actions* design class (actions that interact with permanents, replacing the "activated abilities on creatures" idea). See DECISIONS.md for full reasoning. Sections marked _Pass 2_ are intentionally deferred until the high-level model is validated by a vertical-slice prototype.
 
 ---
 
@@ -2367,6 +2367,90 @@ Stealswap is a *printable effect*, not a fixed card. Variants share the core rul
 Each variant uses the core swap rules; the variation is in targeting condition and any conditional cost components.
 
 **Pairs with:** Black's graveyard recursion theme — a stolen creature that dies enters *your* graveyard, and Black's raise effects can return it as a zombie under your control. Combined with raise-from-any-graveyard (see *Raise from any graveyard*, when added), Black has two distinct acquisition vectors: trade-now (stealswap) and kill-then-claim (raise).
+
+### Reroute (Green)
+
+**Flavor:** misdirection, ambush, the trap that closes after the prey passes through. Green's guerrilla identity turned into a *destination modifier*. *You walked into my snare. Where you fall, I decide.*
+
+**The basic shape.** A Reroute effect places a **reroute counter** on a card on the other side. The card stays where it is, behaves normally, owned by its current side. But when that card *eventually leaves play* — by any mechanism (combat death, sacrifice, structure-destruction, action resolving and exiting, equipment going to junkyard) — its destination is **rerouted to your graveyard** instead of the other side's normal destination pile. From your graveyard, the card joins your deck via end-of-encounter shuffle. **Permanent acquisition.**
+
+#### Cost-shape: temporal
+
+Unlike Recruit (stat-presence cost paid now), Stealswap (material cost — the swap card itself), or Research (resource cost — Insight presence), **Reroute's cost is *waiting***. The counter goes down immediately; the acquisition only fires *when the marked card leaves play*. The player has to wait for, or cause, that exit.
+
+This is a unique cost-shape: **patience as currency**. Tempo is the time-color, and Reroute is the verb where time is the cost. If the marked card never dies during the encounter, Reroute pays nothing. **The whiff condition is *the marked card surviving the encounter*.**
+
+#### Reroute is a destination-modifier — type-agnostic
+
+Reroute does not care what card type the marked card is. It works the same way on creatures, equipment, structures, and actions:
+
+- **Creature** with a reroute counter: when the creature dies or otherwise leaves play, instead of going to the other side's graveyard, it goes to your graveyard.
+- **Equipment** with a reroute counter: when the equipment leaves play (host dies, equipment-removal, end of encounter for token equipment), instead of going to the other side's junkyard, it goes to your junkyard.
+- **Structure** with a reroute counter: when the structure is destroyed by a structure-removal effect, instead of going to the other side's junkyard, it goes to your junkyard.
+- **Action** with a reroute counter: when the action resolves and exits to the discard pile (or graveyard, if the action's text routes there), instead of going to the other side's pile, it goes to your equivalent pile.
+
+The verb modifies *where the card lands when it exits*. Type doesn't matter; the rule generalizes.
+
+This makes Reroute the most general of the conversion verbs. The temporal-cost gating (waiting for exit) keeps it balanced — different card types have different natural exit-rates, but the player's patience is what the cost measures.
+
+#### Printable vectors
+
+Following the vector-pattern framework: each color's verb fans across multiple printable card-type vectors with distinct conditions and timings.
+
+- **Action vector:** *"Place a reroute counter on a card on the other side here."* The simplest expression — pay Tempo, mark a target. The player chooses the location, the system picks among legal candidates per Pillar 10.
+- **Structure vector:** *"When a card moves to this location, place a reroute counter on it."* A passive trap. Green sets up the structure; any creature pushed, swapped, or relocated *into* this location gets marked automatically. The cost was the structure's commit; the mark is free thereafter. Pairs with the broader Displace family — every cross-location movement is a potential trap-trigger.
+- **Equipment vector** *(possible reward-tier)*: *"Equip to a creature on the other side. While equipped, the wielder has a reroute counter."* Cross-side equipment that marks its host. Loses the equipment when the host dies (per the host-side rule), but Reroute fires on that same death — net result, you trade the equipment for the host. Magnetic could optionally print.
+- **Persistent action vector** *(possible reward-tier)*: a delayed multi-mark Curse-shaped Reroute that ticks counters onto opposing cards each turn it remains in the slot.
+
+#### Reroute counter mechanics
+
+- The counter is **default-duration on the target** — it lives on the marked card as long as the card is in play.
+- When the marked card leaves play, the counter *fires* (redirects the destination) and *expires* (cleans up).
+- Multiple Reroute effects on the same target are redundant in 1v1 (one counter is enough; additional counters do nothing).
+- The counter is **visible state** to both sides. The AI can see which of its cards are marked, and may prioritize protecting them or expending them strategically.
+
+#### Trigger interaction with leave-play events
+
+Reroute is a *destination modifier*, not a *replacement* of the leave-play event. When a marked card leaves play:
+
+1. All leave-play triggers fire normally (deathwish on creatures, demolition triggers on structures, etc.). These fire from the card's *original* side at its *original* position, before the destination redirect happens.
+2. After leave-play triggers resolve, Reroute redirects the card's pile destination to your graveyard/junkyard/discard.
+
+So a marked Cultist Martyr that dies still fires its deathwish (debuff lands on a creature on the other side from the original perspective), and *then* Martyr's body is rerouted into your graveyard. **Triggers fire first, destination modifies after.**
+
+#### Pillar 10 setup
+
+Marking a card via the action vector picks legal targets per Pillar 10. If the player wants to mark a specific creature on the other side, they have to engineer the board so that creature is the only legal target — typical Pillar 10 setup play. The structure vector sidesteps this: any movement-into-the-location auto-marks, no targeting decision at all.
+
+The *kill condition* on the marked card is what completes the verb. Cross-color synergies emerge naturally:
+- **Red** brings combat damage and Bombardment-style sacrifice — kills marked creatures.
+- **Black** brings debuff-stacking and graveyard recursion — drops marked creatures into Force ranges where they die easily.
+- **Green's own movement** can push marked creatures into kill positions or out of safe back-row slots.
+
+**Red-Green is a real combo color identity** — Red brings the kill power, Green brings the acquisition trigger. The combination is more than the sum.
+
+#### Anti-Reroute counters
+
+- **Parliament-style location text:** *"Cards cannot change sides here"* — blocks the destination redirect outright. Already documented as a Blue-White multi-color biome.
+- **Counter-removal effects:** White or Blue cards that remove counters from their own creatures. *"Remove a reroute counter from a creature on your side here."* Defensive counter-play.
+- **Punish-on-reroute cards:** *"When a card on your side is rerouted, deal X damage to the rerouting summoner."* Doubles the cost of waiting for the exit.
+- **Color attribution:** White (purification, restoring order) and Blue (foresight, perception, counter-removal) split the anti-Reroute design space, mirroring the anti-Stealswap distribution.
+
+#### Variants and design space
+
+Reroute is a *printable effect*, not a fixed card. Variants share the core rules with different targeting/conditions:
+
+- **Targeting condition variants:** *"place a reroute counter on the highest-Force creature on the other side here"*, *"place reroute counters on all creatures on the other side here"* (premium), *"place a reroute counter on a creature on the other side at an adjacent location"* (cross-location targeting).
+- **Trigger condition variants:** *"when a card on the other side moves to this location, place a reroute counter on it"* (the structure version), *"when a card on the other side enters play here, place a reroute counter on it"* (a different trigger window — captures fresh commits at this location).
+- **Conditional variants:** *"if you have more Tempo here than the other side, place a reroute counter..."* (Tempo-superiority gated, parallels Recruit's Force-superiority).
+
+Each variant uses the core counter-and-redirect rules; the variation is in *how the counter gets placed*.
+
+#### Pairs with
+
+Green's Displace family (Shove, Disperse, position-changing effects) — every cross-location movement Green can cause is a trap-trigger when paired with a Reroute structure. Green's relocate-on-reveal mechanics natively pair with Reroute's structure vector.
+
+Also pairs with **kill-power across colors** — anyone who can dependably kill an opposing creature can trigger the player's Reroute. Red is the natural splash partner; Black's debuff lattice softens marked creatures into kill range.
 
 ### Why two flavors of swap
 
