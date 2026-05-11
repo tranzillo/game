@@ -14,6 +14,30 @@ Format:
 
 ---
 
+## 2026-05-09 — Marks as a foundational mechanic; Convert (White) defined; war/peace framing for locations vs. neutrals
+
+**Marks.** A mark is a physical alteration to a specific card instance — torn, stamped, "cheated." Marks are per-instance and permanent (persist through pile cycling, encounters, side changes). Marks are visible in all zones including face-down piles — leaking information through fog of war is intentional. Marks change behavior, not stats. Each color has one kind of mark; no within-color variants.
+
+The marker is whoever applied the mark. Either side can mark either side's cards in any situation a card-effect can fire. *What a mark does is per-color, not universal.* The destination-redirect rule (mark redirects leave-play to marker's piles) is **Reroute-specific**, not a property of all marks.
+
+Same-kind double-mark on the same card (whether by both sides or by the same side twice) physically destroys the card — exiled, no triggers fire, no recursion recovers. Different kinds of marks coexist.
+
+Per-color marks locked: **Green Reroute** (destination redirect on leave-play), **White Convert** (switches sides on overheal-by-Force-this-turn), **Red damage** (deals +1 damage on every damage source on the card). Black and Blue marks are open.
+
+**Convert (White).** Mark-based acquisition. Convert-marked card switches to the marker's side when overhealed by its Force value or more in a single turn. The card joins the marker's piles permanently. Combined with opposing Reroute marks, a Convert-marked card recurs through both sides' piles repeatedly — White's "redemption that endures" flavor.
+
+Overheal threshold is per-turn cumulative, not across turns.
+
+Cost-shape: stat-presence (Resolve gating, healing capacity).
+
+**War/peace framing.** Location text is war-flavored — alters in-encounter interactions (short-term, this fight). Neutral encounters layered atop locations are peace-flavored — turn the location's rule into an acquisition opportunity (long-term run-impact). They are independent design surfaces that combine at a node.
+
+**Why:** Reroute had been described as a "counter" which is the wrong vocabulary; it's a mark. The marks system was implicit and getting re-specified per verb. Convert had been gestural; needed to be locked. The war/peace framing was confused with good/bad until clarified — peace is about acquisition affordances (long-term), war is about confrontation (short-term), regardless of effect direction.
+
+**Supersedes:** the "counter" framing in the prior 2026-05-05 Reroute entry — Reroute uses a mark, not a counter.
+
+---
+
 ## 2026-05-05 — Reroute (Green) mechanic locked: destination-modifier counter, temporal cost, type-agnostic
 
 **Decision (cluster):**

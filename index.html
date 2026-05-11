@@ -77,6 +77,7 @@
     border-radius: 6px;
   }
   .location-label { grid-column: 1 / 4; text-align: center; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .location-text { grid-column: 1 / 4; text-align: center; color: #c9b8e8; font-size: 11px; font-style: italic; padding: 2px 8px; background: rgba(120, 90, 180, 0.1); border-radius: 4px; }
 
   .ai-structure-row    { grid-column: 1 / 4; grid-row: 2 / 3; display: grid; grid-template-columns: 70px 1fr 70px; gap: 6px; align-items: center; }
   .player-structure-row { grid-column: 1 / 4; grid-row: 5 / 6; display: grid; grid-template-columns: 70px 1fr 70px; gap: 6px; align-items: center; }
@@ -181,6 +182,11 @@
   .card .badge.tempo { background: rgba(111, 207, 111, 0.18); color: var(--ok); }
   .card .badge.insight { background: rgba(96, 192, 224, 0.18); color: #60c0e0; }
   .card .badge.durability { background: rgba(74, 138, 239, 0.18); color: var(--player); }
+  .card .badge.sleep { background: rgba(160, 120, 220, 0.22); color: #c8b0ee; }
+  .card .badge.groggy { background: rgba(220, 160, 100, 0.20); color: #e6c79c; }
+  .card .badge.equipment-tag { background: rgba(200, 170, 90, 0.18); color: #e0c97a; }
+  .card .equipment-row { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 3px; font-size: 10px; }
+  .card .equipment-label { color: var(--muted); font-size: 10px; margin-right: 2px; }
   .card .text { color: var(--muted); font-size: 10px; line-height: 1.25; }
   .card .preview { font-size: 10px; line-height: 1.25; margin-top: 2px; padding: 2px 4px; border-radius: 3px; background: rgba(239, 90, 90, 0.12); color: var(--ai); }
   .card .preview.muted { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
@@ -344,299 +350,404 @@
 // ---------- Card definitions ----------
 // Each definition is a template; instances are created with createCard().
 // `aiHints` is per-card metadata used by the AI scoring function (DECISIONS.md, AI architecture).
+// CARD_DEFS uses flat shorthand keys per color: r1 through r12 for Red, with no
+// starter/reward distinction in the keys — that distinction is just *which slice of the pool
+// goes in the player's starting deck*. Other cards live at encounter locations until acquired.
+// Multi-color cards use both letters (e.g., rb1 for Red/Blue). Display names on each def are
+// for UI only and will change as the design firms; engine references stay stable as keys.
+//
+// Effect-handler tags (the strings in `effect` / `onFlipUp`) are *behavior tags*, not card-identity
+// tags. Multiple cards can use the same effect tag if they share behavior; renaming a card key
+// doesn't affect them.
 const CARD_DEFS = {
-  recruit: {
-    name: "Recruit",
+  // r1 — Free 1F/2D goblin. Flip-up: if alone on your side here, +1 Force.
+  r1: {
+    name: "Goblin Brawler",
     type: "creature",
+    tribe: "goblin",
     cost: 0,
     force: 1,
     tempo: 0,
     durability: 2,
-    text: "Free body. Cheap Force for the location.",
+    onFlipUp: "loneChampionBrawler",
+    text: "On flip-up: if this is the only creature on your side here, gain +1 Force.",
     aiHints: { preferFront: true }
   },
-  conscript: {
-    name: "Conscript",
-    type: "creature",
+  // r2 — Free equipment. Grants cleave.
+  r2: {
+    name: "Crude Axe",
+    type: "equipment",
     cost: 0,
-    force: 1,
+    costStat: "force",
+    force: 0,
     tempo: 0,
-    durability: 1,
-    text: "Free body. Fragile.",
-    aiHints: { preferFront: true }
+    durability: null,
+    grantsAttackPatterns: [{ type: "cleave" }],
+    text: "Equip. The wielder's attacks gain cleave.",
+    aiHints: {}
   },
-  soldier: {
-    name: "Soldier",
+  // r3 — ≥1F ramp creature. 2F/3D. Flip-up: +1 Force this turn.
+  r3: {
+    name: "Orc Bruiser",
     type: "creature",
     cost: 1,
+    costStat: "force",
     force: 2,
     tempo: 0,
     durability: 3,
-    text: "Solid mid-cost striker.",
+    onFlipUp: "bruiserChargeBuff",
+    text: "On flip-up: this gains +1 Force this turn. Needs ≥1 Force here.",
     aiHints: { preferFront: true }
   },
-  champion: {
-    name: "Champion",
+  // r4 — Recruit conversion verb. Action. Force-superiority swap on resolve.
+  r4: {
+    name: "Recruit",
+    type: "action",
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    effect: "recruitConversion",
+    text: "If you have more Force here, a creature in front on the other side moves to the front on your side.",
+    aiHints: {}
+  },
+  // r5 — ≥1F payoff creature. 1F/4D, +2F while alone on your side here.
+  r5: {
+    name: "Ogre Pit-Fighter",
     type: "creature",
-    cost: 3,
-    force: 4,
+    tribe: "ogre",
+    cost: 1,
+    costStat: "force",
+    force: 1,
     tempo: 0,
     durability: 4,
-    text: "Big finisher. Needs ≥3 Force here.",
-    // Avoid contested columns (where the enemy has a creature in front to trade with).
-    // Prefer empty enemy columns so it can swing through to the summoner.
-    aiHints: { preferUncontestedColumn: true, preferFront: true }
+    pitFighterWhileAlone: true,
+    text: "+2 Force here while no other creature on your side is here. Needs ≥1 Force here.",
+    aiHints: { preferFront: true }
   },
-  banner: {
-    name: "Banner of War",
-    type: "structure",
-    cost: 1,
-    force: 2,
-    tempo: 0,
-    durability: null,
-    text: "Structure. +2 Force presence here.",
-    aiHints: {}
-  },
-  skirmisher: {
-    name: "Skirmisher",
+  // r6 — Free 1F/2D goblin. Flip-up: if alone on your side here, fire Recruit.
+  r6: {
+    name: "Goblin Recruiter",
     type: "creature",
+    tribe: "goblin",
     cost: 0,
     force: 1,
-    tempo: 2,
+    tempo: 0,
     durability: 2,
-    text: "Strikes early. Glass cannon.",
-    // Skirmisher likes empty enemy columns or low-Durability enemy fronts (where its first-strike kills cleanly).
-    aiHints: { preferFront: true, preferLowHpFront: true }
+    onFlipUp: "recruiterAloneRecruit",
+    text: "On flip-up: if this is the only creature on your side here, recruit.",
+    aiHints: { preferFront: true }
   },
-  mage: {
-    name: "Mage",
+  // r7 — ≥1F goblin. Flip-up: push the creature across to back row. Isolation tool for r4.
+  r7: {
+    name: "Goblin Bully",
     type: "creature",
-    cost: 0,
-    force: 0,
-    tempo: 0,
-    insight: 1,
-    durability: 1,
-    text: "Prints 1 Insight here. No combat threat. Fragile.",
-    // Mage MUST go to back row, ideally behind a friendly front-row blocker.
-    aiHints: { preferBack: true, requireBlocker: true, fragileMustProtect: true }
-  },
-  spark: {
-    name: "Spark",
-    type: "action",
-    cost: 1,
-    costStat: "insight",
-    force: 0,
-    tempo: 1,
-    durability: null,
-    effect: "deal2",
-    text: "Deal 2 damage here. Needs ≥1 Insight here.",
-    // Per damage fall-through rule: hits a random enemy creature here, or the opposing summoner
-    // if no enemy creatures here. Card text doesn't need to print "to the summoner" — implicit.
-    aiHints: { damagePreferTarget: true }
-  },
-  counterspell: {
-    name: "Counterspell",
-    type: "action",
-    cost: 2,
-    costStat: "insight",
-    force: 0,
-    tempo: 2,
-    durability: null,
-    effect: "counterspell",
-    text: "Send all actions in spell slots to the graveyard (including this). Needs ≥2 Insight here.",
-    // Counterspell is a gamble — only worth it when there's an opposing action to target.
-    // (In v1, the AI doesn't see the player's pending plays, so this is harder to judge.)
-    aiHints: { requiresOpposingAction: true }
-  },
-  // SCOPE EXAMPLE (v2): the first card to use the "at all your locations" scope rule.
-  // Demonstrates that wider scope is a printed premium — Heralding Spark costs more Insight than
-  // Spark and only deals 1 (not 2), but hits at every location instead of just here.
-  // Per the universal damage fall-through rule, an empty enemy location → 1 damage to opposing
-  // summoner (one fall-through instance per empty location). Implicit, not printed.
-  heraldingSpark: {
-    name: "Heralding Spark",
-    type: "action",
-    cost: 2,
-    costStat: "insight",
-    force: 0,
-    tempo: 1,
-    durability: null,
-    effect: "deal1all",
-    text: "Deal 1 damage at each of your locations. Needs ≥2 Insight here.",
-    aiHints: { damageAllLocations: true }
-  },
-
-  // ---------- v3 neutral encounter cards ----------
-  // Neutral cards live on the OTHER side of the board (alongside any AI cards), distinguished from
-  // AI cards only by their owner tag ("neutral"). They occupy the same slot grid as AI cards.
-  // Per the unified-encounter framework, neutral cards do NOT contribute to either side's stat
-  // totals. They have triggered behaviors that fire at phase boundaries (end of cleanup, start of
-  // upkeep, etc.), and deliver a reward when the player engages by committing creatures to the same
-  // location.
-
-  // Siren — Blue/coastal neutral. Deck-thin reward. The player commits a creature here; at end of
-  // cleanup the siren takes itself + a non-neutral creature here out of the run permanently.
-  siren: {
-    name: "Siren",
-    type: "creature",       // structurally a creature (occupies a creature slot)
-    cost: 0,                // never paid — neutral cards are spawned by the location
-    costStat: "force",
-    force: 0,               // does not fight
-    tempo: 0,
-    insight: 0,
-    durability: 4,          // hard to destroy; the puzzle is meant to be engaged with
-    effect: "siren",        // resolved at end of cleanup
-    text: "At end of cleanup, this removes itself and another non-neutral creature here from the run.",
-    aiHints: {}
-  },
-
-  // Forge — Red/mountain neutral. Stat-bump reward. At start of upkeep, the highest-Force friendly
-  // creature here gains +1 Force permanently in the run deck. Forge loses 1 Durability per tick.
-  forge: {
-    name: "Forge",
-    type: "structure",      // structurally a structure (no attack, occupies the structure slot)
-    cost: 0,
-    costStat: "force",
-    force: 0,
-    tempo: 0,
-    insight: 0,
-    durability: 5,
-    effect: "forge",        // resolved at start of upkeep
-    text: "At start of upkeep, the highest-Force friendly creature here gains +1 Force permanently. Then this loses 1 Durability.",
-    aiHints: {}
-  },
-
-  // ---------- v3 flip-up trigger demo cards ----------
-  // These cards exist to exercise the flip-up trigger engine + tokens + Inert. Their effects are
-  // intentionally simple and NOT design candidates — real-game cards will have higher-leverage
-  // flip-up triggers that interact with mechanic families (Lurk, Coward, etc). These are demos.
-
-  // Combat Engineer (Green creature). Demonstrates token spawning via flip-up.
-  combatEngineer: {
-    name: "Combat Engineer",
-    type: "creature",
+    tribe: "goblin",
     cost: 1,
     costStat: "force",
     force: 1,
-    tempo: 1,
+    tempo: 0,
     durability: 2,
-    onFlipUp: "spawnSandbag",
-    text: "On flip-up: drop a Sandbag in an empty front-row slot here.",
-    aiHints: { preferBack: true } // engineer wants to live; drop her behind a sandbag
+    onFlipUp: "bullyPush",
+    text: "On flip-up: push the creature across from this from front to back. Needs ≥1 Force here.",
+    aiHints: { preferFront: true }
   },
-
-  // Sandbag (Inert token). Spawned by Combat Engineer's flip-up. Has Durability for damage-soaking
-  // but no Force/Tempo/Insight, can't be buffed. Tokens vanish on death (no graveyard entry).
-  sandbag: {
-    name: "Sandbag",
+  // r8 — ≥1F goblin. Enraged: +1 Force this turn each time it takes damage this turn.
+  r8: {
+    name: "Goblin Berserker",
     type: "creature",
-    cost: 0,
+    tribe: "goblin",
+    cost: 1,
     costStat: "force",
-    force: 0,
+    force: 1,
     tempo: 0,
     durability: 3,
-    inert: true,
-    text: "Inert. A wall of sand.",
+    enraged: true,
+    text: "Enraged. *(Gains +1 Force this turn each time it takes damage this turn.)* Needs ≥1 Force here.",
+    aiHints: { preferFront: true }
+  },
+  // r9 — ≥2F Ogre with Provocation. +1F per opposing creature here; opposing creatures here gain +1F.
+  r9: {
+    name: "Ogre Challenger",
+    type: "creature",
+    tribe: "ogre",
+    cost: 2,
+    costStat: "force",
+    force: 1,
+    tempo: 0,
+    durability: 3,
+    provocationChallenger: true,
+    text: "+1 Force per creature on the other side here. Creatures on the other side here gain +1 Force. Needs ≥2 Force here.",
+    aiHints: { preferFront: true }
+  },
+  // r10 — ≥1F action. Deal 1 damage to a creature on your side here; that creature +1F this turn.
+  r10: {
+    name: "Battle Driver",
+    type: "action",
+    cost: 1,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    effect: "battleDriver",
+    text: "Deal 1 damage to a creature on your side here. That creature gains +1 Force this turn. Needs ≥1 Force here.",
     aiHints: {}
   },
-
-  // Herald (White creature). Demonstrates self/friendly buff trigger that lands fully at any
-  // moment (no opposing target needed).
-  herald: {
-    name: "Herald",
-    type: "creature",
+  // r11 — ≥1F equipment. Grants pierce 1.
+  r11: {
+    name: "Goblin Pike",
+    type: "equipment",
+    cost: 1,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    grantsAttackPatterns: [{ type: "pierce", value: 1 }],
+    text: "Equip. The wielder's attacks gain pierce 1. Needs ≥1 Force here.",
+    aiHints: {}
+  },
+  // r12 — ≥1F action. Sacrifice a goblin on your side here; deal damage equal to Force here.
+  r12: {
+    name: "Goblin Bombardment",
+    type: "action",
+    cost: 1,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    effect: "goblinBombardment",
+    text: "Sacrifice a goblin on your side here. Deal damage equal to your Force here. Needs ≥1 Force here.",
+    aiHints: {}
+  },
+  // r13 — Action used as Champion's Rest content. +1 Force permanently; tear up this card on resolve.
+  r13: {
+    name: "Proof of the Champion",
+    type: "action",
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    effect: "permPlus1ForceHere",
+    text: "A creature here gains +1 Force permanently. Tear up this card.",
+    aiHints: {}
+  },
+  // r14 — Warbanner. Structure printing 1 Force at the location. Structures don't take combat
+  // damage; removed only by named effects.
+  r14: {
+    name: "Warbanner",
+    type: "structure",
     cost: 0,
     costStat: "force",
     force: 1,
     tempo: 0,
-    durability: 2,
-    onFlipUp: "buffFriendlyForceHere",
-    text: "On flip-up: a friendly creature here gains +1 Force until end of turn.",
-    aiHints: { preferFront: true }
-  },
-
-  // Sapper (Red creature). Demonstrates board-targeting damage trigger. Will fizzle on round 1 of
-  // a fresh encounter (no enemy presence yet) but lands on subsequent re-flips via stealth or as a
-  // mid-encounter commit.
-  sapper: {
-    name: "Sapper",
-    type: "creature",
-    cost: 0,
-    costStat: "force",
-    force: 1,
-    tempo: 1,
-    durability: 1,
-    onFlipUp: "damage1Here",
-    text: "On flip-up: deal 1 damage here.",
-    aiHints: { preferFront: true }
+    durability: null,
+    text: "+1 Force here.",
+    aiHints: {}
   }
 };
 
 // 13-card v1 deck — mixed Force/Tempo/Insight to exercise the cost system and Tempo-ordered combat.
 // ---------- Multi-location config ----------
 // v3: each encounter is a SINGLE LOCATION (the destination node). Multi-location-per-encounter
-// returns in a later prototype increment. v2's location-count-agnostic code paths still work;
-// LOCATION_COUNT is just set to 1 for v3 encounters. The location's biome label comes from the
-// node the encounter is rooted at — see loadEncounterFromNode below.
-const LOCATION_COUNT = 1;
+// returns in a slice prototype increment that mixes peace and war locations. LOCATION_COUNT is
+// a runtime variable: set per-encounter from the node's `locations` array. Default 1 for nodes
+// authored as single-location; 2 for the slice's multi-location encounters.
+let LOCATION_COUNT = 1;
 let LOC_NAMES = ["Encounter"]; // overwritten per-encounter when an encounter is loaded
+let LOC_TEXT_KEYS = [null]; // per-location key into LOCATION_TEXTS; null = no text at this location
 
-// ---------- v3 overworld config ----------
-// Hand-authored map: 6 nodes from start to boss with a two-path branching structure.
-// Each path has one neutral encounter and one hostile encounter, in different orders, so the
-// player picks not which content but which sequence of content to face.
+// Location-text registry. Each entry is a node's printed rules effect for one mode (peace/war).
+// In the slice, peace/war is hard-coded per-node — locations don't flip dynamically. Each location
+// text declares which engine hooks it cares about; the engine consults the per-location text at
+// the relevant moments. Null/missing fields are skipped.
+//
+// Hooks:
+//   suppressActionFlipUp: bool — actions in slots at this location don't flip up at end of phase
+//   onUpkeepStart/End, onDrawStart/End, onMainStart/End, onCombatStart/End, onCleanupStart/End(loc)
+//     — phase-boundary hooks fired by firePhaseHook.
+//   onEquipmentLeavesPlay(loc, equipment, hostSide) — fires when equipment leaves play here.
+//     Returns truthy if the hook handled the equipment's destination (skip default junkyard push).
+//   desc: string — display text for the UI
+const LOCATION_TEXTS = {
+  // Champion's Rest (Red, tall-rewarding peace location).
+  // Actions don't flip up by default. If at end of cleanup only ONE creature is at this location,
+  // all actions here flip up and resolve. Player engineers "exactly one creature here" to extract
+  // a permanent buff via a one-shot exiling action.
+  locP1: {
+    label: "Champion's Rest",
+    desc: "Actions here don't flip up. At end of cleanup, if only one creature is here, flip up all actions.",
+    suppressActionFlipUp: true,
+    onCleanupEnd: function (loc) {
+      let creatureCount = 0;
+      for (const sideName of ["player", "ai"]) {
+        const lc = L(sideName, loc);
+        for (const pos of ["fl","fr","bl","br"]) {
+          if (lc.creatures[pos]) creatureCount++;
+        }
+      }
+      if (creatureCount !== 1) return;
+      // Exactly one creature here. Force-flip all actions in slots here on either side.
+      logEntry(`Champion's Rest: only one creature here — flipping all actions.`, "phase");
+      const flipped = [];
+      for (const sideName of ["player", "ai"]) {
+        const lc = L(sideName, loc);
+        if (lc.action && lc.action.revealed === false) {
+          lc.action.revealed = true;
+          flipped.push({ side: sideName, action: lc.action });
+        }
+      }
+      // Resolve flipped actions in the order they appear (sides interleaved, no Tempo here — the
+      // location's force-flip is a single-shot; slice keeps it simple).
+      for (const f of flipped) {
+        // Use the standard action resolver. It will handle the action's effect text.
+        if (state.sides[f.side].locations[loc].action === f.action) {
+          resolveAction(f.side, loc);
+        }
+      }
+    }
+  },
+  // Goblin Armaments (Red, tribal-training-grounds peace location).
+  // When equipment leaves play here, attach it to a goblin here. Per Pillar 10, the goblin is
+  // picked at random from legal candidates: any goblin on either side at this location that
+  // isn't already at the equipment cap. Equipment cycles between dying goblins until no legal
+  // host remains. Equipment cap (1 per host) bounds the cycling and creates slot-pressure.
+  locP2: {
+    label: "Goblin Armaments (peace)",
+    desc: "When equipment leaves play here, attach it to a goblin here.",
+    onEquipmentLeavesPlay: function (loc, equipment, hostSide) {
+      // Find legal host candidates: any goblin on either side at this location with an empty
+      // equipment slot (cap = 1 per host).
+      const candidates = [];
+      for (const side of ["player", "ai"]) {
+        const lc = L(side, loc);
+        for (const pos of ["fl","fr","bl","br"]) {
+          const c = lc.creatures[pos];
+          if (!c) continue;
+          if (c.revealed === false) continue;  // face-down cards are not legal targets
+          if (c.tribe !== "goblin") continue;
+          if (c.equipment && c.equipment.length > 0) continue;  // equipment cap
+          candidates.push({ side, pos, c });
+        }
+      }
+      if (candidates.length === 0) {
+        // No legal goblin host. Equipment falls through to the default (host-side junkyard).
+        return false;
+      }
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      const reason = candidates.length === 1 ? "[only legal goblin]" : `[random pick from ${candidates.length} goblins]`;
+      attachEquipmentToHost(equipment, pick.c, pick.side);
+      logEntry(`  Goblin Armaments: ${equipment.name} cycles to ${pick.c.name} (${pick.side} ${pick.pos}). ${reason}`, "combat-detail");
+      return true;  // handled — skip the default junkyard push
+    }
+  },
+  // Ogre Hideaway (Red, peace). Recruit-bait location: when an ogre flips up here, it goes to sleep
+  // for 2 turns. Sleeping = 0 effective Force, no combat, no movement. Player can recruit easily
+  // (no Force-superiority hurdle) or poke the ogre awake and trade combat.
+  locP3: {
+    label: "Ogre Hideaway",
+    desc: "When an ogre flips up here, it sleeps for 2.",
+    onFlipUp: function (loc, side, card) {
+      if (card.tribe !== "ogre") return;
+      if (card.sleepCounter > 0) return;  // already asleep — don't refresh
+      card.sleepCounter = 2;
+      logEntry(`  Ogre Hideaway: ${card.name} (${side} ${LOC_NAMES[loc]}) falls asleep (Sleep 2).`, "combat-detail");
+    }
+  }
+};
+
+// ---------- Slice prototype overworld config ----------
+// Bipartite chain: each "stage" is a pair of parallel nodes the player engages with as a
+// 2-location encounter. After clearing the pair, the player picks one to move to. From there,
+// the next pair is the encounter's two locations.
+//
+// Stage 1: A1, A2  — both peace (Champion's Rest content)
+// Stage 2: B1, B2  — mixed (one peace, one hostile)
+// Stage 3: C1, C2  — both hostile (final encounter)
+//
+// Edges connect every Stage-N node to every Stage-(N+1) node (full bipartite per stage),
+// guaranteeing a 2-location encounter at each step.
+//
+// Each node has *one* location's worth of contents — `contents` (and optional `locationTextKey`).
+// Multi-location encounters come from adjacency in the graph, not from arrays inside a node.
 const WORLD_DEFS = {
   nodes: [
-    { id: "start", x: 1, y: 2, biome: "Crossroads",  kind: "start", contents: null,
-      label: "Crossroads (start)" },
-    // Top branch: neutral first, then hostile.
-    { id: "B",     x: 2, y: 1, biome: "Coastal",     kind: "neutral", contents: { neutralKey: "siren" },
-      label: "Singing Cliffs" },
-    { id: "E",     x: 3, y: 1, biome: "Mountain",    kind: "hostile", contents: { aiPlacements: [
-        { defKey: "soldier", slot: { kind: "creature", pos: "fl" } },
-        { defKey: "soldier", slot: { kind: "creature", pos: "fr" } },
-        { defKey: "banner",  slot: { kind: "structure" } }
-      ]}, label: "Iron Pass" },
-    // Bottom branch: hostile first, then neutral.
-    { id: "C",     x: 2, y: 3, biome: "Forest",      kind: "hostile", contents: { aiPlacements: [
-        { defKey: "recruit", slot: { kind: "creature", pos: "fl" } },
-        { defKey: "skirmisher", slot: { kind: "creature", pos: "fr" } }
-      ]}, label: "Wooded Skirmish" },
-    { id: "D",     x: 3, y: 3, biome: "Mountain",    kind: "neutral", contents: { neutralKey: "forge" },
-      label: "Smith's Fire" },
-    { id: "boss",  x: 4, y: 2, biome: "Throne",      kind: "boss",    contents: { aiPlacements: [
-        { defKey: "champion", slot: { kind: "creature", pos: "fl" } },
-        { defKey: "soldier",  slot: { kind: "creature", pos: "fr" } },
-        { defKey: "mage",     slot: { kind: "creature", pos: "br" } },
-        { defKey: "banner",   slot: { kind: "structure" } }
-      ]}, label: "The Throne" }
+    { id: "start", x: 1, y: 2, biome: "Crossroads",  kind: "start",
+      label: "Crossroads (start)",
+      contents: null },
+
+    // Stage 1 — both peace. A1 Ogre Hideaway, A2 Champion's Rest.
+    { id: "A1", x: 2, y: 1, biome: "Mountain", kind: "neutral",
+      label: "Ogre Hideaway",
+      locationTextKey: "locP3",
+      contents: { neutralPlacements: [
+        { defKey: "r9", slot: { kind: "creature", pos: "fl" } }
+      ]}
+    },
+    { id: "A2", x: 2, y: 3, biome: "Mountain", kind: "neutral",
+      label: "Champion's Rest",
+      locationTextKey: "locP1",
+      contents: { neutralPlacements: [
+        { defKey: "r3", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "r13", slot: { kind: "action" } }
+      ]}
+    },
+
+    // Stage 2 — mixed. B1 peace (Goblin Armaments), B2 hostile (Skirmish Line).
+    { id: "B1", x: 3, y: 1, biome: "Mountain", kind: "neutral",
+      label: "Goblin Armaments",
+      locationTextKey: "locP2",
+      contents: { neutralPlacements: [
+        { defKey: "r1", slot: { kind: "creature", pos: "fl" }, equipWith: ["r2"] },
+        { defKey: "r1", slot: { kind: "creature", pos: "fr" }, equipWith: ["r11"] },
+        { defKey: "r1", slot: { kind: "creature", pos: "bl" } },
+        { defKey: "r1", slot: { kind: "creature", pos: "br" } }
+      ]}
+    },
+    { id: "B2", x: 3, y: 3, biome: "Mountain", kind: "hostile",
+      label: "Skirmish Line",
+      contents: { aiPlacements: [
+        { defKey: "r1", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "r7", slot: { kind: "creature", pos: "fr" } },
+        { defKey: "r6", slot: { kind: "creature", pos: "bl" } }
+      ]}
+    },
+
+    // Stage 3 — both hostile. C1 Forward Line, C2 Rear Camp.
+    { id: "C1", x: 4, y: 1, biome: "Mountain", kind: "hostile",
+      label: "Forward Line",
+      contents: { aiPlacements: [
+        { defKey: "r8", slot: { kind: "creature", pos: "fl" }, equipWith: ["r2"] },
+        { defKey: "r3", slot: { kind: "creature", pos: "fr" }, equipWith: ["r11"] }
+      ]}
+    },
+    { id: "C2", x: 4, y: 3, biome: "Mountain", kind: "hostile",
+      label: "Rear Camp",
+      contents: { aiPlacements: [
+        { defKey: "r9", slot: { kind: "creature", pos: "fl" } },
+        { defKey: "r1", slot: { kind: "creature", pos: "br" } }
+      ]}
+    }
   ],
   edges: [
-    ["start", "B"], ["start", "C"],
-    ["B", "E"], ["C", "D"],
-    ["E", "boss"], ["D", "boss"]
+    // start → Stage 1
+    ["start", "A1"], ["start", "A2"],
+    // Stage 1 → Stage 2 (full bipartite)
+    ["A1", "B1"], ["A1", "B2"],
+    ["A2", "B1"], ["A2", "B2"],
+    // Stage 2 → Stage 3 (full bipartite)
+    ["B1", "C1"], ["B1", "C2"],
+    ["B2", "C1"], ["B2", "C2"]
   ],
   startNode: "start",
-  bossNode: "boss"
+  bossNode: null   // slice has no boss — final encounter is the Stage 3 pair
 };
 
 function buildStartingDeck() {
-  // 14-card v2 deck — adds Heralding Spark (the first scope-printed card: "at all your locations").
-  return [
-    "recruit", "conscript",
-    "soldier", "soldier",
-    "champion",
-    "banner", "banner",
-    "skirmisher",
-    "mage",
-    "spark",
-    "counterspell",
-    "heraldingSpark",
-    // v3 flip-up demo cards (engine demos, not card-design candidates):
-    "combatEngineer",
-    "herald",
-    "sapper"
-  ];
+  // Slice starting deck — seven Red cards. r2 (Crude Axe equipment) and r14 (Warbanner structure)
+  // included to exercise the play-from-hand attach and structure-aura flows. Tune in playtest.
+  return ["r1", "r2", "r3", "r4", "r5", "r6", "r14"];
 }
 
 // ---------- State ----------
@@ -658,6 +769,17 @@ function createCard(defKey, owner) {
     effect: def.effect,
     onFlipUp: def.onFlipUp,    // optional flip-up trigger effect key (see fireFlipUpTrigger)
     inert: def.inert || false, // Inert keyword: cannot gain Force/Tempo/Insight/Resolve
+    pitFighterWhileAlone: def.pitFighterWhileAlone || false, // Pit-Fighter's while-alone flag
+    provocationChallenger: def.provocationChallenger || false, // Challenger's while-vs-opposing flag
+    enraged: def.enraged || false, // Enraged keyword: +1 Force this turn per damage instance taken
+    tribe: def.tribe || null,  // creature tribe (e.g., "goblin") — used by tribal-as-resource effects
+    attackPatterns: def.attackPatterns ? [...def.attackPatterns] : [], // copied — equipment may mutate
+    grantsAttackPatterns: def.grantsAttackPatterns || null, // equipment: patterns granted to host
+    grantsStats: def.grantsStats || null, // equipment: stats granted to host (read by effectiveStat)
+    equipment: [], // for creatures/structures: array of equipment attached to this host
+    sleepCounter: 0,    // Sleeping keyword: turns remaining asleep. 0 = awake.
+    wokeInPhase: null,  // phase name where damage woke this sleeper. Gates awake-actions (attack,
+                        // move) while state.phase === wokeInPhase. Self-clears via the phase compare.
     text: def.text,
     aiHints: def.aiHints || {},
     revealed: true
@@ -677,7 +799,11 @@ function freshLocation() {
     pending: {
       creatures: { fl: null, fr: null, bl: null, br: null },
       structure: null,
-      action: null
+      action: null,
+      // Equipment played from hand: keyed by host position (fl/fr/bl/br). Each entry is an array
+      // of pending equipment cards for that host. Resolves on end-of-phase flip; fizzles to your-side
+      // junkyard if the host is gone by then.
+      equipment: { fl: [], fr: [], bl: [], br: [] }
     },
     movedThisTurn: new Set()
   };
@@ -692,6 +818,8 @@ function freshSide(deckKeys, owner) {
     hand: [],          // hand is global to the side
     discard: [],       // discard is global to the side
     graveyard: [],     // graveyard is global to the side
+    junkyard: [],      // junkyard zone — structures and equipment that have left play
+    exile: [],         // exile zone — torn-up cards (permanent stat-buff actions, etc.); cannot be recovered
     locations          // per-location committed/pending state lives here
   };
 }
@@ -741,8 +869,11 @@ function freshState() {
     activeSide: "player",
     firstSide: "player",
     sides: null,                  // { player, ai } — built per encounter
-    currentNodeId: null,          // which node we're encountering at
+    currentNodeId: null,          // destination node id (where pawn moves after clearing)
+    encounterNodeIds: null,       // all node ids in the active encounter (locations)
+    encounterDestId: null,        // node id the player chose to walk to after clearing
     encounterKind: null,          // "hostile" | "neutral" | "boss"
+    encounterEndPending: null,    // null | "playerCleared" | "playerLeft" | "bossKilled" — set mid-turn, resolved at end of cleanup
     selectedCardId: null,
     selectedCommittedId: null,
     gameOver: null,               // encounter-scoped result before run-scoped runOver is updated
@@ -767,17 +898,42 @@ function getNode(nodeId) {
 }
 
 // Returns ids of nodes adjacent to the pawn that are legal targets to move to.
-function legalMovesFromPawn() {
+// Adjacent node ids of the pawn's current position.
+function adjacentToPawn() {
   const pawn = state.world.pawnAt;
   const adj = [];
   for (const [a, b] of state.world.edges) {
     if (a === pawn) adj.push(b);
     else if (b === pawn) adj.push(a);
   }
-  // For v3, allow movement to any adjacent node regardless of status. Backtracking through
-  // completed nodes is permitted — encounters at completed nodes are no longer triggered, the
-  // player just walks through.
   return adj;
+}
+
+// Adjacent node ids that are still unvisited — these are the locations a pawn-node click pulls
+// into the encounter.
+function unvisitedAdjacentsOfPawn() {
+  return adjacentToPawn().filter(id => {
+    const n = getNode(id);
+    return n && n.status === "unvisited";
+  });
+}
+
+// Returns the set of node ids that are *clickable* in the current overworld state.
+// Two cases:
+//   (A) The pawn's own node is clickable IFF there's at least one unvisited adjacent — clicking
+//       it triggers an encounter that pulls in all those unvisited adjacents.
+//   (B) Adjacent nodes are clickable IFF they are completed (cleared) — clicking walks the pawn
+//       to that node, no encounter. Unvisited adjacents are not directly clickable; they get
+//       engaged via the pawn-node click.
+function legalMovesFromPawn() {
+  const legal = [];
+  const pawn = state.world.pawnAt;
+  if (unvisitedAdjacentsOfPawn().length > 0) legal.push(pawn);
+  for (const id of adjacentToPawn()) {
+    const n = getNode(id);
+    if (n && n.status === "completed") legal.push(id);
+  }
+  return legal;
 }
 
 // Build a fresh player side from the persistent run deck.
@@ -797,6 +953,8 @@ function freshPlayerSide() {
     hand: [],
     discard: [],
     graveyard: [],
+    junkyard: [],      // junkyard zone — structures and equipment that have left play
+    exile: [],
     locations
   };
 }
@@ -814,53 +972,131 @@ function freshAiSide() {
     hand: [],
     discard: [],
     graveyard: [],
+    junkyard: [],
+    exile: [],
     locations
   };
 }
 
-// Load an encounter for a given node. Builds state.sides, places the node's contents into the
-// AI side's slots (whether AI cards or neutral cards — they share slots), and switches view.
-function loadEncounterFromNode(nodeId) {
-  const node = getNode(nodeId);
+// Load an encounter triggered by the player attempting to advance from their current pawn node.
+// Per the unified-encounter framework: an encounter pulls in *all unvisited nodes adjacent to
+// the pawn* as the encounter's locations. Each adjacent node contributes one location's worth of
+// contents. After clearing, all those nodes become visited; the player picks one to walk to.
+//
+// `clickedNodeId` is the adjacent the player clicked (used as the destination after clearing).
+function loadEncounterFromPawn(clickedNodeId) {
+  const pawnNodeId = state.world.pawnAt;
+  // Gather unvisited adjacents of the current pawn node (the encounter's locations).
+  const encounterNodeIds = [];
+  for (const [a, b] of state.world.edges) {
+    let other = null;
+    if (a === pawnNodeId) other = b;
+    else if (b === pawnNodeId) other = a;
+    if (!other) continue;
+    const n = getNode(other);
+    if (n && n.status === "unvisited" && !encounterNodeIds.includes(other)) {
+      encounterNodeIds.push(other);
+    }
+  }
+  if (encounterNodeIds.length === 0) {
+    // No unvisited adjacents — just walk to the clicked node, no encounter.
+    state.world.pawnAt = clickedNodeId;
+    state.view = "overworld";
+    render();
+    return;
+  }
+  // Ensure the clicked node is included (it should be, since the player clicked an adjacent).
+  if (!encounterNodeIds.includes(clickedNodeId)) {
+    encounterNodeIds.unshift(clickedNodeId);
+  }
+
+  // Build per-location bookkeeping arrays from the pulled-in nodes.
+  LOCATION_COUNT = encounterNodeIds.length;
+  LOC_NAMES = encounterNodeIds.map(id => getNode(id).label);
+  LOC_TEXT_KEYS = encounterNodeIds.map(id => getNode(id).locationTextKey || null);
+
+  // Determine the encounter's overall kind. If any pulled-in node is hostile, encounter is hostile;
+  // else if any is boss, boss; else neutral. (The slice has no boss; this is just future-proofing.)
+  let encounterKind = "neutral";
+  if (encounterNodeIds.some(id => getNode(id).kind === "boss")) encounterKind = "boss";
+  else if (encounterNodeIds.some(id => getNode(id).kind === "hostile")) encounterKind = "hostile";
+
   state.sides = { player: freshPlayerSide(), ai: freshAiSide() };
-  state.currentNodeId = nodeId;
-  state.encounterKind = node.kind;
+  state.encounterNodeIds = encounterNodeIds;     // tracks which nodes are this encounter's locations
+  state.encounterDestId = clickedNodeId;          // where the pawn moves after clearing
+  state.currentNodeId = clickedNodeId;            // for legacy code paths that read this
+  state.encounterKind = encounterKind;
   state.turn = 1;
   state.phase = "setup";
   state.firstSide = "player";
   state.gameOver = null;
+  state.encounterEndPending = null;
   state.selectedCardId = null;
   state.selectedCommittedId = null;
   state.log = [];
-  // Per-encounter location label uses the node's display label.
-  LOC_NAMES = [node.label];
 
-  // Place node contents into the AI side's slot grid. AI cards land with owner="ai"; neutral
-  // cards land with owner="neutral". Both occupy the same slot grid (the "other side").
-  if (node.contents && node.contents.aiPlacements) {
-    for (const placement of node.contents.aiPlacements) {
-      const card = createCard(placement.defKey, "ai");
-      // Per the unified-encounter framework, AI cards are face-up at encounter start during
-      // overworld placement (the AI's own bookkeeping), then face-down to the player via the
-      // universal stealth on player arrival, then flip up at end of round 1 upkeep.
-      card.revealed = false;
-      placeIntoLocSlot(L("ai", 0), placement.slot, card);
+  // Place each node's contents into the AI side's slot grid at that node's location index.
+  for (let loc = 0; loc < encounterNodeIds.length; loc++) {
+    const node = getNode(encounterNodeIds[loc]);
+    const contents = node.contents;
+    if (!contents) continue;
+    if (contents.aiPlacements) {
+      for (const placement of contents.aiPlacements) {
+        const card = createCard(placement.defKey, "ai");
+        card.revealed = false;
+        placeIntoLocSlot(L("ai", loc), placement.slot, card);
+        // Pre-attach equipment if specified. `equipWith` is an array of equipment defKeys to
+        // attach to this card on encounter-load. Equipment cards are owned by "ai" (same side
+        // as the host) and apply their attack-pattern grants immediately.
+        if (placement.equipWith && placement.slot.kind === "creature") {
+          for (const eqKey of placement.equipWith) {
+            const eq = createCard(eqKey, "ai");
+            eq.revealed = false;
+            attachEquipmentToHost(eq, card, "ai");
+          }
+        }
+      }
     }
-  }
-  if (node.contents && node.contents.neutralKey) {
-    const neutralCard = createCard(node.contents.neutralKey, "neutral");
-    neutralCard.revealed = false;
-    // Neutrals use the same slot model: type "creature" goes into a creature slot, "structure"
-    // into the structure slot. For v3 we hand-pick one default position per neutral type.
-    const slot = neutralCard.type === "creature"
-      ? { kind: "creature", pos: "fl" }
-      : { kind: "structure" };
-    placeIntoLocSlot(L("ai", 0), slot, neutralCard);
+    // Multi-card neutral placements: same shape as aiPlacements but cards are owned by "neutral".
+    // Used for biome-native neutral encounter content (Champion's Rest creature + action, etc.).
+    if (contents.neutralPlacements) {
+      for (const placement of contents.neutralPlacements) {
+        const card = createCard(placement.defKey, "neutral");
+        card.revealed = false;
+        placeIntoLocSlot(L("ai", loc), placement.slot, card);
+        // Pre-attach equipment to neutral creatures too (e.g., Goblin Armaments' goblin-with-sword).
+        if (placement.equipWith && placement.slot.kind === "creature") {
+          for (const eqKey of placement.equipWith) {
+            const eq = createCard(eqKey, "neutral");
+            eq.revealed = false;
+            attachEquipmentToHost(eq, card, "ai");  // hostSide is "ai" because neutrals occupy the AI side spatially
+          }
+        }
+      }
+    }
+    // Legacy single-key path (Forge, Siren). Default slot inferred from card type.
+    if (contents.neutralKey) {
+      const neutralCard = createCard(contents.neutralKey, "neutral");
+      neutralCard.revealed = false;
+      const slot = neutralCard.type === "creature"
+        ? { kind: "creature", pos: "fl" }
+        : { kind: "structure" };
+      placeIntoLocSlot(L("ai", loc), slot, neutralCard);
+    }
   }
 
   state.view = "encounter";
-  logEntry(`— Entering ${node.label} (${node.kind}) —`, "phase");
+  const labelsList = LOC_NAMES.join(" + ");
+  logEntry(`— Encounter: ${labelsList} (${encounterKind}) —`, "phase");
   startNewTurn();
+}
+
+// Legacy: kept as an alias in case anything calls loadEncounterFromNode directly. Treats nodeId
+// as both pawn-anchor *and* destination — simulates the old "encounter at this single node" flow.
+function loadEncounterFromNode(nodeId) {
+  // Set pawn temporarily so adjacency pulls from here.
+  state.world.pawnAt = nodeId;
+  loadEncounterFromPawn(nodeId);
 }
 
 // Helper: place a card directly into a location's committed slot (bypasses the play queue).
@@ -875,58 +1111,98 @@ function placeIntoLocSlot(lc, slot, card) {
   }
 }
 
-// Move the pawn to a new node and trigger an encounter if the node is non-empty.
-// "Empty" nodes (start, or completed) just update pawn position without an encounter.
+// Click handler for overworld nodes. Two cases:
+//  - Click the pawn's own node (with unvisited adjacents present) → trigger encounter pulling in
+//    all unvisited adjacents as the encounter's locations.
+//  - Click a cleared adjacent → walk pawn there (no encounter).
 function moveTo(nodeId) {
   const target = getNode(nodeId);
   if (!target) return;
   if (!legalMovesFromPawn().includes(nodeId)) return;
-  state.world.pawnAt = nodeId;
-  // Completed nodes: walk through, no encounter.
-  if (target.status === "completed") {
-    render();
+
+  // Click on the pawn node: trigger encounter.
+  if (nodeId === state.world.pawnAt) {
+    // The encounter pulls in all unvisited adjacents. The "destination" (which adjacent the pawn
+    // walks to after clearing) is undefined here — the player chooses post-encounter by clicking
+    // a cleared adjacent. For now we set destId to the first unvisited adjacent as a placeholder;
+    // it's overwritten by the post-encounter walk-click flow.
+    const unvisited = unvisitedAdjacentsOfPawn();
+    if (unvisited.length === 0) return;
+    loadEncounterFromPawn(unvisited[0]);  // any adjacent works as the temporary dest anchor
     return;
   }
-  // Otherwise, trigger an encounter at this node. loadEncounterFromNode handles its own rendering
-  // (renders once face-down for the arrival beat, then continues with startNewTurn after a delay).
-  loadEncounterFromNode(nodeId);
+
+  // Click on a cleared adjacent: walk the pawn there, no encounter.
+  state.world.pawnAt = nodeId;
+  render();
 }
 
-// End the current encounter and return to the overworld. Marks the node completed (or not, based
-// on result) and updates run-scoped state (Durability persists; player deck persists).
+// End the current encounter and return to the overworld. Marks all encounter nodes completed.
+// Pawn stays at the original starting node — the player walks to a cleared adjacent post-encounter
+// by clicking on the overworld map.
 function endEncounter(result) {
   // result: "playerCleared" | "playerLeft" | "playerLost" | "bossKilled"
-  const node = getNode(state.currentNodeId);
+  const encounterNodeIds = state.encounterNodeIds || [];
 
   // Persist player Durability into run state.
   state.runDurability = state.sides.player.durability;
 
+  // Acquisition: any card flagged `acquired` (taken via Recruit, Goblin Armaments rewire, etc.)
+  // joins the run-deck for future encounters. Scan all zones — the card might be in slots, in
+  // the player's graveyard, discard, hand, or junkyard. Equipment is scanned both attached to
+  // player creatures and in the junkyard (where it goes when its host died).
+  if (result !== "playerLost" && state.sides && state.sides.player) {
+    const p = state.sides.player;
+    const acquired = [];
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L("player", loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (!c) continue;
+        if (c.acquired) acquired.push(c);
+        if (c.equipment) {
+          for (const eq of c.equipment) {
+            if (eq.acquired) acquired.push(eq);
+          }
+        }
+      }
+    }
+    for (const c of [...p.hand, ...p.discard, ...p.graveyard, ...p.junkyard]) {
+      if (c.acquired) acquired.push(c);
+    }
+    for (const c of acquired) {
+      state.runDeck.push({ defKey: c.defKey, mods: {} });
+      logEntry(`Acquired: ${c.name} joins your deck.`, "win");
+    }
+  }
+
+  const cleanup = () => {
+    state.view = "overworld";
+    state.sides = null;
+    state.currentNodeId = null;
+    state.encounterKind = null;
+    state.encounterNodeIds = null;
+    state.encounterDestId = null;
+    state.encounterEndPending = null;
+    state.gameOver = null;
+  };
+
   if (result === "playerLost") {
     state.runOver = "playerLose";
-    state.view = "overworld";
-    state.sides = null;
-    state.currentNodeId = null;
-    state.encounterKind = null;
+    cleanup();
     render();
     return;
+  }
+  // Mark every node in the encounter as completed. (Includes "bossKilled" — slice has no boss
+  // so it's just here for future-proofing.)
+  for (const id of encounterNodeIds) {
+    const n = getNode(id);
+    if (n) n.status = "completed";
   }
   if (result === "bossKilled") {
-    node.status = "completed";
     state.runOver = "playerWin";
-    state.view = "overworld";
-    state.sides = null;
-    state.currentNodeId = null;
-    state.encounterKind = null;
-    render();
-    return;
   }
-  // Otherwise: player cleared (hostile) or chose to leave (neutral).
-  node.status = "completed";
-  state.view = "overworld";
-  state.sides = null;
-  state.currentNodeId = null;
-  state.encounterKind = null;
-  state.gameOver = null;
+  cleanup();
   render();
 }
 
@@ -937,6 +1213,10 @@ function endEncounter(result) {
 //   - Hostile encounter: ends when AI side has no creatures or structures (effectively "AI cleared").
 //   - Neutral encounter: ends when the neutral card has consumed itself OR when the player presses
 //     the leave-encounter button (handled separately in UI).
+// Mid-turn check: if the encounter's win condition is met, mark it as pending end. The actual
+// endEncounter call is deferred to the very end of cleanup so all phases of the current turn
+// finish first (combat damage, location-text triggers like Champion's Rest, etc.). Player-lost
+// is the one exception — if the player's summoner falls, the encounter ends immediately.
 function checkEncounterEnd() {
   if (!state.sides) return;
   if (state.sides.player.durability <= 0) {
@@ -944,6 +1224,7 @@ function checkEncounterEnd() {
     endEncounter("playerLost");
     return;
   }
+  if (state.encounterEndPending) return;  // already flagged
   // Count non-player presence at all locations.
   let aiCreatures = 0, neutralCards = 0, hasStructure = false;
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
@@ -960,27 +1241,23 @@ function checkEncounterEnd() {
     }
   }
   if (state.encounterKind === "boss") {
-    // Boss is cleared when no AI creatures / AI structures remain. (Neutral cards at the boss node
-    // would also have to be cleared — for v3 the boss has no neutrals.)
     if (aiCreatures === 0 && !hasStructure) {
-      logEntry(`The boss is defeated! You win the run.`, "win");
-      endEncounter("bossKilled");
+      logEntry(`The boss is defeated. (Encounter ends at end of turn.)`, "win");
+      state.encounterEndPending = "bossKilled";
     }
     return;
   }
   if (state.encounterKind === "hostile") {
     if (aiCreatures === 0 && !hasStructure) {
-      logEntry(`Hostile presence cleared. Encounter won.`, "win");
-      endEncounter("playerCleared");
+      logEntry(`Hostile presence cleared. (Encounter ends at end of turn.)`, "win");
+      state.encounterEndPending = "playerCleared";
     }
     return;
   }
   if (state.encounterKind === "neutral") {
-    // Neutral encounter ends when the neutral cards are gone (consumed by their own effects or
-    // destroyed by the player). The player can also choose to leave via the leave-encounter button.
     if (neutralCards === 0 && aiCreatures === 0 && !hasStructure) {
-      logEntry(`Encounter ended.`, "phase");
-      endEncounter("playerLeft");
+      logEntry(`Locations cleared. (Encounter ends at end of turn.)`, "phase");
+      state.encounterEndPending = "playerLeft";
     }
     return;
   }
@@ -1009,13 +1286,99 @@ function logEntry(msg, kind = "") {
 // Committed-only stat total at a location. Pending plays do NOT count.
 // This is what cost requirements check against — costs are paid by the *target location's*
 // committed presence only.
+// Compute the effective value of a stat on a card, given the card's location context.
+// Returns base + scoped buffs (from grantUntilEndOfTurn — already applied to card[stat]) +
+// conditional buffs (Pit-Fighter alone, Provocation Challenger) + equipment grants.
+// Inert filters: cards with `inert: true` cannot gain Force/Tempo/Insight/Resolve.
+//
+// The base `card[stat]` already reflects:
+//   - Printed stat
+//   - Permanent run-deck mods (applyRunMods at card creation)
+//   - End-of-turn buffs (grantUntilEndOfTurn mutates this directly; reverted at cleanup)
+//
+// What this function adds on top:
+//   - Conditional while-X buffs computed from current board state
+//   - Stats granted by equipment attached to this card
+function effectiveStat(card, side, loc, stat) {
+  if (!card) return 0;
+  // Sleeping zeroes Force: no combat presence, no stat-line contribution. Other stats still count
+  // (Tempo, Insight, etc. — the design only nails down Force-zero for sleepers explicitly).
+  if (card.sleepCounter > 0 && stat === "force") return 0;
+  const base = card[stat] || 0;
+  let bonus = 0;
+
+  // Conditional buffs — only apply to creatures in play, with a known location.
+  if (card.type === "creature" && side != null && loc != null) {
+    const lc = L(side, loc);
+    if (lc && lc.creatures) {
+      // Pit-Fighter "+2 Force while no other creature on your side here" (R5).
+      if (card.pitFighterWhileAlone && stat === "force") {
+        let others = 0;
+        for (const p of ["fl","fr","bl","br"]) {
+          const c = lc.creatures[p];
+          if (c && c !== card) others++;
+        }
+        if (others === 0) bonus += 2;
+      }
+      // Pit-Goblin Challenger Provocation: self gains +1 Force per opposing creature here (RR3).
+      if (card.provocationChallenger && stat === "force") {
+        const opLoc = L(other(side), loc);
+        if (opLoc && opLoc.creatures) {
+          for (const p of ["fl","fr","bl","br"]) {
+            if (opLoc.creatures[p]) bonus += 1;
+          }
+        }
+      }
+    }
+  }
+
+  // Provocation reverse-buff: every creature on the other side from a Challenger gets +1 Force
+  // per Challenger that's at the same location on the opposing side. Computed from this card's
+  // perspective: scan the *other* side at this location for live Challengers.
+  if (card.type === "creature" && side != null && loc != null && stat === "force") {
+    const opLoc = L(other(side), loc);
+    if (opLoc && opLoc.creatures) {
+      for (const p of ["fl","fr","bl","br"]) {
+        const c = opLoc.creatures[p];
+        if (c && c.provocationChallenger) bonus += 1;
+      }
+    }
+  }
+
+  // Equipment grants. Each attached equipment may grant stats to its host.
+  if (card.equipment && card.equipment.length > 0) {
+    for (const eq of card.equipment) {
+      if (eq.grantsStats && eq.grantsStats[stat]) bonus += eq.grantsStats[stat];
+    }
+  }
+
+  // Inert: cannot gain Force/Tempo/Insight/Resolve from any source. Bonus is filtered out.
+  if (card.inert && ["force","tempo","insight","resolve"].includes(stat)) {
+    return base;  // base already excludes scoped buffs that grantUntilEndOfTurn already filtered
+  }
+
+  return base + bonus;
+}
+
+// Sum of a stat across the location, on a side. For Force, only front-row creatures count
+// (per design: Force at a location = front-row Force). For other stats, all creatures + structure.
 function committedStatTotal(side, loc, stat) {
   const lc = L(side, loc);
   let t = 0;
-  for (const pos of ["fl", "fr", "bl", "br"]) {
-    if (lc.creatures[pos]) t += lc.creatures[pos][stat] || 0;
+  // Per the unified face-down rule: a face-down card has no stat presence.
+  if (stat === "force") {
+    // Front-row creatures only contribute Force at the location.
+    for (const pos of ["fl", "fr"]) {
+      const c = lc.creatures[pos];
+      if (c && c.revealed !== false) t += effectiveStat(c, side, loc, stat);
+    }
+  } else {
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.revealed !== false) t += effectiveStat(c, side, loc, stat);
+    }
   }
-  if (lc.structure) t += lc.structure[stat] || 0;
+  if (lc.structure && lc.structure.revealed !== false) t += lc.structure[stat] || 0;
   return t;
 }
 
@@ -1023,8 +1386,15 @@ function committedStatTotal(side, loc, stat) {
 function visibleStatTotal(side, loc, stat) {
   const lc = L(side, loc);
   let t = committedStatTotal(side, loc, stat);
-  for (const pos of ["fl", "fr", "bl", "br"]) {
-    if (lc.pending.creatures[pos]) t += lc.pending.creatures[pos][stat] || 0;
+  // Pending plays — same front-row-only filter for Force.
+  if (stat === "force") {
+    for (const pos of ["fl", "fr"]) {
+      if (lc.pending.creatures[pos]) t += lc.pending.creatures[pos][stat] || 0;
+    }
+  } else {
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      if (lc.pending.creatures[pos]) t += lc.pending.creatures[pos][stat] || 0;
+    }
   }
   if (lc.pending.structure) t += lc.pending.structure[stat] || 0;
   return t;
@@ -1079,6 +1449,14 @@ function legalTargetsForCard(side, loc, card) {
     if (!slotOccupied(side, loc, "structure")) targets.push({ loc, kind: "structure" });
   } else if (card.type === "action") {
     if (!slotOccupied(side, loc, "action")) targets.push({ loc, kind: "action" });
+  } else if (card.type === "equipment") {
+    // Equipment legal where a face-up committed creature is present on this side at loc.
+    // Pending or face-down hosts don't qualify — equipment needs an actual landed host.
+    const lc = L(side, loc);
+    for (const pos of ["fl", "fr", "bl", "br"]) {
+      const c = lc.creatures[pos];
+      if (c && c.revealed !== false) targets.push({ loc, kind: "equipment", pos });
+    }
   }
   return targets;
 }
@@ -1096,6 +1474,11 @@ function placeCard(side, card, target) {
     lc.pending.structure = card;
   } else if (card.type === "action") {
     lc.pending.action = card;
+  } else if (card.type === "equipment") {
+    // Equipment is played into a creature's slot. Host is the creature (committed or pending) at
+    // that position; equipment attaches to it on end-of-phase flip. Stored face-down in pending.
+    if (!lc.pending.equipment[target.pos]) lc.pending.equipment[target.pos] = [];
+    lc.pending.equipment[target.pos].push(card);
   }
   return true;
 }
@@ -1113,6 +1496,10 @@ function cancelPendingPlacement(side, loc, kind, pos) {
   } else if (kind === "action") {
     card = lc.pending.action;
     lc.pending.action = null;
+  } else if (kind === "equipment") {
+    // Pop the most-recently-added pending equipment at this position (LIFO undo).
+    const arr = lc.pending.equipment[pos];
+    if (arr && arr.length > 0) card = arr.pop();
   }
   if (card) state.sides[side].hand.push(card);
   return card;
@@ -1163,6 +1550,17 @@ function commitPendingPlays() {
         if (sideName === "player") logEntry(`You commit ${card.name} (action, face-down) at ${LOC_NAMES[loc]}.`);
         else logEntry(`AI commits an action at ${LOC_NAMES[loc]} (face-down).`);
       }
+      // Equipment pending stays in pending.equipment[pos] (no committed slot). Mark face-down for
+      // the unified flip rule; attach happens in endOfPhaseRevealAndResolve.
+      for (const pos of ["fl","fr","bl","br"]) {
+        const arr = lc.pending.equipment[pos];
+        if (!arr || arr.length === 0) continue;
+        for (const eq of arr) {
+          eq.revealed = false;
+          if (sideName === "player") logEntry(`You commit ${eq.name} (equipment, face-down) to ${LOC_NAMES[loc]} ${pos}.`);
+          else logEntry(`AI commits an equipment at ${LOC_NAMES[loc]} ${pos} (face-down).`);
+        }
+      }
     }
   }
 }
@@ -1200,6 +1598,13 @@ function moveCommittedCreature(side, loc, fromPos, toPos) {
   const lc = L(side, loc);
   const creature = lc.creatures[fromPos];
   if (!creature) return false;
+  // Inert: cannot use the normal once-per-turn move. Effects (push, swap, etc.) can still move
+  // an Inert creature; the player's default move action cannot.
+  if (creature.inert) return false;
+  // Sleeping: same rule as Inert for normal movement. Effects can still relocate a sleeper.
+  if (creature.sleepCounter > 0) return false;
+  // Groggy: just woke this phase. Can't take awake actions (move, attack) until the next phase.
+  if (creature.wokeInPhase === state.phase) return false;
   if (lc.movedThisTurn.has(creature.instId)) return false;
   if (slotOccupied(side, loc, "creature", toPos)) return false;
   if (!isAdjacent(fromPos, toPos)) return false;
@@ -1225,7 +1630,7 @@ function isAdjacent(a, b) {
 // Permanents (creatures, structures) only commit during main. Actions can be committed during
 // any phase that is a commit window — in v1 that's main and combat-reveal.
 function isCommitWindowFor(cardType) {
-  if (cardType === "creature" || cardType === "structure") {
+  if (cardType === "creature" || cardType === "structure" || cardType === "equipment") {
     return state.phase === "main";
   }
   if (cardType === "action") {
@@ -1249,7 +1654,7 @@ function computeCombatPreview() {
     const cs = {};
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = lc.creatures[pos] || lc.pending.creatures[pos] || null;
-      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed } : null;
+      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed, sleepCounter: c.sleepCounter || 0, wokeInPhase: c.wokeInPhase || null } : null;
     }
     const action = lc.action || lc.pending.action || null;
     return {
@@ -1359,6 +1764,9 @@ function computeCombatPreview() {
       for (const pos of ["fl", "fr"]) {
         const c = sim[sideName].locs[loc].creatures[pos];
         if (!c) continue;
+        if (c.revealed === false) continue;  // face-down cards don't attack (unified rule)
+        if (c.sleepCounter > 0) continue;
+        if (c.wokeInPhase === state.phase) continue;
         if (c.force <= 0) continue;
         candidates.push({
           side: sideName, loc, pos, creature: c,
@@ -1419,6 +1827,27 @@ function computeCombatPreview() {
 // Forge) and "end of upkeep" (flip-up at end of phase, encounter-end check). startNewTurn inserts
 // a render+delay between them so the player sees the upkeep beat with face-down cards before the
 // flip-up at end of phase.
+// Generic phase-hook dispatcher. Fires registered handlers at a named phase boundary across all
+// locations and card-level triggers. Hook names: "onUpkeepStart", "onUpkeepEnd", "onDrawStart",
+// "onDrawEnd", "onMainStart", "onMainEnd", "onCombatStart", "onCombatEnd", "onCleanupStart",
+// "onCleanupEnd". Location-text handlers are looked up via LOC_TEXT_KEYS + LOCATION_TEXTS.
+//
+// Handler signature: `function(loc) { ... }`. Receives the location index where the text is active.
+// Cards with phase triggers (future) will register similarly per (card, side, loc).
+function firePhaseHook(hookName) {
+  if (!state.sides) return;
+  // Location-text handlers.
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const key = LOC_TEXT_KEYS[loc];
+    if (!key) continue;
+    const text = LOCATION_TEXTS[key];
+    if (text && typeof text[hookName] === "function") {
+      text[hookName](loc);
+      if (state.gameOver) return;
+    }
+  }
+}
+
 function runUpkeepStart() {
   state.phase = "upkeep";
   logEntry(`— Upkeep, turn ${state.turn} —`, "phase");
@@ -1428,15 +1857,35 @@ function runUpkeepStart() {
       L(sideName, loc).movedThisTurn = new Set();
     }
   }
+  tickSleepCounters();
+  firePhaseHook("onUpkeepStart");
   // Start-of-upkeep neutral effects (e.g., Forge stat-bump).
   resolveNeutralUpkeep();
   checkGameOver();
+}
+
+// Tick each sleeping creature's counter down by one at start of upkeep. Counter reaches 0 → awake.
+function tickSleepCounters() {
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (!c || c.sleepCounter <= 0) continue;
+        c.sleepCounter -= 1;
+        if (c.sleepCounter === 0) {
+          logEntry(`  ${c.name} (${sideName} ${LOC_NAMES[loc]} ${pos}) wakes up.`, "phase");
+        }
+      }
+    }
+  }
 }
 
 // End-of-upkeep work: face-down cards flip up here, per the unified flip-up rule (any face-down
 // card flips up at end of current phase). On turn 1 this is the encounter-arrival reveal moment.
 // Uses the same Tempo-ordered reveal-and-resolve as end-of-main.
 function runUpkeepEnd() {
+  firePhaseHook("onUpkeepEnd");
   endOfPhaseRevealAndResolve();
   checkGameOver();
 }
@@ -1484,6 +1933,7 @@ function resolveNeutralUpkeep() {
 function runDraw() {
   state.phase = "draw";
   logEntry(`— Draw —`, "phase");
+  firePhaseHook("onDrawStart");
   for (const sideName of ["player", "ai"]) {
     const s = state.sides[sideName];
     const target = 5;
@@ -1499,11 +1949,13 @@ function runDraw() {
     }
   }
   logEntry(`Drew up to hand size 5.`, "draw");
+  firePhaseHook("onDrawEnd");
 }
 
 function runMain() {
   state.phase = "main";
   logEntry(`— Main phase: play cards, then end. —`, "phase");
+  firePhaseHook("onMainStart");
   // Player plays via UI; AI plays after player ends main
 }
 
@@ -1585,8 +2037,8 @@ function checkAiRetreat() {
       vanished++;
     }
   }
-  logEntry(`The AI faction withdraws from ${LOC_NAMES[0]}. ${vanished > 0 ? `(${vanished} structure${vanished === 1 ? "" : "s"} vanish with them.)` : ""}`, "win");
-  endEncounter("playerCleared");
+  logEntry(`The AI faction withdraws from ${LOC_NAMES.join(", ")}. ${vanished > 0 ? `(${vanished} structure${vanished === 1 ? "" : "s"} vanish with them.)` : ""}`, "win");
+  state.encounterEndPending = "playerCleared";
   return true;
 }
 
@@ -1725,6 +2177,7 @@ function runCombat() {
   state.phase = "combat";
   logEntry(`— Combat —`, "phase");
   logEntry(`Priority: ${state.firstSide === "player" ? "you" : "AI"} have priority on Tempo ties.`, "phase");
+  firePhaseHook("onCombatStart");
 
   if (state.gameOver) return;
 
@@ -1747,6 +2200,14 @@ function runCombat() {
         logEntry(`    ${creature.name} (${pos}): killed before its swing — does not attack.`, "combat-detail");
         continue;
       }
+      if (liveAttacker.sleepCounter > 0) {
+        logEntry(`    ${liveAttacker.name} (${pos}): asleep — does not attack.`, "combat-detail");
+        continue;
+      }
+      if (liveAttacker.wokeInPhase === state.phase) {
+        logEntry(`    ${liveAttacker.name} (${pos}): just woke up this phase — does not attack.`, "combat-detail");
+        continue;
+      }
       if ((liveAttacker.force || 0) <= 0) {
         logEntry(`    ${liveAttacker.name} (${pos}): no Force — does not attack.`, "combat-detail");
         continue;
@@ -1754,6 +2215,7 @@ function runCombat() {
       resolveAttack(side, loc, pos, liveAttacker);
     }
   }
+  firePhaseHook("onCombatEnd");
   checkGameOver();
 }
 
@@ -1779,6 +2241,8 @@ function computeCombatOrder(loc) {
     for (const pos of ["fl", "fr"]) {
       const c = L(sideName, loc).creatures[pos];
       if (!c) continue;
+      if (c.sleepCounter > 0) continue;
+      if (c.wokeInPhase === state.phase) continue;
       if ((c.force || 0) <= 0) continue;
       candidates.push({
         side: sideName, loc, pos, creature: c,
@@ -1854,6 +2318,12 @@ function spawnTokenAt(owner, loc, defKey, slotFilter) {
 // Per the unified face-down rule, flip-up triggers fire EVERY time a card transitions face-down to
 // face-up — not just the first time. Stealth-and-re-flip combos rely on this.
 function fireFlipUpTrigger(side, loc, card) {
+  // Location-text onFlipUp runs first — it sees the freshly-flipped card and can adjust state
+  // (e.g., Ogre Hideaway puts ogres to sleep) before the card's own flip-up trigger fires.
+  const locKey = LOC_TEXT_KEYS[loc];
+  if (locKey && LOCATION_TEXTS[locKey] && typeof LOCATION_TEXTS[locKey].onFlipUp === "function") {
+    LOCATION_TEXTS[locKey].onFlipUp(loc, side, card);
+  }
   const effect = card.onFlipUp;
   if (!effect) return;
   if (effect === "spawnSandbag") {
@@ -1888,6 +2358,67 @@ function fireFlipUpTrigger(side, loc, card) {
     // creature including neutral ones since they're targetable per design). Falls through to
     // opposing summoner if no valid target.
     dealDamageAtLoc(side, loc, 1, card.name, ` (flip-up)`);
+  } else if (effect === "loneChampionBrawler") {
+    // R1 Goblin Brawler: if this is the only creature on your side here, gain +1 Force.
+    // Default-duration buff (lasts as long as this card is in play). One-time check at flip-up;
+    // doesn't recheck if conditions change.
+    const lc = L(side, loc);
+    let othersHere = 0;
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (c && c !== card) othersHere++;
+    }
+    if (othersHere === 0) {
+      card.force = (card.force || 0) + 1;
+      logEntry(`  ${card.name} is alone here — gains +1 Force.`, "combat-detail");
+    } else {
+      logEntry(`  ${card.name} not alone (${othersHere} other${othersHere === 1 ? "" : "s"} here) — no bonus.`, "combat-detail");
+    }
+  } else if (effect === "bruiserChargeBuff") {
+    // R3 Orc Bruiser: gains +1 Force this turn (always fires; no conditional).
+    grantUntilEndOfTurn(card, "force", 1);
+    logEntry(`  ${card.name} charges in — +1 Force this turn.`, "combat-detail");
+  } else if (effect === "recruiterAloneRecruit") {
+    // R6 Goblin Recruiter: if this is the only creature on your side here, fire Recruit.
+    const lc = L(side, loc);
+    let othersHere = 0;
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (c && c !== card) othersHere++;
+    }
+    if (othersHere === 0) {
+      logEntry(`  ${card.name} is alone — attempting Recruit.`, "combat-detail");
+      runRecruitConversion(side, loc, card.name);
+    } else {
+      logEntry(`  ${card.name} not alone (${othersHere} other${othersHere === 1 ? "" : "s"} here) — Recruit gated off.`, "combat-detail");
+    }
+  } else if (effect === "bullyPush") {
+    // RR1 Goblin Bully: push the creature across from this Bully (same column, other side, front
+    // row) from front to back. Push fizzles if Bully isn't in the front row (no across slot to
+    // push from), if the across slot is empty, or if the back-row destination is occupied.
+    // Find Bully's position on its side.
+    const lc = L(side, loc);
+    let bullyPos = null;
+    for (const pos of ["fl","fr","bl","br"]) {
+      if (lc.creatures[pos] === card) { bullyPos = pos; break; }
+    }
+    if (bullyPos !== "fl" && bullyPos !== "fr") {
+      logEntry(`  ${card.name} not in front — push fizzles.`, "combat-detail");
+    } else {
+      const otherSide = other(side);
+      const otherLoc = L(otherSide, loc);
+      const target = otherLoc.creatures[bullyPos];      // creature across from Bully
+      const destPos = bullyPos === "fl" ? "bl" : "br";  // same column, back row
+      if (!target) {
+        logEntry(`  ${card.name} — no creature across from ${bullyPos} on the other side. Push fizzles.`, "combat-detail");
+      } else if (otherLoc.creatures[destPos]) {
+        logEntry(`  ${card.name} — back-row ${destPos} on the other side is occupied. Push fizzles.`, "combat-detail");
+      } else {
+        otherLoc.creatures[bullyPos] = null;
+        otherLoc.creatures[destPos] = target;
+        logEntry(`  ${card.name} pushes ${target.name} (${otherSide}) from ${bullyPos} to ${destPos}.`, "combat-detail");
+      }
+    }
   }
 }
 
@@ -1906,6 +2437,144 @@ function grantUntilEndOfTurn(card, stat, amount) {
   card[stat] = (card[stat] || 0) + amount;
   if (!state.endOfTurnReverts) state.endOfTurnReverts = [];
   state.endOfTurnReverts.push({ card, stat, amount });
+}
+
+// Attach an equipment card to a host (creature or structure). Equipment's granted attack
+// patterns are appended to the host's. Equipment is stored in host.equipment for tracking.
+// When the host leaves play, equipment goes to the host-side's junkyard via detachAllEquipment.
+function attachEquipmentToHost(equipment, host, hostSide) {
+  if (!host.equipment) host.equipment = [];
+  host.equipment.push(equipment);
+  equipment.attachedTo = host.instId;
+  equipment.attachedSide = hostSide;
+  // Equipment landing on a player-side host is acquired — joins the run-deck at encounter end.
+  // Caught here so any path that attaches (pre-place, location-text rewire, future play-from-hand)
+  // marks acquisition consistently.
+  if (hostSide === "player") equipment.acquired = true;
+  if (equipment.grantsAttackPatterns) {
+    for (const p of equipment.grantsAttackPatterns) {
+      host.attackPatterns.push({ ...p });
+    }
+  }
+}
+
+// Detach all equipment from a host that's leaving play. Each equipment goes to the side's
+// junkyard. (Magnetic override: returns to your-side's junkyard regardless. Not implemented for
+// slice — equipment in slice is single-side only.)
+//
+// Fires the location-text `onEquipmentLeavesPlay(loc, equipment, hostSide)` hook for each piece of
+// equipment, BEFORE pushing to the junkyard. Location text can intercept (e.g., Goblin Armaments
+// attaches the equipment to a goblin instead of letting it go to the junkyard).
+function detachAllEquipmentFromHost(host, hostSide, loc) {
+  if (!host.equipment || host.equipment.length === 0) return;
+  const equipment = host.equipment;
+  host.equipment = [];
+  for (const eq of equipment) {
+    // Fire location-text hook for this equipment leaving play at this location. Hook may
+    // re-attach the equipment to a different host instead of going to junkyard. If the hook
+    // returns truthy ("handled"), skip the default junkyard push.
+    let handled = false;
+    if (loc != null) {
+      const key = LOC_TEXT_KEYS[loc];
+      if (key && LOCATION_TEXTS[key] && typeof LOCATION_TEXTS[key].onEquipmentLeavesPlay === "function") {
+        handled = LOCATION_TEXTS[key].onEquipmentLeavesPlay(loc, eq, hostSide);
+      }
+    }
+    if (!handled) {
+      state.sides[hostSide].junkyard.push(eq);
+      logEntry(`    ${eq.name} (equipment on ${host.name}) → ${hostSide} junkyard.`, "combat-detail");
+    }
+  }
+}
+
+// Called when a creature takes damage from any source (combat, action, Battle Driver, etc.).
+// Fires per-damage-instance triggers like Enraged. `amount` is the damage instance size.
+function onCreatureTookDamage(card, side, loc, amount) {
+  if (!card || amount <= 0) return;
+  // Damage wakes a sleeper. The wake-in-phase flag gates awake-actions (attack, move) for the
+  // remainder of the current phase. Self-clears by phase comparison — no explicit reset needed.
+  if (card.sleepCounter > 0) {
+    card.sleepCounter = 0;
+    card.wokeInPhase = state.phase;
+    logEntry(`  ${card.name} wakes up from damage (groggy this ${state.phase} phase).`, "combat-detail");
+  }
+  if (card.enraged) {
+    grantUntilEndOfTurn(card, "force", 1);
+    logEntry(`  ${card.name} is Enraged — gains +1 Force this turn.`, "combat-detail");
+  }
+}
+
+// Sacrifice a creature on a side at a location. Sends the creature directly to the graveyard
+// (death event — leave-play triggers fire normally). Returns the sacrificed card, or null if no
+// creature matched the filter. `filterFn(card)` is optional — returns true for legal sacrifice
+// targets. If multiple candidates, picks one at random (Pillar 10).
+function sacrificeCreatureOnSide(side, loc, filterFn, sourceName) {
+  const lc = L(side, loc);
+  const candidates = [];
+  for (const pos of ["fl","fr","bl","br"]) {
+    const c = lc.creatures[pos];
+    if (!c) continue;
+    if (c.revealed === false) continue;  // face-down cards are not legal targets
+    if (filterFn && !filterFn(c)) continue;
+    candidates.push({ pos, c });
+  }
+  if (candidates.length === 0) return null;
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  const reason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
+  logEntry(`  ${sourceName} sacrifices ${pick.c.name} (${side} ${pick.pos}). ${reason}`, "combat-detail");
+  // Remove from slot; equipment detaches; tokens are torn up (exile), regular creatures graveyard.
+  lc.creatures[pick.pos] = null;
+  detachAllEquipmentFromHost(pick.c, side, loc);
+  if (pick.c.isToken) state.sides[side].exile.push(pick.c);
+  else state.sides[side].graveyard.push(pick.c);
+  return pick.c;
+}
+
+// Run the Recruit conversion verb at a location for a side. Used by the Recruit action card and
+// by Goblin Recruiter's alone-conditional flip-up. Force-superiority check: front-row Force on
+// caster's side > front-row Force on the other side. If yes, pick a creature in the front row on
+// the other side at random (Pillar 10) and move it to the caster's same-column front slot.
+// Fizzles if Force not superior, no front-row creatures opposite, or destination slot occupied.
+// On success, the taken creature is marked `acquired` and joins the caster's piles at encounter end.
+function runRecruitConversion(side, loc, sourceName) {
+  const otherSide = other(side);
+  const casterLoc = L(side, loc);
+  const otherLoc = L(otherSide, loc);
+  // Force at a location = front-row creatures' effective Force (per design).
+  const casterFrontForce = committedStatTotal(side, loc, "force");
+  const otherFrontForce = committedStatTotal(otherSide, loc, "force");
+  if (casterFrontForce <= otherFrontForce) {
+    logEntry(`  ${sourceName} (${side} @${LOC_NAMES[loc]}) — Force ${casterFrontForce} not greater than ${otherFrontForce}. Fizzles.`, "combat-detail");
+    return false;
+  }
+  const candidates = [];
+  for (const pos of ["fl", "fr"]) {
+    const c = otherLoc.creatures[pos];
+    if (!c) continue;
+    if (c.revealed === false) continue;  // face-down cards are not legal targets (unified rule)
+    candidates.push({ pos, c });
+  }
+  if (candidates.length === 0) {
+    logEntry(`  ${sourceName} (${side} @${LOC_NAMES[loc]}) — no legal creatures in front on the other side. Fizzles.`, "combat-detail");
+    return false;
+  }
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  // Destination: any open front-row slot on the caster's side at this location. Per Pillar 10,
+  // pick randomly among open front slots. Fizzles only if BOTH front slots are occupied.
+  const openDests = ["fl", "fr"].filter(p => !casterLoc.creatures[p]);
+  if (openDests.length === 0) {
+    logEntry(`  ${sourceName} (${side} @${LOC_NAMES[loc]}) — both front slots occupied. Fizzles.`, "combat-detail");
+    return false;
+  }
+  const destPos = openDests[Math.floor(Math.random() * openDests.length)];
+  otherLoc.creatures[pick.pos] = null;
+  pick.c.owner = side;
+  pick.c.acquired = true;
+  casterLoc.creatures[destPos] = pick.c;
+  const sourceReason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
+  const destReason = openDests.length === 1 ? "" : ` [random open front slot from ${openDests.length}]`;
+  logEntry(`  ${sourceName} (${side} @${LOC_NAMES[loc]}) → ${pick.c.name} moves to ${side} ${destPos}. Joins your piles at encounter end. ${sourceReason}${destReason}`, "combat-detail");
+  return true;
 }
 
 // Called at end of cleanup to revert any "until end of turn" buffs.
@@ -1945,10 +2614,14 @@ function dealDamageAtLoc(sourceSide, loc, dmg, actionName, actionLocLabel) {
   pick.c.durability -= dmg;
   const pickReason = targets.length === 1 ? "[only legal target]" : `[random pick from ${targets.length}]`;
   logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) → ${pick.c.name} (${enemySide} ${LOC_NAMES[loc]} ${pick.pos}) for ${dmg}. ${pickReason}`, "combat-detail");
+  // Fire damage-taken triggers (Enraged etc.).
+  onCreatureTookDamage(pick.c, enemySide, loc, dmg);
   if (pick.c.durability <= 0) {
     logEntry(`    ${pick.c.name} is destroyed.`, "combat-detail");
-    // Tokens don't go to graveyard — they have no representation in any zone outside the battlefield.
-    if (!pick.c.isToken) state.sides[enemySide].graveyard.push(pick.c);
+    detachAllEquipmentFromHost(pick.c, enemySide, loc);
+    // Tokens are torn up (exile) on death; regular creatures go to graveyard.
+    if (pick.c.isToken) state.sides[enemySide].exile.push(pick.c);
+    else state.sides[enemySide].graveyard.push(pick.c);
     enemyLoc.creatures[pick.pos] = null;
   }
 }
@@ -1974,6 +2647,32 @@ function resolveAction(side, loc) {
       logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) finds no opposing action here — fizzles, exits to graveyard.`, "combat-detail");
     }
     exitZone = "graveyard";
+  } else if (action.effect === "permPlus1ForceHere") {
+    // Permanent stat-buff action: pick a random creature here (per Pillar 10), give +1 Force
+    // permanently. Self-exiles per the exile-as-physical-destruction rule for permanent stat
+    // buffs — the card is physically destroyed and cannot be recovered.
+    const candidates = [];
+    for (const sideName of ["player", "ai"]) {
+      const lc2 = L(sideName, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc2.creatures[pos];
+        if (c && c.revealed !== false) candidates.push({ side: sideName, pos, c });
+      }
+    }
+    if (candidates.length === 0) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) finds no creatures here — fizzles.`, "combat-detail");
+    } else {
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      pick.c.force = (pick.c.force || 0) + 1;
+      // Permanent buff: also bump the run-deck entry so the change persists if this is a player creature.
+      if (pick.c.runDeckEntry) {
+        pick.c.runDeckEntry.mods = pick.c.runDeckEntry.mods || {};
+        pick.c.runDeckEntry.mods.force = (pick.c.runDeckEntry.mods.force || 0) + 1;
+      }
+      const reason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) → ${pick.c.name} (${pick.side} ${pick.pos}) gains +1 Force permanently. ${reason}`, "combat-detail");
+    }
+    exitZone = "exile";
   } else if (action.effect === "deal1all") {
     // SCOPE EXAMPLE: deal 1 damage to a random enemy creature at EACH location.
     // Per the universal fall-through rule, an empty location → 1 damage to the opposing summoner
@@ -1981,6 +2680,53 @@ function resolveAction(side, loc) {
     // summoner once *per empty location*.
     for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
       dealDamageAtLoc(side, l2, 1, action.name, ``);
+    }
+  } else if (action.effect === "recruitConversion") {
+    runRecruitConversion(side, loc, action.name);
+  } else if (action.effect === "goblinBombardment") {
+    // Sacrifice a goblin on your side here (random pick if multiple). Then deal damage equal to
+    // front-row Force on your side here (post-sacrifice — the sacrificed goblin's Force is gone).
+    const sacrificed = sacrificeCreatureOnSide(side, loc, c => c.tribe === "goblin", action.name);
+    if (!sacrificed) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — no goblin on your side here. Fizzles.`, "combat-detail");
+    } else {
+      // Force at the location = front-row creatures' effective Force (post-sacrifice).
+      const force = committedStatTotal(side, loc, "force");
+      if (force <= 0) {
+        logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — 0 Force here after sacrifice. No damage dealt.`, "combat-detail");
+      } else {
+        dealDamageAtLoc(side, loc, force, action.name, ` @${LOC_NAMES[loc]}`);
+      }
+    }
+  } else if (action.effect === "battleDriver") {
+    // Pick a random creature on your side here. Deal 1 damage to it. That creature gains +1
+    // Force this turn. Combos with Berserker — the 1 damage triggers Enraged for an additional +1F.
+    const lc2 = L(side, loc);
+    const candidates = [];
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc2.creatures[pos];
+      if (c && c.revealed !== false) candidates.push({ pos, c });
+    }
+    if (candidates.length === 0) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — no creatures on your side here. Fizzles.`, "combat-detail");
+    } else {
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      const reason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
+      pick.c.durability -= 1;
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) → ${pick.c.name} (${side} ${pick.pos}) takes 1 damage. ${reason}`, "combat-detail");
+      // Fire damage-taken triggers (Enraged etc.).
+      onCreatureTookDamage(pick.c, side, loc, 1);
+      // Buff +1 Force this turn (if creature is still alive).
+      if (pick.c.durability > 0) {
+        grantUntilEndOfTurn(pick.c, "force", 1);
+        logEntry(`  ${pick.c.name} gains +1 Force this turn.`, "combat-detail");
+      } else {
+        logEntry(`  ${pick.c.name} is destroyed before buff applies.`, "combat-detail");
+        detachAllEquipmentFromHost(pick.c, side, loc);
+        if (pick.c.isToken) state.sides[side].exile.push(pick.c);
+        else state.sides[side].graveyard.push(pick.c);
+        lc2.creatures[pick.pos] = null;
+      }
     }
   }
   s[exitZone].push(action);
@@ -2044,8 +2790,22 @@ function endOfPhaseRevealAndResolve() {
         events.push({ kind: "flip", side: sideName, loc, where: "structure", card: lc.structure, tempo: lc.structure.tempo || 0 });
       }
       // Actions in slots: action-resolve events (they flip up as part of resolving).
-      if (lc.action) {
+      // Locations whose printed text suppresses action flip-up skip this — actions sit in the slot
+      // until the location's text force-flips them via another trigger (e.g., end-of-cleanup).
+      const locTextKey = LOC_TEXT_KEYS[loc];
+      const suppressed = locTextKey && LOCATION_TEXTS[locTextKey] && LOCATION_TEXTS[locTextKey].suppressActionFlipUp;
+      if (lc.action && !suppressed) {
         events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: lc.action.tempo || 0 });
+      }
+      // Pending equipment: flip events. Attaches to host on flip; fizzles to junkyard if host gone.
+      for (const pos of ["fl","fr","bl","br"]) {
+        const arr = lc.pending.equipment[pos];
+        if (!arr) continue;
+        for (const eq of arr) {
+          if (eq.revealed === false) {
+            events.push({ kind: "equipment", side: sideName, loc, where: "equipment", pos, card: eq, tempo: eq.tempo || 0 });
+          }
+        }
       }
     }
   }
@@ -2104,45 +2864,117 @@ function endOfPhaseRevealAndResolve() {
         if (ev.side === "ai") logEntry(`  → Revealed: ${ev.card.name} (AI action at ${LOC_NAMES[ev.loc]}).`, "combat-detail");
       }
       resolveAction(ev.side, ev.loc);
+    } else if (ev.kind === "equipment") {
+      // Equipment flips up and attaches to the host at its slot. If the host is gone (died/moved
+      // before flip), the equipment fizzles to the owner-side junkyard.
+      const lc = L(ev.side, ev.loc);
+      const arr = lc.pending.equipment[ev.pos];
+      const idx = arr ? arr.indexOf(ev.card) : -1;
+      if (idx === -1) continue;  // already removed somehow
+      arr.splice(idx, 1);
+      ev.card.revealed = true;
+      const host = lc.creatures[ev.pos];
+      if (!host) {
+        state.sides[ev.side].junkyard.push(ev.card);
+        logEntry(`  → ${ev.card.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}) has no host — fizzles to junkyard.`, "combat-detail");
+        continue;
+      }
+      attachEquipmentToHost(ev.card, host, ev.side);
+      logEntry(`  → ${ev.card.name} attaches to ${host.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}).`, "combat-detail");
+      fireFlipUpTrigger(ev.side, ev.loc, ev.card);
     }
   }
 }
 
 function other(side) { return side === "player" ? "ai" : "player"; }
 
+// Apply combat damage to a creature at a specific (side, loc, pos). Handles death-resolution and
+// fires onCreatureTookDamage. Used by resolveAttack's main hit + extra-target attack patterns
+// (cleave hits adjacent same-row slots; pierce hits the back-row slot behind the front-row target).
+function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel) {
+  if (dmg <= 0) return;
+  const lc = L(targetSide, loc);
+  const target = lc.creatures[pos];
+  if (!target) {
+    // No creature at this slot — damage falls through to the summoner.
+    state.sides[targetSide].durability -= dmg;
+    logEntry(`    ${attackerLabel} → ${targetSide} summoner for ${dmg} (empty ${pos}). (${targetSide} Durability: ${state.sides[targetSide].durability})`, "combat-detail");
+    return;
+  }
+  target.durability -= dmg;
+  logEntry(`    ${attackerLabel} → ${target.name} (${targetSide} ${pos}) for ${dmg}.`, "combat-detail");
+  onCreatureTookDamage(target, targetSide, loc, dmg);
+  if (target.durability <= 0) {
+    logEntry(`      ${target.name} is destroyed.`, "combat-detail");
+    detachAllEquipmentFromHost(target, targetSide, loc);
+    // Tokens are torn up (exile) on death; regular creatures go to graveyard.
+    if (target.isToken) state.sides[targetSide].exile.push(target);
+    else state.sides[targetSide].graveyard.push(target);
+    lc.creatures[pos] = null;
+  }
+}
+
 function resolveAttack(side, loc, pos, attacker) {
   if (pos !== "fl" && pos !== "fr") return;
 
-  const enemyLoc = L(other(side), loc);
+  const enemySide = other(side);
+  const enemyLoc = L(enemySide, loc);
   const enemyFront = pos;
   const enemyBack = pos === "fl" ? "bl" : "br";
 
-  let target = enemyLoc.creatures[enemyFront];
-  let targetPos = enemyFront;
-  if (!target) {
-    target = enemyLoc.creatures[enemyBack];
-    targetPos = enemyBack;
+  // Main target: front first, falling through to back if front is empty.
+  const targetPos = enemyLoc.creatures[enemyFront] ? enemyFront : (enemyLoc.creatures[enemyBack] ? enemyBack : null);
+  const dmg = effectiveStat(attacker, side, loc, "force");
+  const label = `${attacker.name} (${pos})`;
+
+  if (targetPos) {
+    applyCombatDamage(enemySide, loc, targetPos, dmg, label);
+  } else {
+    state.sides[enemySide].durability -= dmg;
+    logEntry(`    ${label} → ${enemySide} summoner for ${dmg}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
   }
 
-  const dmg = attacker.force;
-  if (target) {
-    target.durability -= dmg;
-    logEntry(`    ${attacker.name} (${pos}) → ${target.name} (${other(side)} ${targetPos}) for ${dmg}.`, "combat-detail");
-    if (target.durability <= 0) {
-      logEntry(`      ${target.name} is destroyed.`, "combat-detail");
-      // Tokens vanish (no graveyard entry); regular creatures go to graveyard.
-      if (!target.isToken) state.sides[other(side)].graveyard.push(target);
-      enemyLoc.creatures[targetPos] = null;
+  // Attack-pattern extras (cleave, pierce). attackPatterns is an array of { type, value? }.
+  const patterns = attacker.attackPatterns || [];
+  for (const p of patterns) {
+    if (p.type === "cleave") {
+      // Cleave hits the *adjacent same-row slots* of the main target's location on the same
+      // side as the main target. On a 2-column grid, that's the *other* front-row slot
+      // (cleave fires from a front-row attacker → hits across-front; the cleave adjacency is
+      // the same-row other column on the enemy side, i.e., the slot next to the main target).
+      if (!targetPos) continue;  // no target hit, cleave has nothing adjacent
+      const adjacent = targetPos === "fl" ? "fr" : (targetPos === "fr" ? "fl" : (targetPos === "bl" ? "br" : "bl"));
+      if (enemyLoc.creatures[adjacent]) {
+        applyCombatDamage(enemySide, loc, adjacent, dmg, `${label} (cleave)`);
+      }
+    } else if (p.type === "pierce") {
+      // Pierce X: deal X damage to the slot directly behind the main target's column on the
+      // enemy side. If the main target was already in the back row (front was empty), pierce
+      // has nothing further to pierce — fizzle the pierce portion.
+      const pierceVal = p.value || 1;
+      if (!targetPos) {
+        // Front + back both empty → main damage already hit summoner. Pierce also hits summoner.
+        state.sides[enemySide].durability -= pierceVal;
+        logEntry(`    ${label} (pierce ${pierceVal}) → ${enemySide} summoner for ${pierceVal}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
+      } else if (targetPos === "fl" || targetPos === "fr") {
+        const backPos = targetPos === "fl" ? "bl" : "br";
+        if (enemyLoc.creatures[backPos]) {
+          applyCombatDamage(enemySide, loc, backPos, pierceVal, `${label} (pierce ${pierceVal})`);
+        } else {
+          // No back-row creature → pierce falls through to summoner.
+          state.sides[enemySide].durability -= pierceVal;
+          logEntry(`    ${label} (pierce ${pierceVal}) → ${enemySide} summoner for ${pierceVal}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
+        }
+      }
+      // If main target was a back-row creature (front was empty), pierce doesn't go further.
     }
-  } else {
-    state.sides[other(side)].durability -= dmg;
-    logEntry(`    ${attacker.name} (${pos}) → ${other(side)} summoner for ${dmg}. (${other(side)} Durability: ${state.sides[other(side)].durability})`, "combat-detail");
   }
 }
 
 function runCleanup() {
   state.phase = "cleanup";
   logEntry(`— Cleanup —`, "phase");
+  firePhaseHook("onCleanupStart");
   for (const sideName of ["player", "ai"]) {
     const s = state.sides[sideName];
     if (s.hand.length > 0) {
@@ -2153,14 +2985,28 @@ function runCleanup() {
   }
   // Revert "until end of turn" buffs (Herald-style flip-up grants and similar).
   revertEndOfTurnBuffs();
+  // Location-text end-of-cleanup hooks (Champion's Rest, etc.).
+  firePhaseHook("onCleanupEnd");
+  if (state.gameOver) return;
   // v3: neutral effects that fire at end of cleanup (e.g., Siren consumption).
   resolveNeutralCleanup();
-  // After cleanup effects fire, check whether the encounter has ended (e.g., siren consumed itself
-  // and was the only thing left).
+  // After cleanup effects fire, re-check the encounter-end condition. checkEncounterEnd sets
+  // state.encounterEndPending if the win condition is met (it does NOT end immediately).
   checkGameOver();
-  // End-of-turn AI retreat evaluation: if the AI managed no living presence this turn (and didn't
-  // bring any in via main-phase reinforcement), the faction withdraws.
-  if (state.view === "encounter" && checkAiRetreat()) return;
+
+  // End-of-turn AI retreat evaluation: same deferred treatment — sets state.encounterEndPending
+  // rather than ending immediately.
+  if (state.view === "encounter") checkAiRetreat();
+
+  // Now resolve any pending encounter-end. All phases of this turn have run; the player has had
+  // their full turn including end-of-cleanup hooks (Champion's Rest, etc.). Time to actually end.
+  if (state.encounterEndPending) {
+    const result = state.encounterEndPending;
+    state.encounterEndPending = null;
+    endEncounter(result);
+    return;
+  }
+
   // Flip priority for next turn (alternation tiebreak).
   const oldPriority = state.firstSide;
   state.firstSide = other(state.firstSide);
@@ -2274,6 +3120,7 @@ function endMainPhase() {
   aiPlaceMain();
   // Both sides commit. AI cards are face-down at this point.
   commitPendingPlays();
+  firePhaseHook("onMainEnd");
   // Enter the reveal phase. AI cards visible as backs, then flip to face-up after a beat.
   state.phase = "reveal";
   logEntry(`— Reveal —`, "phase");
@@ -2531,7 +3378,7 @@ function buildOverworldHelp() {
   help.className = "overworld-help";
   const node = getNode(state.world.pawnAt);
   help.innerHTML = `
-    <div><strong>Overworld.</strong> Click any highlighted node adjacent to your pawn to advance.</div>
+    <div><strong>Overworld.</strong> Click your pawn's node to engage with adjacent unvisited nodes. After clearing, click a cleared adjacent to walk there.</div>
     <div>You're at: <strong>${node ? node.label : "?"}</strong></div>
     <div>Run Durability: <strong>${state.runDurability}</strong> &nbsp;·&nbsp; Run deck: <strong>${state.runDeck.length}</strong> cards</div>
     <div class="muted">⚔ hostile · ? neutral encounter · ★ boss · • empty/start</div>
@@ -2546,11 +3393,20 @@ function buildLocationColumn(loc) {
   col.className = "location";
   col.dataset.loc = String(loc);
 
-  // Location label (flavor name only — no location text in v2).
+  // Location label.
   const label = document.createElement("div");
   label.className = "location-label";
   label.textContent = LOC_NAMES[loc] || `Location ${loc + 1}`;
   col.appendChild(label);
+
+  // Location text (if this location has any printed rules effect).
+  const textKey = LOC_TEXT_KEYS[loc];
+  if (textKey && LOCATION_TEXTS[textKey]) {
+    const txt = document.createElement("div");
+    txt.className = "location-text";
+    txt.textContent = LOCATION_TEXTS[textKey].desc;
+    col.appendChild(txt);
+  }
 
   // AI structure row (above the AI side).
   const aiStructRow = document.createElement("div");
@@ -2673,6 +3529,12 @@ function buildCreatureGrid(side, loc) {
         if (sel && sel.type === "creature" && !slotOccupied("player", loc, "creature", pos) && canPay("player", loc, sel)) {
           cell.classList.add("legal-target");
           cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "creature", pos }));
+        }
+        // Equipment placement: target a slot that has a face-up committed creature here.
+        // Pending or face-down hosts don't qualify — equipment needs an actual landed host.
+        if (sel && sel.type === "equipment" && committedCard && committedCard.revealed !== false && canPay("player", loc, sel)) {
+          cell.classList.add("legal-target");
+          cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "equipment", pos }));
         }
         // Pending creature cancel.
         if (pendingCard && !sel && !state.selectedCommittedId) {
@@ -2819,23 +3681,26 @@ function makeCardEl(card, inSlot = false) {
     b.textContent = `≥${card.cost} ${(card.costStat || "force").toUpperCase()}`;
     meta.appendChild(b);
   }
-  if (card.force > 0) {
-    const b = document.createElement("span");
-    b.className = "badge force";
-    b.textContent = `Force ${card.force}`;
-    meta.appendChild(b);
-  }
-  if (card.tempo > 0) {
-    const b = document.createElement("span");
-    b.className = "badge tempo";
-    b.textContent = `Tempo ${card.tempo}`;
-    meta.appendChild(b);
-  }
-  if (card.insight > 0) {
-    const b = document.createElement("span");
-    b.className = "badge insight";
-    b.textContent = `Insight ${card.insight}`;
-    meta.appendChild(b);
+  // Stat badges show on creatures only. Structure stats are conveyed through the rules text.
+  if (card.type === "creature") {
+    if (card.force > 0) {
+      const b = document.createElement("span");
+      b.className = "badge force";
+      b.textContent = `Force ${card.force}`;
+      meta.appendChild(b);
+    }
+    if (card.tempo > 0) {
+      const b = document.createElement("span");
+      b.className = "badge tempo";
+      b.textContent = `Tempo ${card.tempo}`;
+      meta.appendChild(b);
+    }
+    if (card.insight > 0) {
+      const b = document.createElement("span");
+      b.className = "badge insight";
+      b.textContent = `Insight ${card.insight}`;
+      meta.appendChild(b);
+    }
   }
   if (card.durabilityMax != null) {
     const b = document.createElement("span");
@@ -2843,7 +3708,36 @@ function makeCardEl(card, inSlot = false) {
     b.textContent = `Durability ${card.durability}/${card.durabilityMax}`;
     meta.appendChild(b);
   }
+  if (card.sleepCounter > 0) {
+    const b = document.createElement("span");
+    b.className = "badge sleep";
+    b.textContent = `Sleep ${card.sleepCounter}`;
+    meta.appendChild(b);
+  }
+  if (card.wokeInPhase && card.wokeInPhase === state.phase) {
+    const b = document.createElement("span");
+    b.className = "badge groggy";
+    b.textContent = `Groggy (this ${state.phase})`;
+    meta.appendChild(b);
+  }
   el.appendChild(meta);
+
+  // Attached equipment list (for hosts that have any equipped).
+  if (card.equipment && card.equipment.length > 0) {
+    const eqRow = document.createElement("div");
+    eqRow.className = "equipment-row";
+    const lbl = document.createElement("span");
+    lbl.className = "equipment-label";
+    lbl.textContent = "Equipped:";
+    eqRow.appendChild(lbl);
+    for (const eq of card.equipment) {
+      const tag = document.createElement("span");
+      tag.className = "badge equipment-tag";
+      tag.textContent = eq.name;
+      eqRow.appendChild(tag);
+    }
+    el.appendChild(eqRow);
+  }
 
   if (card.text) {
     const t = document.createElement("div");

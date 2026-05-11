@@ -1571,73 +1571,24 @@ Each color has a set of biomes that fit its theme. The biome is aesthetic; the s
 
 Cross-color biomes also exist (a *Crusader Cathedral* is a Red+White location; a *Cursed Marsh* is Green+Black). Map generation can mix and match.
 
-### Canonical strategic location-text effects
+### Strategic location-text sketches (working)
 
-The following effects are captured as the working library of strategic-location text. Each shapes the encounter in a structurally distinct way; many overlap with card-level mechanics but live more naturally at the location level because they're symmetric and zone-wide.
+These are working sketches — paired location-text concepts that share an axis. They are **not** war/peace pairs (that's a separate framing — see *Location text vs. neutral encounter* below); they're paired ideas at the same location concept. Some pair cleanly; some are single-text concepts. All pending sort-out as we design encounters that use them.
 
-**Self-emptying locations:**
-
-- *"When a creature flips in the front row here, move it away."* The front row never fills. Combat geometry breaks; the location can't be properly contested for direct attacks. Wide-board strategies eventually corner this location by filling everywhere else. **The rule scales with map complexity:** with 1 location it's *non-functional* (no other location to move creatures to — the rule simply fails to apply, becoming a no-op); with 2-3 locations it's mildly disruptive; with 5+ it's severe. **This is forward-compatible by design** — single-location prototypes can include this location text harmlessly, and it activates as a feature when multi-location lands. Color-flavor: Green (windswept plain) or Blue (illusory ground).
-
-  **Counterplay:** Green can move creatures *into* this location after they've flipped up elsewhere. Movement isn't a flip-up event — it's a separate action — so the moved creature lands here intact. Green's mobility specifically circumvents the location's restriction, turning the "uninhabitable front row" into a Green safe-zone. White's sacrificial plays (martyrs, dispersal) also have a reason to send creatures here — for the deathwish trigger before the move-away kicks in.
-
-- *"After a card flips here, return it to hand."* No permanent presence at this location. **Flip-up triggers fire each time before bouncing**, so the location is a re-trigger machine — same flip-up creature plays again next turn, fires its trigger again. The location becomes a *trigger war* rather than a presence battle. Color-flavor: Blue (dream-zone) or Green (bramble that rejects inhabitation).
-
-  **Counterplay:** Same as front-row-rejection. Green can *move* a creature into this location after it has flipped up at another location — movement isn't a flip-up, so the bounce trigger doesn't fire. Green can hold ground here. White's dispersal-flavored plays can deliberately use the bounce as a cycling tool (play here for the trigger, bounce back to hand, play again next turn for the trigger again).
-
-**Multiplying / amplifying locations:**
-
-- *"When a structure flips here, create a token copy."* Doubles structure investment. Heavy incentive to commit structures here. Token copy is canonically Inert (just stat-stick durability, no triggers fire from the copy). Color-flavor: Green (replication), Blue (mirror), or White (consecrated). *Note: token-creator economics that would normally apply to cards are dissolved by location-symmetry — both sides are equally encouraged to commit structures here, so the location escalates the encounter without giving either player a unique advantage.*
-
-- *"The highest-Force creature here gains +1 Force at start of upkeep."* Tall-rewarding. Big creatures get bigger. Wide strategies are blunted. Tie-breaking: all creatures tied at the highest Force gain the buff (since location text is symmetric and zone-wide, no random selection needed). Color-flavor: Red (mountain — the strongest stand tallest) or Black (king-of-the-hill).
-
-- *"Cards here have double durability."* Everything is harder to kill. Encounters here are slow grinds. Whoever has higher Spite or stronger durability benefits more — Black tanks and White-healed creatures dominate. Color-flavor: Black (clinging plague-pit), White (sanctified cathedral), or Red (mountain stronghold).
-
-- *"Creatures here stealth after flipping."* Every creature that flips up immediately stealths, then re-flips at end of phase, **firing its flip-up trigger twice**. Free trigger doubler for everyone, location-wide. Symmetric but heavily favors whoever has stronger flip-up triggers. Color-flavor: Green (forest cover) or Blue (illusory plain).
-
-**Action-restriction locations:**
-
-- *"You can't play actions here on consecutive turns."* Forces alternating commit patterns. Action-dense decks (Blue-heavy) suffer most. Forces commits to spread across other locations. Color-flavor: White (zone of contemplation) or Red (no time for spells, just fights).
-
-- *"In each upkeep, pull a random card from each side's hand into play here face-down."* Both sides have a random card auto-committed to this location. The Pull mechanic applied as zone rule — flip-up triggers fire, then resolve cost-check applies, then card lands or graveyards. **Massively chaotic.** Encounter shape becomes partly randomized. Color-flavor: Black (compulsion ground), Red (chaos arena), or Blue (compulsion through illusion).
-
-**Time-bomb / pacing locations:**
-
-- *"After turn 5, all creatures at this location take 1 damage at start of upkeep."* The volcano rumbles. Pressure to *not* turtle here forever. Color-flavor: Red (volcanic), Black (poisonous miasma seeping in).
-
-- *"After turn 3, a token Demon is created here for the side with fewer creatures."* The cult ritual completes. Color-flavor: Black (cult ground).
-
-- *"After turn 4, this location's terrain stats double."* The ley line awakens. Color-flavor: Blue (arcane convergence) or Green (sacred grove blooming).
-
-**Trigger-extraction / sacrificial locations:**
-
-- *"When a card flips here, destroy it."* Forces flip-up triggers and deathwish triggers. Token-creator cards become primary plays here (the source dies; the token survives). Cards with strong flip-up + weak body suddenly become flagship plays. Color-flavor: Black (lethal ground) or Red (slaughterhouse).
-
-  **Counterplay is structurally different per color, making this location surprisingly play-rich:**
-
-  - **Token-generator decks (Red, Green) positively value this location.** Per the existing token rules, tokens enter face-up and skip the face-down phase entirely. So at a destroy-on-flip location: a creature whose flip-up trigger generates a token fires the trigger, the token spawns face-up (no flip-up event for the token), the *generator* gets destroyed (it flipped up, that's what triggered the destruction). **The token survives.** The location effectively converts token-generator cards into single-use spells that leave a permanent on the board. Combat Engineer plays here die to the trigger but leave their Sandbag token; Goblin Mechanic dies but its created vehicle/token persists.
-  - **Green stealth at this location is a removal tool.** Once an enemy creature is *at* this location face-up, Green can stealth it. Stealth flips it face-down; end of phase, it flips up again — and destroy-on-flip triggers, killing the creature. **Green stealth becomes a location-gated removal spell.** Stealth normally has no killing power; here, it does. (Getting the enemy *to* this location in the first place takes work — opponents won't commit there willingly. Movement-based combos with Green's positional disruption are how this lands.)
-  - **Green can also move *itself* in.** Movement isn't a flip-up event, so Green creatures committing elsewhere first and moving here arrive intact. Green's mobility specifically circumvents the destruction trigger — Green creatures can establish presence at this location while everyone else's plays die on arrival.
-  - **White's enemy-dispersal mechanic interacts oddly here.** White moves *enemies* to lanes where they can't block — typically into the back row of a different column. White's dispersal *flavor* is "we move you out of our way, off to that field over there." If a White player disperses an enemy into a destroy-on-flip location, the enemy **does not die from movement** (movement isn't a flip-up). So White's dispersal *protects* the enemy creature here rather than destroying it. **White wouldn't normally want to disperse enemies here**, but it's mechanically funny and flavorful — the white knight moves the orc aside, into the kill-zone, and the orc just stands there safely.
-  - **Black mostly avoids this location.** Black relies on creature-bodies for its tank-and-thorns engine, and destroy-on-flip kills bodies on arrival. Black might use the location for graveyard-recursion combos (creatures die fast, Black's graveyard fills, raise dead works overtime), but it's a costly path.
-
-  **The general pattern:** restriction locations are **counterplay-rich for colors with positional flexibility (Green movement, Green stealth) or token-generator design (Red, Green)**, oddly-flavored-but-not-aligned for colors with sideways tools (White dispersal-as-protection-of-enemy), and net-negative for colors that rely on creature-body presence (Black). **Same applies to bounce locations and front-row-rejection locations** — restriction locations create asymmetric counterplay rather than flat-disadvantage zones.
-
-- *"The first card you play here is destroyed."* Sacrificial threshold. Encourages a throwaway first play (or a card whose flip-up trigger is the real value). Color-flavor: Black (offering altar).
-
-- *"The first card you play here gains +2 Force."* Sacrificial gift. Rewards committing your *biggest* card first. Color-flavor: Red (proving ground) or White (consecration).
-
-**Race-condition locations:**
-
-- *"First side to fill the front row here gains +2 Force at this location until end of encounter."* Tempo race. Aggressive commits rewarded; once won, the location is *spoiled* for the loser. Color-flavor: Red (battlefield), Green (race to position).
-
-- *"First side with a full structure slot here gains +1 to all stats at this location until end of encounter."* Structure-building race. Color-flavor: White (building the temple) or Black (claiming the ruin).
-
-**Distribution / propagation locations:**
-
-- *"After a card flips here, give +1 Force to a random card in the same side's hand."* Spreads value to future plays. Color-flavor: Blue (transmission) or White (blessing reserves).
-
-- *"After a card flips here, give -1 Hp to a random card in the opposing side's deck."* Slow-grind attrition into the deck. Engineering note: requires per-card-instance modifier system in deck (Pass 2 cost). Color-flavor: Black (corruption seeping into supply lines).
+- **Cursed Crypts.** *"The first creature that dies here goes to your graveyard."* / *"The first creature that dies here goes to the other graveyard."*
+- **Library / Draw.** *"Each side draws 1 more card per turn."* / *"Each side draws 1 fewer card per turn."* Pairs with the Siren neutral card.
+- **King of the mountain.** *"At start of upkeep, the highest-Force creature here gains +1 Force this turn."* / *"If you only have 1 creature here, discard 1 fewer."* Stat-check + thematically-linked payoff; biggest body gets the rewards.
+- **Bounce-to-hand.** *"The first card that flips up here each turn is returned to hand."* / *"At end of cleanup, the lowest-Durability creature here is returned to hand."*
+- **Involuntary movement.** *"Before start of combat, the last card to flip up here moves to another location."* / *"Before start of combat, move a card from another location to here."* Paired neutral-encounter idea: a Green creature that marks the first card to move here from another location for Reroute.
+- **Action restriction.** *"You can't play actions here on consecutive turns."* / *"You must play your first action here each turn."*
+- **Double-durability.** *"Creatures here have double durability."* / *"Creatures here receive double healing."*
+- **Stealth-on-flip.** *"Each turn the first creature that flips up here gains stealth."* / *"The first card that would flip up each turn does not."*
+- **Compulsion (from/to hand).** *"After upkeep, pull a random card from each side's hand into play here."* / *"Before combat, return a card from each side here to hand."*
+- **Volcano.** *"After cleanup, this location gains an eruption counter. When this location becomes full, it is destroyed and damage is dealt to all creatures here equal to the number of eruption counters."*
+- **Cult ritual.** *"When either side here becomes full, add a Demon token to the side with fewer creatures."*
+- **Destroy-on-flip.** *"When a card flips here, destroy it."* / *"When a creature flips up here, it gains a divine shield."*
+- **Sacrificial first play.** *"The first card played here on each side this encounter is destroyed."* / *"The first card destroyed here this encounter is returned to play at another location."*
+- **Parliament.** *"Creatures cannot change sides here."*
 
 ### Locations don't synergize with most card effects
 
@@ -1755,6 +1706,16 @@ Some specifics that fall out:
 Pure neutral encounters last for a designed time limit, most commonly **1 turn**. The encounter ends at end of cleanup of that turn, regardless of player engagement. Neutral cards may print a longer time limit if a specific design needs it, but the limit is a printed property — never player-chosen. No "I'm done" menus.
 
 Mixed encounters (hostile + neutral locations in the same encounter) follow the hostile encounter's end condition (AI retreat). Neutrals at those locations persist across the full encounter naturally.
+
+### Location text vs. neutral encounter — the war/peace framing
+
+Locations and the encounters built atop them serve different design roles:
+
+- **Location text is the rules-shape of the place — war-flavored.** Location text alters in-encounter interactions: how combat plays out at this location, what stat changes apply, what triggers fire, what's restricted or amplified. The rewards and consequences are short-term (this encounter). Whether the effect feels "giving" (a stat buff) or "punishing" (a stat debuff) is irrelevant to the war framing — both reshape the *fight at this location*.
+
+- **Neutral encounters are the cards, conditions, and acquisition paths layered on top — peace-flavored.** A neutral encounter is the puzzle built atop a location that turns the location's rule into an acquisition opportunity. The rewards are long-term (deckbuilding, permanent alterations, run-impact). Peace-mode design starts from "what location text exists here, and what acquisition shape can I build that uses that text?"
+
+Location and neutral are independent design surfaces that combine at a node. The same location can host different neutral encounters across runs; the same neutral encounter shape can plug into different locations.
 
 ### Design principles for neutral encounter authoring
 
@@ -2316,6 +2277,32 @@ The two vocabularies share no keywords. `cleave` and `row` both describe horizon
 
 Note: in larger location grids (e.g., 3x3), `adjacent` extends to 4 neighbors per inner slot. `row` and `column` extend to all slots in the line, not just immediate neighbors. The vocabulary scales naturally.
 
+## Marks
+
+A **mark** is a physical alteration to a specific card instance. The card itself becomes marked — torn, stamped, "cheated" — and the mark is part of that card's identity for the rest of the run.
+
+**Properties:**
+
+- **Per-instance, permanent.** The mark lives on that one physical card, persists through pile cycling, persists across encounters, persists across side changes.
+- **Visible everywhere.** The mark shows on the card in all zones — in play, in hand, face-down, in any pile, on either side. Marks leak information through fog of war by design. They are commitments, and commitments are visible.
+- **Behavior changes, not stat changes.** Marks add or alter card behavior. Stat changes are permanent buffs (separate mechanic).
+- **One kind per color.** Each color prints one kind of mark expressing how that color "cheats" its own discipline. No within-color variants.
+
+**The marker is whoever applied the mark.** Either side can mark either side's cards. Player marks own card, opponent marks own card, player marks opponent's card, opponent marks player's card — all valid in any situation a card-effect can fire. Use cases: marking enemy cards as acquisition tools, marking own cards as defensive commitments (a marked card stays yours by mark even if it changes sides via other mechanics), and any combination as situations arise.
+
+**What a mark *does* is per-color, not universal.** Each color's mark has its own effect (Reroute redirects destination on leave-play; Convert flips sides on overheal-by-Force-this-turn; Red damage adds +1 to damage sources). Properties common across all marks are the ones in this section: per-instance, permanent, visible everywhere, marker-tied, exile on same-kind double-mark. The *effect* is per-color.
+
+**Conflict resolution: same-kind double-mark = exile.** Two marks of the same kind on the same card — whether applied by both sides or by the same side twice — physically destroy the card. The card tears in half. It is exiled: gone from the run entirely, no triggers fire, no recursion can recover it. Different kinds of marks coexist on the same card without conflict.
+
+**Per-color marks (locked so far):**
+
+- **Green — Reroute mark.** When the marked card leaves play, its destination is redirected to the marker's piles, regardless of where the card is at that moment or who currently controls it. (See *Reroute (Green)*.) This destination-redirect rule is *specific to Reroute*, not a property of marks in general.
+- **White — Convert mark.** Marked card switches to the marker's side when overhealed by its Force value or more in a single turn. (See *Convert (White)*.)
+- **Red — damage mark.** "Deals +1 damage." Universal: applies to every damage source on the card (combat damage, on-flip damage triggers, action damage, pierce, etc.). Red cheats damage by adding raw damage that bypasses the Force vocabulary discipline.
+- Black, Blue: design space, TBD.
+
+**Flavor:** marking is cheating. Tearing a corner, writing on the card, "fixing" the deck. The act is visible to everyone, the alteration is permanent, and the act commits the marker to that specific card. Marked cards accumulate a story — who marked them, what kind of mark, whether they've been double-marked and torn.
+
 ## Swap Mechanics (Bodyswap and Stealswap)
 
 Two confirmed instances of the swap subclass within the relocate-on-reveal family. Both involve **two creatures exchanging positions** at the moment of reveal — one ends up where the other was, and vice versa.
@@ -2417,11 +2404,25 @@ Each variant uses the core swap rules; the variation is in targeting condition a
 
 **Pairs with:** Black's graveyard recursion theme — a stolen creature that dies enters *your* graveyard, and Black's raise effects can return it as a zombie under your control. Combined with raise-from-any-graveyard (see *Raise from any graveyard*, when added), Black has two distinct acquisition vectors: trade-now (stealswap) and kill-then-claim (raise).
 
+### Convert (White)
+
+**Flavor:** salvation, redemption that endures. Whoever has been marked for conversion can be reclaimed by the marker, and reclaimed again, no matter how many times the enemy reclaims them back.
+
+**Mechanic.** Convert applies a Convert mark to a card (on either side). When that card is overhealed by its Force value or more in a single turn, it switches to the marker's side. The card joins the marker's piles permanently — same as any other acquisition.
+
+**Overheal threshold is per-turn cumulative, not across turns.** Healing applied to the card across multiple turns doesn't add up. The trigger needs a single turn where total healing on that card exceeds its Force.
+
+**The Convert + Reroute interaction.** A Convert-marked card the AI also Reroute-marks creates a recurring loop: player heals it past Force → Convert fires, card switches to player → player uses it, dies → AI's Reroute fires, card returns to AI's piles → AI plays it again → player heals it again → repeat. Convert is permanent acquisition; the *redemption that endures* flavor is that the player can reclaim the card every cycle through repeated healing.
+
+**Cost-shape: stat-presence.** Resolve gating to place the mark; healing capacity to fire the trigger.
+
 ### Reroute (Green)
 
 **Flavor:** misdirection, ambush, the trap that closes after the prey passes through. Green's guerrilla identity turned into a *destination modifier*. *You walked into my snare. Where you fall, I decide.*
 
-**The basic shape.** A Reroute effect places a **reroute counter** on a card on the other side. The card stays where it is, behaves normally, owned by its current side. But when that card *eventually leaves play* — by any mechanism (combat death, sacrifice, structure-destruction, action resolving and exiting, equipment going to junkyard) — its destination is **rerouted to your graveyard** instead of the other side's normal destination pile. From your graveyard, the card joins your deck via end-of-encounter shuffle. **Permanent acquisition.**
+**The basic shape.** A Reroute effect applies a **Reroute mark** to a card. (See *Marks* for the underlying mark mechanic — visible-everywhere, permanent per-instance, marker-tied.) The marked card stays where it is, behaves normally. When the card eventually leaves play — by any mechanism — its destination is **redirected to the marker's piles**, regardless of which side currently controls the card. The card joins the marker's deck via end-of-encounter shuffle. **Permanent acquisition.**
+
+Marks can be applied to cards on either side: marking an enemy card sets up acquisition; marking own cards is a defensive commitment (the card stays in your piles even if it changes sides via other mechanics).
 
 #### Cost-shape: temporal
 
@@ -2451,12 +2452,12 @@ Following the vector-pattern framework: each color's verb fans across multiple p
 - **Equipment vector** *(possible reward-tier)*: *"Equip to a creature on the other side. While equipped, the wielder has a reroute counter."* Cross-side equipment that marks its host. Loses the equipment when the host dies (per the host-side rule), but Reroute fires on that same death — net result, you trade the equipment for the host. Magnetic could optionally print.
 - **Persistent action vector** *(possible reward-tier)*: a delayed multi-mark Curse-shaped Reroute that ticks counters onto opposing cards each turn it remains in the slot.
 
-#### Reroute counter mechanics
+#### Reroute mark mechanics
 
-- The counter is **default-duration on the target** — it lives on the marked card as long as the card is in play.
-- When the marked card leaves play, the counter *fires* (redirects the destination) and *expires* (cleans up).
-- Multiple Reroute effects on the same target are redundant in 1v1 (one counter is enough; additional counters do nothing).
-- The counter is **visible state** to both sides. The AI can see which of its cards are marked, and may prioritize protecting them or expending them strategically.
+See *Marks* for the underlying mechanic. Reroute-specific points:
+
+- The mark fires when the card leaves play, redirecting destination to the marker's piles. The card joins the marker's deck via end-of-encounter shuffle.
+- Two Reroute marks on the same card (whether from both sides or from the same side twice) → the card is exiled per the same-kind-double-mark rule.
 
 #### Trigger interaction with leave-play events
 
