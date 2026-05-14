@@ -14,13 +14,13 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 
 ## Half-implemented design features
 
-4. **Equipment can't be played from hand.** Pre-attached only via `equipWith` in `aiPlacements`. The standard commit/flip/attach flow doesn't exist. Player has no way to play equipment from hand or pick a target host.
+4. ~~**Equipment can't be played from hand.**~~ **FIXED.** Equipment can be played from hand: select equipment in hand, click a friendly committed face-up creature slot, equipment goes pending. At end-of-phase flip, equipment attaches (or fizzles to junkyard if host died/moved). Pending-target check rejects pending and face-down hosts.
 
 5. ~~**Equipment can't grant stats.**~~ **FIXED.** Equipment now supports `grantsStats: { force: 1 }` etc. on the def. `effectiveStat` reads attached equipment for stat grants. `goblinSword` card def added (+1 Force).
 
 5a. ~~**Equipment can't be acquired across encounters.**~~ **FIXED.** `attachEquipmentToHost` marks `acquired = true` when `hostSide === "player"`. The encounter-end acquisition pass scans equipment attached to player creatures and equipment in the player's junkyard, pushing acquired ones into runDeck. Goblin Armaments' cycling-onto-player-goblin reward now durably persists.
 
-6. **Equipment cap not enforced.** Design rule: 1 equipment per host. Currently unlimited.
+6. ~~**Equipment cap not enforced.**~~ **FIXED.** `EQUIPMENT_CAP_PER_HOST = 1` enforced in `attachEquipmentToHost` (returns false on cap). UI legal-target check, `legalTargetsForCard`, Goblin Armaments candidate filter, and the play-from-hand fizzle-on-cap path all honor the cap.
 
 7. **No Magnetic keyword.** Equipment leaves play to the host's-side junkyard with no override path.
 
@@ -30,25 +30,30 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 
 10. **No dynamic peace/war flip.** Hard-coded per node. Real game needs AI spread to flip nodes from peace to war.
 
-11. **Battle Driver and Bombardment not deployed.** Cards exist in CARD_DEFS but not in any deck — can't be played, can't be acquired.
+11. ~~**Battle Driver and Bombardment not deployed.**~~ **FIXED.** Both r10 and r12 added to the shared starting deck. AI and player both draw and play them. (Player can't "acquire" actions yet — Recruit takes creatures only — but they're already in deck so they cycle through play normally.)
 
 12. ~~**Phase trigger windows incomplete.**~~ **FIXED.** `firePhaseHook(hookName)` dispatcher fires registered handlers at all 10 phase boundaries (`onUpkeepStart/End`, `onDrawStart/End`, `onMainStart/End`, `onCombatStart/End`, `onCleanupStart/End`). Location texts can hook any. Future card-level phase triggers ride the same pattern.
 
 13. ~~**Tokens vanish; should be torn up = exile.**~~ **PARTIALLY FIXED.** Tokens that die now go to exile (with equipment detaching first), not "vanishing into nothing." Tokens-survive-encounter-and-join-piles still TODO; not testable in slice (no player-side token-creators deployed). Token-actions-exile-on-resolve still TODO; no token actions in the prototype yet (Blue's copy mechanics aren't built). The framing is unified: "torn up" = exile, applies to all tokens leaving play.
 
+## Designed but deferred mechanics
+
+- **Movement-as-queued-action.** Currently movement is instant on click. Design intent (noted on 2026-05-13): movement should commit to a per-phase queue and resolve in Tempo order at end of phase, same as flips and actions. Players queue moves face-up to themselves; opposing-side moves interleave by Tempo. Lets you mistime your own positioning or be cut off by enemy plays. Implementation TBD — affects move-click handler, UI feedback, the initiative tracker, and combat-preview snapshotting.
+- **Initiative tracker animation.** Items currently render in a single beat per phase. The "card walks out of fog" reveal flow described in design (faces-down item slides into Tempo-position, then flips at its turn to resolve) requires animation/delay between events in `endOfPhaseRevealAndResolve` and `runCombat`. Deferred.
+
 ## Missing major systems (designed, not built)
 
-14. **Marks system.** Foundational primitive. Per-instance permanent state, visible in all zones, same-kind double mark exiles. Reroute (Green) and Convert (White) both ride on marks. Red damage mark (+1 damage) too. Black/Blue marks TBD. Not started.
+14. ~~**Marks system.**~~ **FIXED (foundation).** Per-instance `card.marks` array of `{kind, side}`. `applyMark()` places a mark; same-kind double mark exiles the card (and removes the runDeck entry permanently). `sendToPile()` is now the central pile-push helper — Reroute marks redirect destination to the marker's same-zone pile (graveyard/junkyard/discard/exile). Acquisition flag set on rerouted-to-player cards. Marks persist across encounters via `mods.marks` on the runDeck entry. Marks render visibly on cards in all zones, including face-down opposing cards (fog leak by design). Specific mark kinds (reroute / convert / damage) — only Reroute is currently used; Convert and Red damage marks have no application sites yet.
 
-15. **Reroute, Convert, Stealswap, Research conversion verbs.** Four of five verbs not implemented. Recruit (Red) is the only one built.
+15. **Reroute, Convert, Stealswap, Research conversion verbs.** **Reroute mark partially implemented** via the marks system — `applyMark(card, "reroute", side)` places a mark that redirects the card's leave-play destination to the marker's pile (handled by sendToPile). Pathfinder (g2) drops a Bad Intel quest that places a Reroute mark on the next card flipping up at its location. Convert (White), Stealswap (Black), Research (Blue) still TBD. Recruit (Red) remains the only active conversion verb.
 
 16. **AI overworld spread.** AI mini-turns between player encounters. Eats neutrals. Flips nodes from peace to war via summoner presence. Difficulty curve emerges from accumulated build-up. Not started.
 
 17. **Persistent structures and supply lines.** Pillar 9. Player structures stay on the map across encounters. Supply lines feed future encounters via the chain. Not started.
 
-18. **Ranged combat + ammo.** Green's combat identity. Back-row creatures fire in combat with ammo. Ammo as consumable resource. Not started.
+18. ~~**Ranged combat + ammo.**~~ **FIXED.** `ranged + ammoCost` on creature defs; back-row attackers must be ranged. `lc.ammo` per-side per-location stockpile (resets per encounter). Forage (g6 action) adds 1 ammo with per-instance escalating cost. Slinger (g4) is the first ranged creature.
 
-19. **Deathwish and other leave-play triggers.** Generic trigger pattern: card prints "when this leaves play, X." Currently only Enraged (per-damage-instance) is implemented as a leave-play-adjacent trigger, and only on the damage taking side. No generic deathwish dispatch.
+19. ~~**Deathwish and other leave-play triggers.**~~ **FIXED (dispatch).** Generic `fireLeavePlayTriggers(card, side, loc)` runs at every creature-death site BEFORE sendToPile (so triggers see original side/position, before destination redirect). `card.deathwish` field on def holds the effect tag; `fireDeathwish()` dispatches by tag. No deathwish effects implemented yet — Pathfinder's "drop a token quest" will be the first.
 
 20. **Run-end / win condition.** Slice has no boss and no "you won" check. Player wanders the cleared overworld with nothing to declare victory.
 
@@ -90,15 +95,31 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 - Side state: deck, hand, discard, graveyard, junkyard, exile.
 - Side priority alternation fallback.
 - Damage fall-through to summoner (combat and action damage).
-- Equipment pre-attached at encounter load (no play-from-hand yet).
+- Equipment pre-attached at encounter load + play-from-hand.
 - Sleep keyword: sleeping creatures have 0 effective Force, can't attack/move, take damage normally. Damage wakes them mid-phase; "groggy this phase" gate (via `wokeInPhase === state.phase`) suppresses awake actions for the remainder of that phase. Sleep counter ticks at start of upkeep.
 - Location-text `onFlipUp(loc, side, card)` hook fires when any card flips up at that location (used by Ogre Hideaway).
+- All 5 phases (Upkeep, Draw, Main, Combat, Cleanup) are player-advanced. Actions and equipment can be committed in any interactive phase; creatures and structures only in main. Each phase end runs `endOfPhaseRevealAndResolve` to flip face-down cards committed during the phase. Player-driven Advance button with auto-advance when the player has no legal plays or moves remaining.
+- Movement allowed in any interactive phase. Each card can move once per turn (via `movedThisTurn` tracker, reset at upkeep start). Creatures that flipped this turn can't move (`flippedThisTurn`, cleared at end of cleanup).
+- Compound costs: card cost is now `card.costs = { force: 2, tempo: 1 }` (object keyed by stat). `canPay` checks every stat. Cost badge renders one per stat, color-coded. Legacy single-stat `cost + costStat` still accepted at def time.
+- Marks system: per-instance permanent state, persists through pile cycling and across encounters. Same-kind double mark exiles the card. Renders visibly in all zones, including face-down opposing cards.
+- `sendToPile()` central pile-router honors Reroute marks (destination redirects to marker's same-zone pile; rerouted-to-player flags `acquired`).
+- Deathwish keyword: generic leave-play trigger fired before destination redirect.
+- Quest action archetype: persistent action that flips up, sits in slot, watches for completion event, fires reward, exits. QUEST_DEFS registry. `createQuestToken()` for tokens. `checkQuestsForEvent()` runs after relevant events (currently flip-up).
+- Pathfinder (g2): assembles deathwish → quest token → mark + reroute → acquisition.
+- Stealth keyword: `stealth(card)` flips a face-up card face-down. Card re-flips at the next end-of-phase pass, firing flip-up triggers a second time. Rebel Outrider (g5) flips up and stealths same-row friendlies on this side — re-flip payoff is Green's foundational synergy.
+- Ranged combat + ammo: `card.ranged + ammoCost` enables back-row (or front-row) firing that consumes ammo from the side's per-location stockpile. `lc.ammo` initialized 0 per encounter. Slinger (g4) is ranged 1F/1T/2D consuming 1 ammo per shot. Forage (g6) is an action that adds 1 ammo to your stockpile here; per-instance escalating cost via `effectiveCosts(card)` (+1 Tempo per previous cast of that card-instance, counter resets per encounter).
+- Starter-deck menu at run start (Red or Green). Picking sets `state.deckKey` and builds the runDeck.
+- Initiative tracker at top of UI: shows the current phase's queue (face-down face-down items rendered as `?` for opposing side) sorted by Tempo → side priority → loc → pos. Items fade to `resolved` state as they fire during the phase. Combat phase shows the attack queue. Animation between events (so the player can watch the queue resolve card-by-card) is deferred — all events currently fire in a single synchronous beat per phase.
 
 ## What card pool exists
 
 CARD_DEFS uses flat keys r1–r13 (Red pool only). Display names are UI-only and may change without engine impact.
 
-**Starting deck:** r1, r3, r4, r5, r6.
+**Starter decks:** two per-color starters selected from a menu before the run begins.
+- **Red:** r1, r2, r3, r4, r5, r6, r10, r12, r14.
+- **Green:** g1, g2, g3, g4, g5, g6, g7, g8.
+
+`DECKS` registry indexed by `deckKey` ("red" | "green"). AI uses the same deck list as the chosen color (custom AI decks per color land later).
 
 **Deployed at encounter locations:** A1 (Ogre Hideaway): r9 ogre. A2 (Champion's Rest): r3 + r13. B1 (Goblin Armaments): 4×r1 + r2 axe + r11 pike. B2 (Skirmish): r1 + r7 + r6. C1 (Forward Line): r8 (+r2) + r3 (+r11). C2 (Rear Camp): r9 + r1.
 

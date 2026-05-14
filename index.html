@@ -105,6 +105,7 @@
   .stat-cell.stat-force .stat-cell-value { color: var(--ai); }
   .stat-cell.stat-tempo .stat-cell-value { color: var(--ok); }
   .stat-cell.stat-insight .stat-cell-value { color: #60c0e0; }
+  .stat-cell.stat-ammo .stat-cell-value { color: #e0c97a; }
   .stat-pending { color: var(--muted); font-weight: 400; font-size: 10px; margin-left: 4px; }
 
   .ai-info     { grid-column: 1 / 2; grid-row: 3 / 4; }
@@ -131,8 +132,8 @@
   .slot.has-card { padding: 4px; border-style: solid; }
   .slot.has-card.pending { border-style: dashed; border-color: var(--accent); background: rgba(240, 192, 64, 0.06); }
   .slot.can-cancel { cursor: pointer; }
-  .slot.can-select-move { cursor: pointer; }
-  .slot.can-select-move:hover { border-color: var(--player); }
+  .slot.can-select-move { cursor: pointer; box-shadow: inset 0 0 0 1px rgba(74, 138, 239, 0.4); }
+  .slot.can-select-move:hover { border-color: var(--player); box-shadow: inset 0 0 0 2px var(--player); }
   .card.pending-card { opacity: 0.85; box-shadow: inset 0 0 0 1px rgba(240, 192, 64, 0.4); }
   .card.moved { opacity: 0.7; }
   .card.moved::after { content: "moved"; position: absolute; top: 2px; right: 2px; font-size: 9px; color: var(--muted); background: var(--panel-2); padding: 1px 3px; border-radius: 2px; }
@@ -187,6 +188,14 @@
   .card .badge.equipment-tag { background: rgba(200, 170, 90, 0.18); color: #e0c97a; }
   .card .equipment-row { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 3px; font-size: 10px; }
   .card .equipment-label { color: var(--muted); font-size: 10px; margin-right: 2px; }
+  .card .requires-row { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 2px; font-size: 10px; }
+  .card .requires-label { color: var(--muted); font-size: 10px; margin-right: 2px; }
+  .card .stats-row { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: auto; padding-top: 4px; }
+  .card .marks-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; font-size: 10px; }
+  .card .badge.mark { font-weight: bold; }
+  .card .badge.mark-reroute { background: rgba(111, 207, 111, 0.28); color: var(--ok); }
+  .card .badge.mark-convert { background: rgba(255, 255, 255, 0.18); color: #f0f0f0; }
+  .card .badge.mark-damage { background: rgba(239, 90, 90, 0.28); color: var(--ai); }
   .card .text { color: var(--muted); font-size: 10px; line-height: 1.25; }
   .card .preview { font-size: 10px; line-height: 1.25; margin-top: 2px; padding: 2px 4px; border-radius: 3px; background: rgba(239, 90, 90, 0.12); color: var(--ai); }
   .card .preview.muted { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
@@ -204,6 +213,28 @@
   #hand { display: flex; gap: 8px; flex-wrap: wrap; min-height: 100px; }
 
   #ai-hand-info { padding: 6px 12px; color: var(--muted); font-size: 12px; text-align: right; }
+  #initiative-tracker {
+    display: flex; flex-direction: row; gap: 4px; align-items: center;
+    padding: 6px 12px; min-height: 44px;
+    background: var(--panel-2); border-bottom: 1px solid var(--border);
+    overflow-x: auto; white-space: nowrap;
+  }
+  #initiative-tracker:empty::before {
+    content: ""; color: var(--muted); font-size: 11px;
+  }
+  .init-label { color: var(--muted); font-size: 10px; letter-spacing: 0.5px; margin-right: 8px; flex-shrink: 0; }
+  .init-item {
+    display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+    padding: 3px 6px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--panel); min-width: 56px; flex-shrink: 0;
+    font-size: 10px; line-height: 1.15;
+  }
+  .init-item.player { border-left: 3px solid var(--player); }
+  .init-item.ai { border-left: 3px solid var(--ai); }
+  .init-item.resolved { opacity: 0.4; }
+  .init-item .name { font-weight: 600; color: var(--text); }
+  .init-item .meta { color: var(--muted); font-size: 9px; }
+  .init-item.face-down .name { color: var(--muted); font-style: italic; }
 
   /* Controls */
   #controls { display: flex; justify-content: center; gap: 12px; padding: 8px; }
@@ -286,6 +317,18 @@
     font-size: 13px; color: var(--text); text-align: center;
   }
   .overworld-help .muted { color: var(--muted); font-size: 11px; }
+  .start-menu { display: flex; flex-direction: column; gap: 16px; align-items: center; padding: 20px; }
+  .start-menu h2 { margin: 0; font-size: 22px; color: var(--text); }
+  .start-menu-row { display: flex; gap: 16px; }
+  .start-menu-card {
+    background: var(--panel); border: 2px solid var(--border); border-radius: 6px;
+    padding: 18px 24px; cursor: pointer; min-width: 200px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: transform 0.12s, background 0.12s;
+  }
+  .start-menu-card:hover { transform: translateY(-2px); background: var(--panel-2); }
+  .start-menu-label { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+  .start-menu-tag { font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -300,6 +343,8 @@
 </div>
 
 <div id="ai-hand-info"></div>
+
+<div id="initiative-tracker"></div>
 
 <div id="board">
   <div class="summoner ai" id="ai-summoner">
@@ -396,7 +441,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: 3,
     onFlipUp: "bruiserChargeBuff",
-    text: "On flip-up: this gains +1 Force this turn. Needs ≥1 Force here.",
+    text: "On flip-up: this gains +1 Force this turn.",
     aiHints: { preferFront: true }
   },
   // r4 — Recruit conversion verb. Action. Force-superiority swap on resolve.
@@ -423,7 +468,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: 4,
     pitFighterWhileAlone: true,
-    text: "+2 Force here while no other creature on your side is here. Needs ≥1 Force here.",
+    text: "+2 Force here while no other creature on your side is here.",
     aiHints: { preferFront: true }
   },
   // r6 — Free 1F/2D goblin. Flip-up: if alone on your side here, fire Recruit.
@@ -450,7 +495,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: 2,
     onFlipUp: "bullyPush",
-    text: "On flip-up: push the creature across from this from front to back. Needs ≥1 Force here.",
+    text: "On flip-up: push the creature across from this from front to back.",
     aiHints: { preferFront: true }
   },
   // r8 — ≥1F goblin. Enraged: +1 Force this turn each time it takes damage this turn.
@@ -464,7 +509,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: 3,
     enraged: true,
-    text: "Enraged. *(Gains +1 Force this turn each time it takes damage this turn.)* Needs ≥1 Force here.",
+    text: "Enraged. *(Gains +1 Force this turn each time it takes damage this turn.)*",
     aiHints: { preferFront: true }
   },
   // r9 — ≥2F Ogre with Provocation. +1F per opposing creature here; opposing creatures here gain +1F.
@@ -478,7 +523,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: 3,
     provocationChallenger: true,
-    text: "+1 Force per creature on the other side here. Creatures on the other side here gain +1 Force. Needs ≥2 Force here.",
+    text: "+1 Force per creature on the other side here. Creatures on the other side here gain +1 Force.",
     aiHints: { preferFront: true }
   },
   // r10 — ≥1F action. Deal 1 damage to a creature on your side here; that creature +1F this turn.
@@ -491,7 +536,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: null,
     effect: "battleDriver",
-    text: "Deal 1 damage to a creature on your side here. That creature gains +1 Force this turn. Needs ≥1 Force here.",
+    text: "Deal 1 damage to a creature on your side here. That creature gains +1 Force this turn.",
     aiHints: {}
   },
   // r11 — ≥1F equipment. Grants pierce 1.
@@ -504,7 +549,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: null,
     grantsAttackPatterns: [{ type: "pierce", value: 1 }],
-    text: "Equip. The wielder's attacks gain pierce 1. Needs ≥1 Force here.",
+    text: "Equip. The wielder's attacks gain pierce 1.",
     aiHints: {}
   },
   // r12 — ≥1F action. Sacrifice a goblin on your side here; deal damage equal to Force here.
@@ -517,7 +562,7 @@ const CARD_DEFS = {
     tempo: 0,
     durability: null,
     effect: "goblinBombardment",
-    text: "Sacrifice a goblin on your side here. Deal damage equal to your Force here. Needs ≥1 Force here.",
+    text: "Sacrifice a goblin on your side here. Deal damage equal to your Force here.",
     aiHints: {}
   },
   // r13 — Action used as Champion's Rest content. +1 Force permanently; tear up this card on resolve.
@@ -545,8 +590,231 @@ const CARD_DEFS = {
     durability: null,
     text: "+1 Force here.",
     aiHints: {}
+  },
+  // g2 — Pathfinder. 0F/2T/2D off-pattern creature, no tribe. Deathwish drops a Bad Intel quest
+  // token into the action slot. The quest watches for the next flip-up here and marks that card
+  // for Reroute (sending it to the player's pile on its eventual leave-play). Theme: an outsider
+  // feeding misinformation; in death, the bad intel still lands.
+  g2: {
+    name: "Pathfinder",
+    type: "creature",
+    cost: 0,
+    costStat: "tempo",
+    force: 0,
+    tempo: 2,
+    durability: 2,
+    deathwish: "dropQuest_badIntel",
+    text: "Deathwish: drop a Bad Intel quest into your action slot here.",
+    aiHints: {}
+  },
+  // g5 — Rebel Outrider. Compound-cost ramp creature: ≥2F AND ≥1T. 2F/2T/3D. The compound gate
+  // is the design point — it ties Force and Tempo together, pushing two-stat presence.
+  // Flip-up stealths same-row-adjacent friendlies, re-flipping them for a second flip-up trigger.
+  g5: {
+    name: "Rebel Outrider",
+    type: "creature",
+    tribe: "rebel",
+    costs: { force: 2, tempo: 1 },
+    force: 2,
+    tempo: 2,
+    durability: 3,
+    onFlipUp: "stealthRowAdjacentFriendlies",
+    text: "Flip-up: stealth friendly creatures in the same row.",
+    aiHints: { preferFront: true }
+  },
+  // g4 — Rebel Slinger. Ranged. 1F/1T/2D. Fires from any row; needs 1 ammo per shot from this
+  // side's stockpile at this location. Ranged-only: never melees. Forage feeds the stockpile.
+  g4: {
+    name: "Rebel Slinger",
+    type: "creature",
+    tribe: "rebel",
+    cost: 0,
+    costStat: "tempo",
+    force: 1,
+    tempo: 1,
+    durability: 2,
+    ranged: true,
+    ammoCost: 1,
+    text: "Ranged (consumes 1 ammo per shot from this side's stockpile here).",
+    aiHints: {}
+  },
+  // g6 — Forage. Action: add 1 ammo to your stockpile here. Cost: 0 base, escalating +1 Tempo
+  // for each previous cast of this same card-instance this encounter. Counter resets per encounter.
+  g6: {
+    name: "Forage",
+    type: "action",
+    cost: 0,
+    costStat: "tempo",
+    force: 0,
+    tempo: 0,
+    durability: null,
+    effect: "forageAddAmmo",
+    text: "Add 1 ammo to your stockpile here. Each subsequent cast of this card needs +1 Tempo here (this encounter).",
+    aiHints: {}
+  },
+  // g1 — Rebel Scout. Cheap deathwish: relocate one of your creatures from elsewhere to this slot.
+  g1: {
+    name: "Rebel Scout",
+    type: "creature",
+    tribe: "rebel",
+    cost: 0,
+    costStat: "force",
+    force: 1,
+    tempo: 1,
+    durability: 2,
+    deathwish: "moveFriendlyHere",
+    text: "Deathwish: move a friendly creature from another location to this slot.",
+    aiHints: {}
+  },
+  // g3 — Rebel Sapper. Force ramp; deathwish plants a trap on your front row here.
+  g3: {
+    name: "Rebel Sapper",
+    type: "creature",
+    tribe: "rebel",
+    cost: 1,
+    costStat: "force",
+    force: 1,
+    tempo: 0,
+    durability: 2,
+    deathwish: "dropTrapFront",
+    text: "Deathwish: drop a token Explosive Trap to your front row here.",
+    aiHints: { preferFront: true }
+  },
+  // g7 — Rebel Runner. Flip-up sends a friendly creature here to another location. Repositions.
+  g7: {
+    name: "Rebel Runner",
+    type: "creature",
+    tribe: "rebel",
+    cost: 0,
+    costStat: "tempo",
+    force: 1,
+    tempo: 1,
+    durability: 3,
+    onFlipUp: "sendFriendlyAway",
+    text: "Flip-up: move a friendly creature here to another location.",
+    aiHints: {}
+  },
+  // g8 — Rebel Saboteur. Flip-up plants a trap on the opposing front row here.
+  g8: {
+    name: "Rebel Saboteur",
+    type: "creature",
+    tribe: "rebel",
+    cost: 1,
+    costStat: "force",
+    force: 1,
+    tempo: 1,
+    durability: 2,
+    onFlipUp: "dropTrapOpposingFront",
+    text: "Flip-up: drop a token Explosive Trap to the opposing front row here.",
+    aiHints: {}
+  },
+  // Explosive Trap (g_trap). Token-only — created by g3 deathwish and g8 flip-up. Inert.
+  // Deathwish: deal 2 damage to same-side adjacent creatures + creatures that dealt melee damage
+  // to this trap this turn.
+  g_trap: {
+    name: "Explosive Trap",
+    type: "creature",
+    inert: true,
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    durability: 1,
+    deathwish: "explosiveTrap",
+    text: "Inert. Deathwish: deal 2 damage to adjacent friendlies and any creature that melee'd this on this turn.",
+    aiHints: {}
   }
 };
+
+// ---------- Quest definitions ----------
+// Quest is a persistent-action archetype. The card defines a `questKey` pointing here, and the
+// engine handles the completion-watch and reward-resolve via this registry. A quest can also be
+// created as a token (no card def needed) — see createQuestToken below.
+//
+// Each quest def declares:
+//   - name, text: display
+//   - checkCompletion(quest, side, loc, event): returns true to complete on this trigger
+//   - reward(quest, side, loc): fires when complete; the quest then exits the slot
+//   - events: list of trigger kinds the quest listens for (e.g., ["flipUp"])
+const QUEST_DEFS = {
+  // Bad Intel — Pathfinder's deathwish token. Watches for any card flipping up at this location;
+  // marks that card for reroute (Green's conversion). One-shot: completes on first flip-up.
+  badIntel: {
+    name: "Bad Intel",
+    text: "When a card flips up here, mark it for reroute. (Token — exiles on completion.)",
+    events: ["flipUp"],
+    checkCompletion: function(quest, side, loc, event) {
+      return event.kind === "flipUp" && event.loc === loc;
+    },
+    reward: function(quest, side, loc, event) {
+      applyMark(event.card, "reroute", side);
+    }
+  }
+};
+
+// Create a quest token. defKey is optional — token quests don't need a CARD_DEFS entry. The
+// returned card has type="action", subtype="quest", isToken=true, questKey set.
+function createQuestToken(questKey, owner) {
+  const qd = QUEST_DEFS[questKey];
+  if (!qd) return null;
+  const card = {
+    instId: nextInstId(),
+    defKey: `quest_${questKey}`,
+    owner,
+    name: qd.name,
+    type: "action",
+    cost: 0,
+    costStat: "force",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durabilityMax: null,
+    durability: null,
+    effect: null,
+    onFlipUp: null,
+    deathwish: null,
+    subtype: "quest",
+    questKey,
+    inert: false,
+    pitFighterWhileAlone: false,
+    provocationChallenger: false,
+    enraged: false,
+    tribe: null,
+    attackPatterns: [],
+    grantsAttackPatterns: null,
+    grantsStats: null,
+    equipment: [],
+    sleepCounter: 0,
+    wokeInPhase: null,
+    flippedThisTurn: false,
+    marks: [],
+    text: qd.text,
+    aiHints: {},
+    revealed: false,
+    isToken: true
+  };
+  return card;
+}
+
+// Check all active quests in play; if any completes on the given event, resolve its reward and
+// exit it from the slot. Called from event-firing sites (flip-up, etc.).
+function checkQuestsForEvent(event) {
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      const q = lc.action;
+      if (!q || q.subtype !== "quest" || q.revealed === false) continue;
+      const qd = QUEST_DEFS[q.questKey];
+      if (!qd || !qd.events.includes(event.kind)) continue;
+      if (!qd.checkCompletion(q, sideName, loc, event)) continue;
+      // Quest completes — fire reward, then exit slot (tokens exile, non-tokens discard).
+      logEntry(`  ${q.name} (${sideName} @${LOC_NAMES[loc]}) — Quest complete.`, "combat-detail");
+      qd.reward(q, sideName, loc, event);
+      lc.action = null;
+      sendToPile(q, sideName, "discard");  // tokens auto-route to exile via sendToPile
+    }
+  }
+}
 
 // 13-card v1 deck — mixed Force/Tempo/Insight to exercise the cost system and Tempo-ordered combat.
 // ---------- Multi-location config ----------
@@ -627,7 +895,7 @@ const LOCATION_TEXTS = {
           if (!c) continue;
           if (c.revealed === false) continue;  // face-down cards are not legal targets
           if (c.tribe !== "goblin") continue;
-          if (c.equipment && c.equipment.length > 0) continue;  // equipment cap
+          if (c.equipment && c.equipment.length >= EQUIPMENT_CAP_PER_HOST) continue;  // equipment cap
           candidates.push({ side, pos, c });
         }
       }
@@ -744,10 +1012,16 @@ const WORLD_DEFS = {
   bossNode: null   // slice has no boss — final encounter is the Stage 3 pair
 };
 
+// Per-color starter decks. Player picks one in the start menu; the AI uses the same list as
+// the chosen color (custom AI decks land later).
+const DECKS = {
+  red: ["r1", "r2", "r3", "r4", "r5", "r6", "r10", "r12", "r14"],
+  green: ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]
+};
+
 function buildStartingDeck() {
-  // Slice starting deck — seven Red cards. r2 (Crude Axe equipment) and r14 (Warbanner structure)
-  // included to exercise the play-from-hand attach and structure-aura flows. Tune in playtest.
-  return ["r1", "r2", "r3", "r4", "r5", "r6", "r14"];
+  const key = state.deckKey || "red";
+  return DECKS[key] ? [...DECKS[key]] : [...DECKS.red];
 }
 
 // ---------- State ----------
@@ -760,7 +1034,10 @@ function createCard(defKey, owner) {
     name: def.name,
     type: def.type,
     cost: def.cost,
-    costStat: def.costStat || "force", // which stat the cost is checked against ("force", "insight", etc.)
+    costStat: def.costStat || "force", // legacy: single-stat cost (kept for display compatibility)
+    // Unified cost shape: `{ force: 2, tempo: 1 }` etc. Built from def.costs (new shape) OR from
+    // def.cost + def.costStat (legacy single-stat). Empty object = no cost.
+    costs: def.costs ? { ...def.costs } : (def.cost > 0 ? { [def.costStat || "force"]: def.cost } : {}),
     force: def.force || 0,
     tempo: def.tempo || 0,
     insight: def.insight || 0,
@@ -768,6 +1045,13 @@ function createCard(defKey, owner) {
     durability: def.durability, // current durability for creatures
     effect: def.effect,
     onFlipUp: def.onFlipUp,    // optional flip-up trigger effect key (see fireFlipUpTrigger)
+    deathwish: def.deathwish || null, // Deathwish keyword: effect key fired when this leaves play.
+    subtype: def.subtype || null, // For actions: "quest" marks persistent-action archetype.
+    questKey: def.questKey || null, // For quests: identifies which quest definition is in play.
+    ranged: def.ranged || false, // Ranged keyword: attacks from any row, consumes ammo per shot.
+                                 // Ranged creatures cannot melee — they only fire (ammo-gated).
+    ammoCost: def.ammoCost || 0, // For ranged creatures: ammo consumed per attack (printed as "Ammo N").
+    forageCasts: 0, // Per-instance Forage cast counter (escalating cost). Resets at encounter end.
     inert: def.inert || false, // Inert keyword: cannot gain Force/Tempo/Insight/Resolve
     pitFighterWhileAlone: def.pitFighterWhileAlone || false, // Pit-Fighter's while-alone flag
     provocationChallenger: def.provocationChallenger || false, // Challenger's while-vs-opposing flag
@@ -780,6 +1064,14 @@ function createCard(defKey, owner) {
     sleepCounter: 0,    // Sleeping keyword: turns remaining asleep. 0 = awake.
     wokeInPhase: null,  // phase name where damage woke this sleeper. Gates awake-actions (attack,
                         // move) while state.phase === wokeInPhase. Self-clears via the phase compare.
+    flippedThisTurn: false, // true the turn a creature flips up; blocks movement that turn.
+    meleeAttackersThisTurn: [], // instIds of creatures that dealt melee damage to this this turn.
+                                // Read by Explosive Trap's deathwish. Reset at upkeep start.
+    lastPos: null,      // last known position in a slot; recorded by fireLeavePlayTriggers so
+                        // position-dependent leave-play effects (e.g., trap adjacency) work.
+    marks: [],          // Marks system: per-instance permanent state. Each mark = { kind, side }.
+                        // Persists through pile cycling and across encounters. Same-kind double
+                        // mark = exile (handled in applyMark). Visible in all zones.
     text: def.text,
     aiHints: def.aiHints || {},
     revealed: true
@@ -805,7 +1097,10 @@ function freshLocation() {
       // junkyard if the host is gone by then.
       equipment: { fl: [], fr: [], bl: [], br: [] }
     },
-    movedThisTurn: new Set()
+    movedThisTurn: new Set(),
+    // Ammo stockpile for this side at this location. Resets to 0 per encounter ("the wilderness
+    // is fresh" — per CARD_DESIGN.md). Forage adds; ranged creatures consume on attack.
+    ammo: 0
   };
 }
 
@@ -852,16 +1147,22 @@ function applyRunMods(card, mods) {
     card.durability += mods.durability;
     card.durabilityMax = (card.durabilityMax || 0) + mods.durability;
   }
+  // Marks persist across encounters via the run-deck entry. Each entry can carry an array of
+  // { kind, side } marks that re-apply to the new instance when it enters a new encounter.
+  if (mods.marks && mods.marks.length > 0) {
+    card.marks = mods.marks.map(m => ({ kind: m.kind, side: m.side }));
+  }
   return card;
 }
 
 function freshState() {
   return {
     // Run-scoped (persists across encounters):
-    runDeck: buildRunDeck(),     // player's persistent deck (entries with per-card mods)
+    deckKey: null,                // chosen starter ("red" | "green"); null until picked at menu
+    runDeck: [],                  // populated when deck is chosen
     runDurability: 20,            // player Durability persists across encounters
     world: makeFreshWorld(),     // overworld nodes/edges/pawn
-    view: "overworld",            // "overworld" or "encounter"
+    view: "menu",                 // "menu" | "overworld" | "encounter"
     runOver: null,                // null | "playerWin" | "playerLose"
     // Encounter-scoped (rebuilt at each encounter-load; null when on the overworld):
     turn: 1,
@@ -879,6 +1180,15 @@ function freshState() {
     gameOver: null,               // encounter-scoped result before run-scoped runOver is updated
     log: []
   };
+}
+
+// Called from the start menu when the player picks a deck. Builds the runDeck and transitions
+// to the overworld view.
+function chooseDeckAndStartRun(deckKey) {
+  state.deckKey = deckKey;
+  state.runDeck = buildRunDeck();
+  state.view = "overworld";
+  render();
 }
 
 // Build a fresh world from WORLD_DEFS. Node status tracks per-node progress.
@@ -1171,7 +1481,11 @@ function endEncounter(result) {
       if (c.acquired) acquired.push(c);
     }
     for (const c of acquired) {
-      state.runDeck.push({ defKey: c.defKey, mods: {} });
+      const mods = {};
+      if (c.marks && c.marks.length > 0) {
+        mods.marks = c.marks.map(m => ({ kind: m.kind, side: m.side }));
+      }
+      state.runDeck.push({ defKey: c.defKey, mods });
       logEntry(`Acquired: ${c.name} joins your deck.`, "win");
     }
   }
@@ -1412,9 +1726,23 @@ function globalStatTotal(side, stat) {
 function canPay(side, loc, card) {
   // Cost is checked against committed presence at the *target location only*. Per design:
   // "every card has a stat-presence cost requirement at its location."
-  const stat = card.costStat || "force";
-  const present = committedStatTotal(side, loc, stat);
-  return present >= (card.cost || 0);
+  // Compound costs: every stat in card.costs must be met by committed presence at the location.
+  const costs = effectiveCosts(card);
+  for (const stat of Object.keys(costs)) {
+    if (committedStatTotal(side, loc, stat) < costs[stat]) return false;
+  }
+  return true;
+}
+
+// Compute the effective cost of a card at this moment. Most cards just return `card.costs`.
+// Forage's escalating-per-instance cost: each cast bumps the per-card counter, so the next play
+// of that same instance pays `base + forageCasts` Tempo. Counter resets at encounter end.
+function effectiveCosts(card) {
+  const base = card.costs ? { ...card.costs } : {};
+  if (card.effect === "forageAddAmmo" && card.forageCasts > 0) {
+    base.tempo = (base.tempo || 0) + card.forageCasts;
+  }
+  return base;
 }
 
 // True if the side has any location where this card could legally land (cost + open slot).
@@ -1450,12 +1778,14 @@ function legalTargetsForCard(side, loc, card) {
   } else if (card.type === "action") {
     if (!slotOccupied(side, loc, "action")) targets.push({ loc, kind: "action" });
   } else if (card.type === "equipment") {
-    // Equipment legal where a face-up committed creature is present on this side at loc.
-    // Pending or face-down hosts don't qualify — equipment needs an actual landed host.
+    // Equipment legal where a face-up committed creature is present on this side at loc, and the
+    // host is below the equipment cap.
     const lc = L(side, loc);
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = lc.creatures[pos];
-      if (c && c.revealed !== false) targets.push({ loc, kind: "equipment", pos });
+      if (!c || c.revealed === false) continue;
+      if ((c.equipment || []).length >= EQUIPMENT_CAP_PER_HOST) continue;
+      targets.push({ loc, kind: "equipment", pos });
     }
   }
   return targets;
@@ -1598,6 +1928,8 @@ function moveCommittedCreature(side, loc, fromPos, toPos) {
   const lc = L(side, loc);
   const creature = lc.creatures[fromPos];
   if (!creature) return false;
+  // Face-down: can't move (inert per unified rule).
+  if (creature.revealed === false) return false;
   // Inert: cannot use the normal once-per-turn move. Effects (push, swap, etc.) can still move
   // an Inert creature; the player's default move action cannot.
   if (creature.inert) return false;
@@ -1605,6 +1937,8 @@ function moveCommittedCreature(side, loc, fromPos, toPos) {
   if (creature.sleepCounter > 0) return false;
   // Groggy: just woke this phase. Can't take awake actions (move, attack) until the next phase.
   if (creature.wokeInPhase === state.phase) return false;
+  // A creature that flipped up this turn can't move this turn.
+  if (creature.flippedThisTurn) return false;
   if (lc.movedThisTurn.has(creature.instId)) return false;
   if (slotOccupied(side, loc, "creature", toPos)) return false;
   if (!isAdjacent(fromPos, toPos)) return false;
@@ -1630,11 +1964,14 @@ function isAdjacent(a, b) {
 // Permanents (creatures, structures) only commit during main. Actions can be committed during
 // any phase that is a commit window — in v1 that's main and combat-reveal.
 function isCommitWindowFor(cardType) {
-  if (cardType === "creature" || cardType === "structure" || cardType === "equipment") {
+  // Creatures and structures only commit during main. Actions and equipment commit in any
+  // player-interactive phase (upkeep, draw, main, combat-reveal, cleanup).
+  const interactivePhases = ["upkeep", "draw", "main", "combat-reveal", "cleanup"];
+  if (cardType === "creature" || cardType === "structure") {
     return state.phase === "main";
   }
-  if (cardType === "action") {
-    return state.phase === "main" || state.phase === "combat-reveal";
+  if (cardType === "action" || cardType === "equipment") {
+    return interactivePhases.includes(state.phase);
   }
   return false;
 }
@@ -1654,12 +1991,13 @@ function computeCombatPreview() {
     const cs = {};
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = lc.creatures[pos] || lc.pending.creatures[pos] || null;
-      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed, sleepCounter: c.sleepCounter || 0, wokeInPhase: c.wokeInPhase || null } : null;
+      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed, sleepCounter: c.sleepCounter || 0, wokeInPhase: c.wokeInPhase || null, ranged: !!c.ranged, ammoCost: c.ammoCost || 0 } : null;
     }
     const action = lc.action || lc.pending.action || null;
     return {
       creatures: cs,
-      action: action ? { instId: action.instId, name: action.name, tempo: action.tempo || 0, effect: action.effect, revealed: action.revealed } : null
+      action: action ? { instId: action.instId, name: action.name, tempo: action.tempo || 0, effect: action.effect, revealed: action.revealed } : null,
+      ammo: lc.ammo || 0
     };
   }
   // Build per-location snapshots for both sides; summoner durabilities are global per side.
@@ -1751,7 +2089,7 @@ function computeCombatPreview() {
     }
   }
 
-  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+  const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3 };
   const attackers = {};
   const willDie = new Set();
   const summonerHits = { player: spellFallThrough.player, ai: spellFallThrough.ai };
@@ -1761,13 +2099,16 @@ function computeCombatPreview() {
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     const candidates = [];
     for (const sideName of ["player", "ai"]) {
-      for (const pos of ["fl", "fr"]) {
+      for (const pos of ["fl", "fr", "bl", "br"]) {
         const c = sim[sideName].locs[loc].creatures[pos];
         if (!c) continue;
         if (c.revealed === false) continue;  // face-down cards don't attack (unified rule)
+        const isBack = pos === "bl" || pos === "br";
+        if (isBack && !c.ranged) continue;
         if (c.sleepCounter > 0) continue;
         if (c.wokeInPhase === state.phase) continue;
         if (c.force <= 0) continue;
+        if (c.ranged && (sim[sideName].locs[loc].ammo || 0) < (c.ammoCost || 1)) continue;
         candidates.push({
           side: sideName, loc, pos, creature: c,
           sortKey: [-(c.tempo || 0), sidePriorityRankAt(sideName, loc), POS_RANK[pos]]
@@ -1784,9 +2125,17 @@ function computeCombatPreview() {
     for (const cand of candidates) {
       const live = sim[cand.side].locs[loc].creatures[cand.pos];
       if (!live || live.instId !== cand.creature.instId) continue;
+      // Ranged ammo simulation: must still have ammo at swing time; consume it.
+      if (live.ranged) {
+        const cost = live.ammoCost || 1;
+        const myLoc = sim[cand.side].locs[loc];
+        if ((myLoc.ammo || 0) < cost) continue;
+        myLoc.ammo -= cost;
+      }
       const enemyLoc = sim[other(cand.side)].locs[loc];
-      const frontPos = cand.pos;
-      const backPos = cand.pos === "fl" ? "bl" : "br";
+      const column = (cand.pos === "fl" || cand.pos === "bl") ? "fl" : "fr";
+      const frontPos = column;
+      const backPos = column === "fl" ? "bl" : "br";
       let target = enemyLoc.creatures[frontPos];
       let targetPos = frontPos;
       if (!target) {
@@ -1855,6 +2204,12 @@ function runUpkeepStart() {
   for (const sideName of ["player", "ai"]) {
     for (let loc = 0; loc < LOCATION_COUNT; loc++) {
       L(sideName, loc).movedThisTurn = new Set();
+      // Reset per-turn melee-attacker trackers on all creatures here (used by Explosive Trap).
+      const lc = L(sideName, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (c) c.meleeAttackersThisTurn = [];
+      }
     }
   }
   tickSleepCounters();
@@ -2065,7 +2420,11 @@ function aiPickBestPlay() {
 function aiScorePlay(card, loc, target) {
   const hints = card.aiHints || {};
   let score = 0;
-  score += (card.cost || 0) * 2;
+  // Cost-magnitude weight (favor expensive plays). Sum across all cost stats for compound costs.
+  const costs = card.costs || {};
+  let costMag = 0;
+  for (const s of Object.keys(costs)) costMag += costs[s];
+  score += costMag * 2;
   if (card.type === "creature") return scoreCreaturePlay(card, loc, target, hints, score);
   if (card.type === "structure") return scoreStructurePlay(card, loc, target, hints, score);
   if (card.type === "action") return scoreActionPlay(card, loc, target, hints, score);
@@ -2212,7 +2571,20 @@ function runCombat() {
         logEntry(`    ${liveAttacker.name} (${pos}): no Force — does not attack.`, "combat-detail");
         continue;
       }
+      // Ranged: consume ammo from this side's stockpile here. If insufficient at swing-time
+      // (could happen if multiple ranged on same side drain it), the shot fizzles.
+      if (liveAttacker.ranged) {
+        const cost = liveAttacker.ammoCost || 1;
+        const lc2 = L(side, loc);
+        if ((lc2.ammo || 0) < cost) {
+          logEntry(`    ${liveAttacker.name} (${pos}): out of ammo — can't fire.`, "combat-detail");
+          continue;
+        }
+        lc2.ammo -= cost;
+        logEntry(`    ${liveAttacker.name} (${pos}): spends ${cost} ammo (${side} ${LOC_NAMES[loc]} stockpile now ${lc2.ammo}).`, "combat-detail");
+      }
       resolveAttack(side, loc, pos, liveAttacker);
+      _initResolved.add(`attack-${liveAttacker.instId}`);
     }
   }
   firePhaseHook("onCombatEnd");
@@ -2222,9 +2594,10 @@ function runCombat() {
 // Compute combat order at a single location. Per-location Tempo hierarchy:
 //   1. Tempo descending
 //   2. Side priority (higher local Tempo total at THIS location wins; ties go to state.firstSide)
-//   3. Position rank (front-row left, then front-row right; back row doesn't attack)
+//   3. Position rank (front-row left, then front-row right; back-row ranged after)
+// Ranged creatures attack from any row, melee creatures attack from the front row only.
 function computeCombatOrder(loc) {
-  const POS_RANK = { fl: 0, fr: 1, bl: 99, br: 99 };
+  const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3 };
 
   const localTempoTotal = {
     player: committedStatTotal("player", loc, "tempo"),
@@ -2238,12 +2611,20 @@ function computeCombatOrder(loc) {
 
   const candidates = [];
   for (const sideName of ["player", "ai"]) {
-    for (const pos of ["fl", "fr"]) {
+    for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = L(sideName, loc).creatures[pos];
       if (!c) continue;
+      // Melee: front row only. Ranged: any row but needs ammo to fire.
+      const isBack = pos === "bl" || pos === "br";
+      if (isBack && !c.ranged) continue;
       if (c.sleepCounter > 0) continue;
       if (c.wokeInPhase === state.phase) continue;
       if ((c.force || 0) <= 0) continue;
+      // Ranged creatures need ammo to attack (any row — they only fire, never melee).
+      if (c.ranged) {
+        const cost = c.ammoCost || 1;
+        if ((L(sideName, loc).ammo || 0) < cost) continue;
+      }
       candidates.push({
         side: sideName, loc, pos, creature: c,
         sortKey: [-(c.tempo || 0), sidePriorityRank(sideName), POS_RANK[pos]]
@@ -2419,7 +2800,73 @@ function fireFlipUpTrigger(side, loc, card) {
         logEntry(`  ${card.name} pushes ${target.name} (${otherSide}) from ${bullyPos} to ${destPos}.`, "combat-detail");
       }
     }
+  } else if (effect === "stealthRowAdjacentFriendlies") {
+    // g5 Rebel Outrider: re-stealth friendly creatures in the same row on this side. They go
+    // face-down and will re-flip at end of current phase via the unified rule, firing flip-up
+    // triggers a second time.
+    const lc = L(side, loc);
+    let selfPos = null;
+    for (const pos of ["fl","fr","bl","br"]) {
+      if (lc.creatures[pos] === card) { selfPos = pos; break; }
+    }
+    if (!selfPos) return;
+    const sameRowAdjacent = { fl: ["fr"], fr: ["fl"], bl: ["br"], br: ["bl"] }[selfPos] || [];
+    let stealthed = 0;
+    for (const p of sameRowAdjacent) {
+      const target = lc.creatures[p];
+      if (!target) continue;
+      if (target.revealed === false) continue;  // already face-down — no effect
+      stealth(target);
+      logEntry(`  ${card.name} stealths ${target.name} (${side} ${p}).`, "combat-detail");
+      stealthed++;
+    }
+    if (stealthed === 0) logEntry(`  ${card.name}: no same-row friendlies to stealth.`, "combat-detail");
+  } else if (effect === "sendFriendlyAway") {
+    // g7 Rebel Runner: move a friendly creature here to another location. Pillar 10 random pick
+    // from candidates (friendlies at this location, excluding self) and from destinations.
+    const lc = L(side, loc);
+    const candidates = [];
+    for (const p of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[p];
+      if (!c || c === card) continue;
+      if (c.revealed === false) continue;
+      candidates.push({ pos: p, c });
+    }
+    if (candidates.length === 0) {
+      logEntry(`  ${card.name}: no other friendly creature here to send.`, "combat-detail");
+      return;
+    }
+    const dests = [];
+    for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+      if (l2 === loc) continue;
+      const lc2 = L(side, l2);
+      for (const p of ["fl","fr","bl","br"]) {
+        if (!lc2.creatures[p]) dests.push({ loc: l2, pos: p });
+      }
+    }
+    if (dests.length === 0) {
+      logEntry(`  ${card.name}: no empty destination slot at other locations — fizzles.`, "combat-detail");
+      return;
+    }
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const dest = dests[Math.floor(Math.random() * dests.length)];
+    lc.creatures[pick.pos] = null;
+    L(side, dest.loc).creatures[dest.pos] = pick.c;
+    logEntry(`  ${card.name} sends ${pick.c.name} from ${LOC_NAMES[loc]} ${pick.pos} → ${LOC_NAMES[dest.loc]} ${dest.pos}.`, "combat-detail");
+  } else if (effect === "dropTrapOpposingFront") {
+    // g8 Rebel Saboteur: plant an Explosive Trap on the opposing side's front row at this location.
+    dropExplosiveTrap(other(side), loc);
   }
+}
+
+// Stealth: flip a face-up card face-down. Per the unified face-down rule, the card becomes
+// inert (no stats, no combat, not targetable, triggers dormant) until it flips up again at the
+// next end-of-phase reveal. Clears flippedThisTurn so the re-flip will set it again. Does NOT
+// detach equipment or wake sleepers — only changes revealed state.
+function stealth(card) {
+  if (!card || card.revealed === false) return;
+  card.revealed = false;
+  card.flippedThisTurn = false;
 }
 
 // Grant a temporary "until end of turn" stat buff to a card. The buff is applied to the in-play
@@ -2439,11 +2886,225 @@ function grantUntilEndOfTurn(card, stat, amount) {
   state.endOfTurnReverts.push({ card, stat, amount });
 }
 
+// ---------- Marks system ----------
+// A mark is per-instance permanent state. Each mark = { kind, side }. Marks persist through
+// pile cycling and across encounters. Same-kind double mark on a card destroys it (exile).
+//
+// Mark kinds:
+//   - "reroute" (Green): on leave-play, destination redirects to the marker's same-zone pile.
+//   - "convert" (White): switches sides when overhealed by Force value+. Not implemented.
+//   - "damage"  (Red):   +1 damage from any damage source on this card. Not implemented.
+//
+// applyMark: place a mark on a card from a side. If a same-kind mark already exists, the card
+// is destroyed (exiled). Returns true if the mark applied normally, false if double-mark exile.
+function applyMark(card, kind, side) {
+  if (!card.marks) card.marks = [];
+  const existing = card.marks.find(m => m.kind === kind);
+  if (existing) {
+    // Same-kind double mark — card tears in half. Exile from the run entirely.
+    logEntry(`  ${card.name} torn in half — same-kind double mark (${kind}). Exiled.`, "combat-detail");
+    exileFromPlay(card);
+    // Same-kind exile is permanent: remove the entry from the run-deck so it can't return.
+    if (card.runDeckEntry) {
+      const idx = state.runDeck.indexOf(card.runDeckEntry);
+      if (idx !== -1) state.runDeck.splice(idx, 1);
+    }
+    return false;
+  }
+  card.marks.push({ kind, side });
+  // Mirror the mark into the run-deck entry's mods so it persists across encounters.
+  if (card.runDeckEntry) {
+    if (!card.runDeckEntry.mods) card.runDeckEntry.mods = {};
+    if (!card.runDeckEntry.mods.marks) card.runDeckEntry.mods.marks = [];
+    card.runDeckEntry.mods.marks.push({ kind, side });
+  }
+  logEntry(`  ${card.name}: marked for ${kind} (by ${side}).`, "combat-detail");
+  return true;
+}
+
+// Exile a card from play immediately, regardless of zone. Used by same-kind double-mark.
+// Removes the card from whatever slot it's in, detaches equipment, places in exile under its
+// current side.
+function exileFromPlay(card) {
+  for (const side of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(side, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        if (lc.creatures[pos] === card) {
+          detachAllEquipmentFromHost(card, side, loc);
+          lc.creatures[pos] = null;
+          state.sides[side].exile.push(card);
+          return;
+        }
+      }
+      if (lc.structure === card) {
+        detachAllEquipmentFromHost(card, side, loc);
+        lc.structure = null;
+        state.sides[side].exile.push(card);
+        return;
+      }
+      if (lc.action === card) {
+        lc.action = null;
+        state.sides[side].exile.push(card);
+        return;
+      }
+    }
+  }
+}
+
+// Central leave-play pile routing. Tokens always exile (regardless of marks). Otherwise check
+// the card's marks for "reroute" — if present, the destination side becomes the marker's side.
+// Rerouted-to-player marks the card `acquired = true` so it joins runDeck at encounter end.
+// Triggers fire BEFORE this is called (per design: leave-play triggers from original side, then
+// destination modifies).
+function sendToPile(card, intendedSide, zone) {
+  if (card.isToken) { state.sides[intendedSide].exile.push(card); return; }
+  const reroute = card.marks ? card.marks.find(m => m.kind === "reroute") : null;
+  let destSide = intendedSide;
+  if (reroute && reroute.side !== intendedSide) {
+    destSide = reroute.side;
+    if (destSide === "player") card.acquired = true;
+    logEntry(`  ${card.name}: rerouted to ${destSide}'s ${zone}.`, "combat-detail");
+  }
+  state.sides[destSide][zone].push(card);
+}
+
+// Generic leave-play trigger dispatch. Fires Deathwish and any future leave-play effects.
+// Called BEFORE sendToPile so triggers see the original side/position and fire from there
+// (per design: triggers fire first, destination modifies after).
+// pos is optional — if provided, recorded on the card as lastPos for position-dependent effects.
+function fireLeavePlayTriggers(card, side, loc, pos) {
+  if (pos !== undefined) card.lastPos = pos;
+  if (card.deathwish) fireDeathwish(card, side, loc);
+}
+
+// Dispatcher for Deathwish effect tags. Each tag is a behavior key. New effects add cases here.
+function fireDeathwish(card, side, loc) {
+  const effect = card.deathwish;
+  if (!effect) return;
+  logEntry(`  ${card.name} (${side} ${LOC_NAMES[loc] || ""}) — Deathwish: ${effect}.`, "combat-detail");
+  if (effect === "dropQuest_badIntel") {
+    // Drop a Bad Intel quest token into this side's action slot at this location. If the slot
+    // is occupied, the new quest fizzles (no slot to occupy → ripped up immediately).
+    const lc = L(side, loc);
+    if (lc.action) {
+      logEntry(`    Action slot occupied at ${LOC_NAMES[loc]} — Bad Intel quest fizzles.`, "combat-detail");
+      return;
+    }
+    const token = createQuestToken("badIntel", side);
+    token.revealed = true;  // Tokens enter face-up per the token rule.
+    lc.action = token;
+    logEntry(`    Bad Intel quest token enters at ${side} @${LOC_NAMES[loc]}.`, "combat-detail");
+  } else if (effect === "moveFriendlyHere") {
+    // g1 Rebel Scout: move one of your creatures from another location to this slot. By the time
+    // deathwish fires, the dying card has been removed from its slot, so the slot at (side, loc)
+    // is empty. Random pick from legal candidates (creatures on the same side at a different loc).
+    const lc = L(side, loc);
+    const candidates = [];
+    for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+      if (l2 === loc) continue;
+      const otherLoc = L(side, l2);
+      for (const p of ["fl","fr","bl","br"]) {
+        const c = otherLoc.creatures[p];
+        if (c && c.revealed !== false) candidates.push({ loc: l2, pos: p, c });
+      }
+    }
+    if (candidates.length === 0) {
+      logEntry(`    No friendly creature at another location — fizzles.`, "combat-detail");
+      return;
+    }
+    // Find an empty slot at this location to land in. Pillar 10 random pick among empties.
+    const empties = ["fl","fr","bl","br"].filter(p => !lc.creatures[p]);
+    if (empties.length === 0) {
+      logEntry(`    No empty slot at ${LOC_NAMES[loc]} — fizzles.`, "combat-detail");
+      return;
+    }
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    const destPos = empties[Math.floor(Math.random() * empties.length)];
+    L(side, pick.loc).creatures[pick.pos] = null;
+    lc.creatures[destPos] = pick.c;
+    logEntry(`    ${pick.c.name} moves from ${LOC_NAMES[pick.loc]} ${pick.pos} → ${LOC_NAMES[loc]} ${destPos}.`, "combat-detail");
+  } else if (effect === "dropTrapFront") {
+    // g3 Rebel Skirmisher: drop an Explosive Trap token in your front row at this location.
+    dropExplosiveTrap(side, loc);
+  } else if (effect === "explosiveTrap") {
+    // The Trap's own deathwish: damage same-side adjacent creatures + creatures that hit this
+    // with melee damage this turn. "Adjacent" = same-side only (same row other column + same
+    // column back row).
+    explosiveTrapDeathwish(card, side, loc);
+  }
+}
+
+// Drop an Explosive Trap token into a side's front row at a location. Pillar 10 random empty
+// slot pick; fizzles if both front slots are occupied. Returns the placed token or null.
+function dropExplosiveTrap(side, loc) {
+  const lc = L(side, loc);
+  const empties = ["fl","fr"].filter(p => !lc.creatures[p]);
+  if (empties.length === 0) {
+    logEntry(`    Explosive Trap: front row full on ${side} ${LOC_NAMES[loc]} — fizzles.`, "combat-detail");
+    return null;
+  }
+  const destPos = empties[Math.floor(Math.random() * empties.length)];
+  const trap = createCard("g_trap", side);
+  trap.isToken = true;
+  trap.revealed = true;  // Tokens enter face-up.
+  lc.creatures[destPos] = trap;
+  logEntry(`    Explosive Trap drops at ${side} ${LOC_NAMES[loc]} ${destPos}.`, "combat-detail");
+  return trap;
+}
+
+// Trap's deathwish resolution: damage same-side adjacents + any creature that dealt melee damage
+// to this trap on this turn (tracked via card.meleeAttackersThisTurn).
+function explosiveTrapDeathwish(trap, side, loc) {
+  // Adjacency map: same-side, geographic neighbors. The trap's position when it dies is unknown
+  // here (already removed from slot), so check meleeAttackersThisTurn and scan same-side slots
+  // adjacent to where it WAS. We need the position to compute adjacency — store it on the trap
+  // when placed and at every position change.
+  // For now: damage every same-side creature touching its last-known position.
+  const lc = L(side, loc);
+  const ADJACENT = { fl: ["fr","bl"], fr: ["fl","br"], bl: ["fl","br"], br: ["fr","bl"] };
+  const adjacents = ADJACENT[trap.lastPos || "fl"] || [];
+  const hits = [];
+  for (const p of adjacents) {
+    const target = lc.creatures[p];
+    if (target) hits.push({ target, where: { side, loc, pos: p } });
+  }
+  // Add melee attackers from this turn (other side of board, by definition — melee comes from
+  // enemy creatures). They may still be alive or already destroyed/moved.
+  const attackerIds = trap.meleeAttackersThisTurn || [];
+  for (const id of attackerIds) {
+    // Find this attacker on the board by instId.
+    for (const s2 of ["player","ai"]) {
+      for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+        const lc2 = L(s2, l2);
+        for (const p of ["fl","fr","bl","br"]) {
+          const c = lc2.creatures[p];
+          if (c && c.instId === id) {
+            // Avoid double-hit if the attacker was also a same-side adjacent (won't happen across
+            // sides, but defensive).
+            if (!hits.some(h => h.target === c)) hits.push({ target: c, where: { side: s2, loc: l2, pos: p } });
+          }
+        }
+      }
+    }
+  }
+  if (hits.length === 0) {
+    logEntry(`    Explosive Trap: no targets in range.`, "combat-detail");
+    return;
+  }
+  for (const h of hits) {
+    applyCombatDamage(h.where.side, h.where.loc, h.where.pos, 2, `Explosive Trap`);
+  }
+}
+
 // Attach an equipment card to a host (creature or structure). Equipment's granted attack
 // patterns are appended to the host's. Equipment is stored in host.equipment for tracking.
 // When the host leaves play, equipment goes to the host-side's junkyard via detachAllEquipment.
+// Hard rule: one equipment per host. Returns true on success, false if the cap blocks the attach.
+const EQUIPMENT_CAP_PER_HOST = 1;
 function attachEquipmentToHost(equipment, host, hostSide) {
   if (!host.equipment) host.equipment = [];
+  if (host.equipment.length >= EQUIPMENT_CAP_PER_HOST) return false;
   host.equipment.push(equipment);
   equipment.attachedTo = host.instId;
   equipment.attachedSide = hostSide;
@@ -2456,6 +3117,7 @@ function attachEquipmentToHost(equipment, host, hostSide) {
       host.attackPatterns.push({ ...p });
     }
   }
+  return true;
 }
 
 // Detach all equipment from a host that's leaving play. Each equipment goes to the side's
@@ -2481,8 +3143,8 @@ function detachAllEquipmentFromHost(host, hostSide, loc) {
       }
     }
     if (!handled) {
-      state.sides[hostSide].junkyard.push(eq);
       logEntry(`    ${eq.name} (equipment on ${host.name}) → ${hostSide} junkyard.`, "combat-detail");
+      sendToPile(eq, hostSide, "junkyard");
     }
   }
 }
@@ -2522,11 +3184,13 @@ function sacrificeCreatureOnSide(side, loc, filterFn, sourceName) {
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   const reason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
   logEntry(`  ${sourceName} sacrifices ${pick.c.name} (${side} ${pick.pos}). ${reason}`, "combat-detail");
-  // Remove from slot; equipment detaches; tokens are torn up (exile), regular creatures graveyard.
-  lc.creatures[pick.pos] = null;
+  // Remove from slot; fire leave-play triggers (deathwish etc.) from original side/loc; detach
+  // equipment; route to pile (tokens exile, marks may redirect).
+  const pos = pick.pos;
+  lc.creatures[pos] = null;
+  fireLeavePlayTriggers(pick.c, side, loc, pos);
   detachAllEquipmentFromHost(pick.c, side, loc);
-  if (pick.c.isToken) state.sides[side].exile.push(pick.c);
-  else state.sides[side].graveyard.push(pick.c);
+  sendToPile(pick.c, side, "graveyard");
   return pick.c;
 }
 
@@ -2618,11 +3282,11 @@ function dealDamageAtLoc(sourceSide, loc, dmg, actionName, actionLocLabel) {
   onCreatureTookDamage(pick.c, enemySide, loc, dmg);
   if (pick.c.durability <= 0) {
     logEntry(`    ${pick.c.name} is destroyed.`, "combat-detail");
+    const dPos = pick.pos;
+    enemyLoc.creatures[dPos] = null;
+    fireLeavePlayTriggers(pick.c, enemySide, loc, dPos);
     detachAllEquipmentFromHost(pick.c, enemySide, loc);
-    // Tokens are torn up (exile) on death; regular creatures go to graveyard.
-    if (pick.c.isToken) state.sides[enemySide].exile.push(pick.c);
-    else state.sides[enemySide].graveyard.push(pick.c);
-    enemyLoc.creatures[pick.pos] = null;
+    sendToPile(pick.c, enemySide, "graveyard");
   }
 }
 
@@ -2641,8 +3305,9 @@ function resolveAction(side, loc) {
     const oppLoc = L(other(side), loc);
     if (oppLoc.action) {
       logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) counters ${oppLoc.action.name} (${other(side)}) — to graveyard.`, "combat-detail");
-      state.sides[other(side)].graveyard.push(oppLoc.action);
+      const c = oppLoc.action;
       oppLoc.action = null;
+      sendToPile(c, other(side), "graveyard");
     } else {
       logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) finds no opposing action here — fizzles, exits to graveyard.`, "combat-detail");
     }
@@ -2722,15 +3387,23 @@ function resolveAction(side, loc) {
         logEntry(`  ${pick.c.name} gains +1 Force this turn.`, "combat-detail");
       } else {
         logEntry(`  ${pick.c.name} is destroyed before buff applies.`, "combat-detail");
+        const bdPos = pick.pos;
+        lc2.creatures[bdPos] = null;
+        fireLeavePlayTriggers(pick.c, side, loc, bdPos);
         detachAllEquipmentFromHost(pick.c, side, loc);
-        if (pick.c.isToken) state.sides[side].exile.push(pick.c);
-        else state.sides[side].graveyard.push(pick.c);
-        lc2.creatures[pick.pos] = null;
+        sendToPile(pick.c, side, "graveyard");
       }
     }
+  } else if (action.effect === "forageAddAmmo") {
+    // Forage: add 1 ammo to this side's stockpile at this location. Per-instance escalating cost
+    // tracks here too — bump the cast counter so the next play of THIS card-instance costs more.
+    const lc2 = L(side, loc);
+    lc2.ammo = (lc2.ammo || 0) + 1;
+    action.forageCasts = (action.forageCasts || 0) + 1;
+    logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — +1 ammo (stockpile now ${lc2.ammo}). Next cast of this card needs ≥${action.forageCasts} Tempo extra.`, "combat-detail");
   }
-  s[exitZone].push(action);
   lc.action = null;
+  sendToPile(action, side, exitZone);
 }
 
 // Resolve all queued actions across all locations in Tempo order. Higher Tempo resolves first;
@@ -2795,7 +3468,13 @@ function endOfPhaseRevealAndResolve() {
       const locTextKey = LOC_TEXT_KEYS[loc];
       const suppressed = locTextKey && LOCATION_TEXTS[locTextKey] && LOCATION_TEXTS[locTextKey].suppressActionFlipUp;
       if (lc.action && !suppressed) {
-        events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: lc.action.tempo || 0 });
+        // Quests that have already flipped sit in the slot watching for completion — don't
+        // re-queue them. Only face-down actions need to flip here. Face-up non-quest actions
+        // shouldn't normally be in the slot at end-of-phase (resolveAction clears them).
+        const isQuest = lc.action.subtype === "quest";
+        if (!isQuest || lc.action.revealed === false) {
+          events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: lc.action.tempo || 0 });
+        }
       }
       // Pending equipment: flip events. Attaches to host on flip; fizzles to junkyard if host gone.
       for (const pos of ["fl","fr","bl","br"]) {
@@ -2841,6 +3520,9 @@ function endOfPhaseRevealAndResolve() {
         continue;
       }
       ev.card.revealed = true;
+      // Creatures that flip this turn can't move this turn. flippedThisTurn clears at end of cleanup.
+      if (ev.where === "creature") ev.card.flippedThisTurn = true;
+      _initResolved.add(`flip-${ev.card.instId}`);
       if (ev.side === "ai") {
         const where = ev.where === "creature" ? `${LOC_NAMES[ev.loc]} ${ev.pos}` : `${LOC_NAMES[ev.loc]} (structure)`;
         logEntry(`  → Revealed: ${ev.card.name} at ${where}.`, "combat-detail");
@@ -2851,6 +3533,8 @@ function endOfPhaseRevealAndResolve() {
       // Fire the card's flip-up trigger if it has one. Triggers fire AFTER the card is face-up
       // (so the card itself is on the board for any "this gains X" effects).
       fireFlipUpTrigger(ev.side, ev.loc, ev.card);
+      // Notify active quests of this flip-up event.
+      checkQuestsForEvent({ kind: "flipUp", card: ev.card, side: ev.side, loc: ev.loc });
     } else if (ev.kind === "action") {
       // Action might have been countered / removed already.
       const lc = L(ev.side, ev.loc);
@@ -2858,12 +3542,16 @@ function endOfPhaseRevealAndResolve() {
         logEntry(`  → ${ev.card.name} (${ev.side} @${LOC_NAMES[ev.loc]}) was countered before resolving.`, "combat-detail");
         continue;
       }
-      // Reveal it (if not already), then resolve.
+      // Quests flip up but DON'T resolve immediately. They sit in the slot until their completion
+      // condition fires. Skip resolveAction for quests; just reveal and continue.
+      const isQuest = ev.card.subtype === "quest";
       if (ev.card.revealed === false) {
         ev.card.revealed = true;
         if (ev.side === "ai") logEntry(`  → Revealed: ${ev.card.name} (AI action at ${LOC_NAMES[ev.loc]}).`, "combat-detail");
+        if (isQuest) logEntry(`  → ${ev.card.name} (Quest) sits in slot, watching for completion.`, "combat-detail");
       }
-      resolveAction(ev.side, ev.loc);
+      if (!isQuest) resolveAction(ev.side, ev.loc);
+      _initResolved.add(`action-${ev.card.instId}`);
     } else if (ev.kind === "equipment") {
       // Equipment flips up and attaches to the host at its slot. If the host is gone (died/moved
       // before flip), the equipment fizzles to the owner-side junkyard.
@@ -2875,13 +3563,19 @@ function endOfPhaseRevealAndResolve() {
       ev.card.revealed = true;
       const host = lc.creatures[ev.pos];
       if (!host) {
-        state.sides[ev.side].junkyard.push(ev.card);
         logEntry(`  → ${ev.card.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}) has no host — fizzles to junkyard.`, "combat-detail");
+        sendToPile(ev.card, ev.side, "junkyard");
         continue;
       }
-      attachEquipmentToHost(ev.card, host, ev.side);
+      const ok = attachEquipmentToHost(ev.card, host, ev.side);
+      if (!ok) {
+        logEntry(`  → ${ev.card.name} can't attach to ${host.name} — already at equipment cap. Fizzles to junkyard.`, "combat-detail");
+        sendToPile(ev.card, ev.side, "junkyard");
+        continue;
+      }
       logEntry(`  → ${ev.card.name} attaches to ${host.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}).`, "combat-detail");
       fireFlipUpTrigger(ev.side, ev.loc, ev.card);
+      _initResolved.add(`equip-${ev.card.instId}`);
     }
   }
 }
@@ -2891,7 +3585,7 @@ function other(side) { return side === "player" ? "ai" : "player"; }
 // Apply combat damage to a creature at a specific (side, loc, pos). Handles death-resolution and
 // fires onCreatureTookDamage. Used by resolveAttack's main hit + extra-target attack patterns
 // (cleave hits adjacent same-row slots; pierce hits the back-row slot behind the front-row target).
-function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel) {
+function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel, attacker) {
   if (dmg <= 0) return;
   const lc = L(targetSide, loc);
   const target = lc.creatures[pos];
@@ -2901,26 +3595,36 @@ function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel) {
     logEntry(`    ${attackerLabel} → ${targetSide} summoner for ${dmg} (empty ${pos}). (${targetSide} Durability: ${state.sides[targetSide].durability})`, "combat-detail");
     return;
   }
+  // Record this melee attacker on the target for the Explosive Trap deathwish (only non-ranged
+  // attackers count as melee — ranged shots don't trigger the trap).
+  if (attacker && !attacker.ranged) {
+    if (!target.meleeAttackersThisTurn) target.meleeAttackersThisTurn = [];
+    if (!target.meleeAttackersThisTurn.includes(attacker.instId)) target.meleeAttackersThisTurn.push(attacker.instId);
+  }
   target.durability -= dmg;
   logEntry(`    ${attackerLabel} → ${target.name} (${targetSide} ${pos}) for ${dmg}.`, "combat-detail");
   onCreatureTookDamage(target, targetSide, loc, dmg);
   if (target.durability <= 0) {
     logEntry(`      ${target.name} is destroyed.`, "combat-detail");
-    detachAllEquipmentFromHost(target, targetSide, loc);
-    // Tokens are torn up (exile) on death; regular creatures go to graveyard.
-    if (target.isToken) state.sides[targetSide].exile.push(target);
-    else state.sides[targetSide].graveyard.push(target);
     lc.creatures[pos] = null;
+    fireLeavePlayTriggers(target, targetSide, loc, pos);
+    detachAllEquipmentFromHost(target, targetSide, loc);
+    sendToPile(target, targetSide, "graveyard");
   }
 }
 
 function resolveAttack(side, loc, pos, attacker) {
-  if (pos !== "fl" && pos !== "fr") return;
+  // Front-row attackers always allowed. Back-row attackers must be ranged.
+  const isBack = pos === "bl" || pos === "br";
+  if (isBack && !attacker.ranged) return;
 
   const enemySide = other(side);
   const enemyLoc = L(enemySide, loc);
-  const enemyFront = pos;
-  const enemyBack = pos === "fl" ? "bl" : "br";
+  // Map attacker column to enemy front/back the way front-row attacks already do.
+  // fl/bl on player's side aligns with enemy's fl front-row column; fr/br with enemy's fr.
+  const column = (pos === "fl" || pos === "bl") ? "fl" : "fr";
+  const enemyFront = column;
+  const enemyBack = column === "fl" ? "bl" : "br";
 
   // Main target: front first, falling through to back if front is empty.
   const targetPos = enemyLoc.creatures[enemyFront] ? enemyFront : (enemyLoc.creatures[enemyBack] ? enemyBack : null);
@@ -2928,7 +3632,7 @@ function resolveAttack(side, loc, pos, attacker) {
   const label = `${attacker.name} (${pos})`;
 
   if (targetPos) {
-    applyCombatDamage(enemySide, loc, targetPos, dmg, label);
+    applyCombatDamage(enemySide, loc, targetPos, dmg, label, attacker);
   } else {
     state.sides[enemySide].durability -= dmg;
     logEntry(`    ${label} → ${enemySide} summoner for ${dmg}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
@@ -2945,7 +3649,7 @@ function resolveAttack(side, loc, pos, attacker) {
       if (!targetPos) continue;  // no target hit, cleave has nothing adjacent
       const adjacent = targetPos === "fl" ? "fr" : (targetPos === "fr" ? "fl" : (targetPos === "bl" ? "br" : "bl"));
       if (enemyLoc.creatures[adjacent]) {
-        applyCombatDamage(enemySide, loc, adjacent, dmg, `${label} (cleave)`);
+        applyCombatDamage(enemySide, loc, adjacent, dmg, `${label} (cleave)`, attacker);
       }
     } else if (p.type === "pierce") {
       // Pierce X: deal X damage to the slot directly behind the main target's column on the
@@ -2959,7 +3663,7 @@ function resolveAttack(side, loc, pos, attacker) {
       } else if (targetPos === "fl" || targetPos === "fr") {
         const backPos = targetPos === "fl" ? "bl" : "br";
         if (enemyLoc.creatures[backPos]) {
-          applyCombatDamage(enemySide, loc, backPos, pierceVal, `${label} (pierce ${pierceVal})`);
+          applyCombatDamage(enemySide, loc, backPos, pierceVal, `${label} (pierce ${pierceVal})`, attacker);
         } else {
           // No back-row creature → pierce falls through to summoner.
           state.sides[enemySide].durability -= pierceVal;
@@ -2971,10 +3675,10 @@ function resolveAttack(side, loc, pos, attacker) {
   }
 }
 
-function runCleanup() {
-  state.phase = "cleanup";
-  logEntry(`— Cleanup —`, "phase");
-  firePhaseHook("onCleanupStart");
+// End-of-cleanup work. Called from advancePhase when player ends the cleanup phase, after any
+// pending cleanup-phase commits have been committed and flipped. Discards hands, reverts
+// end-of-turn buffs, fires onCleanupEnd hooks, runs neutral end-of-cleanup, advances priority/turn.
+function runCleanupEnd() {
   for (const sideName of ["player", "ai"]) {
     const s = state.sides[sideName];
     if (s.hand.length > 0) {
@@ -2983,31 +3687,28 @@ function runCleanup() {
       s.hand = [];
     }
   }
-  // Revert "until end of turn" buffs (Herald-style flip-up grants and similar).
   revertEndOfTurnBuffs();
-  // Location-text end-of-cleanup hooks (Champion's Rest, etc.).
+  // Clear per-turn "flipped this turn" markers so movement is allowed next turn.
+  for (const sideName of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (c && c.flippedThisTurn) c.flippedThisTurn = false;
+      }
+    }
+  }
   firePhaseHook("onCleanupEnd");
   if (state.gameOver) return;
-  // v3: neutral effects that fire at end of cleanup (e.g., Siren consumption).
   resolveNeutralCleanup();
-  // After cleanup effects fire, re-check the encounter-end condition. checkEncounterEnd sets
-  // state.encounterEndPending if the win condition is met (it does NOT end immediately).
   checkGameOver();
-
-  // End-of-turn AI retreat evaluation: same deferred treatment — sets state.encounterEndPending
-  // rather than ending immediately.
   if (state.view === "encounter") checkAiRetreat();
-
-  // Now resolve any pending encounter-end. All phases of this turn have run; the player has had
-  // their full turn including end-of-cleanup hooks (Champion's Rest, etc.). Time to actually end.
   if (state.encounterEndPending) {
     const result = state.encounterEndPending;
     state.encounterEndPending = null;
     endEncounter(result);
     return;
   }
-
-  // Flip priority for next turn (alternation tiebreak).
   const oldPriority = state.firstSide;
   state.firstSide = other(state.firstSide);
   logEntry(`Priority flips: ${oldPriority} → ${state.firstSide} (alternation tiebreak).`, "cleanup");
@@ -3063,7 +3764,7 @@ function resolveNeutralCleanup() {
 }
 
 // v3 game-over check: handles per-event win/loss conditions (player death, boss death). Does NOT
-// check AI retreat — that's an end-of-turn evaluation, fired from runCleanup. This way mid-turn
+// check AI retreat — that's an end-of-turn evaluation, fired from runCleanupEnd. This way mid-turn
 // creature deaths don't end the encounter prematurely (the AI might still reinforce next turn,
 // but we can't know that until cleanup).
 function checkGameOver() {
@@ -3092,44 +3793,43 @@ function checkGameOver() {
 function startNewTurn() {
   if (state.gameOver) return;
   if (state.view !== "encounter" || !state.sides) return;
+  _initResolved = new Set();
   runUpkeepStart();
   if (state.gameOver || state.view !== "encounter") { render(); return; }
-  // Render the upkeep beat with face-down cards still face-down. Then flip them up at end of
-  // upkeep per the unified rule, then continue to draw and main.
   render();
-  setTimeout(() => {
-    if (state.view !== "encounter" || !state.sides) return;
-    runUpkeepEnd();
-    if (state.gameOver || state.view !== "encounter") { render(); return; }
-    runDraw();
-    if (state.view !== "encounter") { render(); return; }
-    runMain();
-    render();
-  }, 700);
+  maybeAutoAdvance();
 }
 
-// Phase 1 of player advancement: end main, AI places, both sides commit (AI face-down),
-// reveal AI cards, resolve any actions committed in main (in Tempo order), then enter combat-reveal.
+// If the current phase is interactive but the player has nothing legal to do, auto-advance to
+// the next phase. Delay long enough that the player can read the phase label and any log entries
+// that fired this phase (upkeep tick, draw, etc.) before the next phase starts.
+function maybeAutoAdvance() {
+  const interactive = ["upkeep","draw","main","combat-reveal","cleanup"];
+  if (!interactive.includes(state.phase)) return;
+  if (state.gameOver || state.view !== "encounter") return;
+  if (playerHasAnyLegalActionThisPhase()) return;
+  setTimeout(() => {
+    if (state.view !== "encounter" || state.gameOver) return;
+    if (playerHasAnyLegalActionThisPhase()) return;  // re-check after delay
+    advancePhase();
+  }, 1500);
+}
+
+// End main: AI places its main-phase plays, both sides commit pending, fire onMainEnd,
+// run end-of-phase reveal/resolve, advance to combat-reveal.
 function endMainPhase() {
   if (state.phase !== "main") return;
   if (state.gameOver || state.view !== "encounter") return;
-  // Clear any pending UI selections.
-  state.selectedCardId = null;
-  state.selectedCommittedId = null;
   // AI places into pending (cost-checks against committed only; can't see player's pending).
   aiPlaceMain();
   // Both sides commit. AI cards are face-down at this point.
   commitPendingPlays();
   firePhaseHook("onMainEnd");
-  // Enter the reveal phase. AI cards visible as backs, then flip to face-up after a beat.
   state.phase = "reveal";
   logEntry(`— Reveal —`, "phase");
   render();
   setTimeout(() => {
     if (state.gameOver || state.view !== "encounter") return;
-    // Tempo-ordered interleaved reveal-and-resolve: each card's flip-up happens at its Tempo step,
-    // and actions resolve at their Tempo step (using the board state visible at that moment —
-    // lower-Tempo cards are still face-down and not legal targets).
     endOfPhaseRevealAndResolve();
     if (state.gameOver || state.view !== "encounter") {
       render();
@@ -3137,21 +3837,18 @@ function endMainPhase() {
       return;
     }
     state.phase = "combat-reveal";
-    logEntry(`Combat previews shown. Commit anytime actions, then resolve.`, "phase");
+    logEntry(`— Combat preview — commit actions/equipment, then advance to combat. —`, "phase");
     render();
+    maybeAutoAdvance();
   }, 700);
 }
 
-// Phase 2 of player advancement: commit any combat-reveal-phase actions, resolve them,
-// then run creature combat, then cleanup, then next turn auto-rolls.
+// End combat-reveal: commit any pending combat-reveal commits, flip them, run creature combat,
+// then transition to cleanup (interactive — player can still play actions/equipment / move).
 function resolveCombatPhase() {
   if (state.phase !== "combat-reveal") return;
   if (state.gameOver || state.view !== "encounter") return;
-  // If the player committed an action during combat-reveal, it lives in pending. Commit it now.
   commitPendingPlays();
-  // Actions committed during combat-reveal resolve now via the unified Tempo-ordered reveal-and-
-  // resolve. Any face-down combat-reveal commits flip up here in Tempo order, with actions
-  // resolving at their Tempo step.
   endOfPhaseRevealAndResolve();
   if (state.gameOver || state.view !== "encounter") {
     render();
@@ -3168,25 +3865,112 @@ function resolveCombatPhase() {
       showGameOver();
       return;
     }
-    runCleanup();
-    if (state.gameOver || state.view !== "encounter") {
-      render();
-      showGameOver();
-      return;
-    }
+    // Enter cleanup as interactive phase.
+    state.phase = "cleanup";
+    logEntry(`— Cleanup —`, "phase");
+    firePhaseHook("onCleanupStart");
     render();
-    setTimeout(() => {
-      if (state.view !== "encounter") return;
-      startNewTurn();
-    }, 800);
+    maybeAutoAdvance();
+  }, 700);
+}
+
+// End cleanup: commit any pending cleanup commits, flip them, fire onCleanupEnd, run discard
+// + side-priority alternation, end encounter if applicable, start next turn otherwise.
+function endCleanupPhase() {
+  if (state.phase !== "cleanup") return;
+  if (state.gameOver || state.view !== "encounter") return;
+  commitPendingPlays();
+  endOfPhaseRevealAndResolve();
+  if (state.gameOver || state.view !== "encounter") {
+    render();
+    showGameOver();
+    return;
+  }
+  runCleanupEnd();
+  if (state.gameOver || state.view !== "encounter") {
+    render();
+    showGameOver();
+    return;
+  }
+  render();
+  setTimeout(() => {
+    if (state.view !== "encounter") return;
+    startNewTurn();
   }, 400);
 }
 
-// Single advance handler — picks the right action based on current phase.
+// Single advance handler — picks the right action based on current phase. Each phase ends by
+// firing its onPhaseEnd hook, running end-of-phase reveal/resolve (which flips face-down cards
+// committed during the phase), then transitioning to the next phase.
 function advancePhase() {
   if (state.gameOver) return;
-  if (state.phase === "main") return endMainPhase();
-  if (state.phase === "combat-reveal") return resolveCombatPhase();
+  if (state.view !== "encounter" || !state.sides) return;
+  state.selectedCardId = null;
+  state.selectedCommittedId = null;
+  // New phase = clear the resolved tracker.
+  _initResolved = new Set();
+
+  if (state.phase === "upkeep") {
+    // Commit anything pending (actions/equipment played during upkeep) before the upkeep flip pass.
+    commitPendingPlays();
+    runUpkeepEnd();
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); return; }
+    runDraw();
+    render();
+    maybeAutoAdvance();
+    return;
+  }
+  if (state.phase === "draw") {
+    commitPendingPlays();
+    firePhaseHook("onDrawEnd");
+    endOfPhaseRevealAndResolve();
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); return; }
+    runMain();
+    render();
+    maybeAutoAdvance();
+    return;
+  }
+  if (state.phase === "main") {
+    return endMainPhase();
+  }
+  if (state.phase === "combat-reveal") {
+    return resolveCombatPhase();
+  }
+  if (state.phase === "cleanup") {
+    return endCleanupPhase();
+  }
+}
+
+// Check if the player has any legal play (action/equipment in hand they can commit, or a creature
+// that can still move). Used to decide whether to auto-advance an idle phase.
+function playerHasAnyLegalActionThisPhase() {
+  if (state.view !== "encounter" || !state.sides) return false;
+  const p = state.sides.player;
+  // Any playable hand card?
+  for (const card of p.hand) {
+    if (!isCommitWindowFor(card.type)) continue;
+    if (cardHasAnyLegalPlay("player", card)) return true;
+  }
+  // Any movable committed creature? (movement allowed in all phases except the turn a creature
+  // flipped up; one move per turn per creature.)
+  for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+    const lc = L("player", loc);
+    for (const pos of ["fl","fr","bl","br"]) {
+      const c = lc.creatures[pos];
+      if (!c || c.revealed === false) continue;
+      if (c.flippedThisTurn) continue;
+      if (c.sleepCounter > 0) continue;
+      if (c.wokeInPhase === state.phase) continue;
+      if (lc.movedThisTurn.has(c.instId)) continue;
+      // At least one adjacent slot must be empty for a move to be possible.
+      for (const dest of ["fl","fr","bl","br"]) {
+        if (dest === pos) continue;
+        if (!isAdjacent(pos, dest)) continue;
+        if (!lc.creatures[dest]) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ---------- UI: rendering ----------
@@ -3195,10 +3979,150 @@ const $ = (id) => document.getElementById(id);
 // Most recent combat preview, computed at start of each render during main phase.
 let _combatPreview = null;
 
+// Resolved-this-phase tracker — instIds of cards/actions/attacks already resolved this phase.
+// Used by the initiative tracker to fade out items that have already happened. Cleared on phase
+// transitions. Keys are scoped by phase to avoid stale state bleeding.
+let _initResolved = new Set();
+
+// Build the initiative tracker's items for the current phase. Each item describes one queued
+// event (flip, action-resolve, equipment-flip, attack), with ordering metadata (Tempo, side,
+// position) and presentation (face-up/face-down to the player). The tracker shows everything
+// that's lined up to resolve in this phase, with already-resolved items left in but faded.
+function buildInitiativeQueue() {
+  if (!state.sides) return [];
+  const items = [];
+  const phase = state.phase;
+  // POS_RANK matches endOfPhaseRevealAndResolve's tiebreak ordering.
+  const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3, structure: 4, action: 5 };
+
+  if (phase === "combat" || phase === "combat-reveal") {
+    // Combat-reveal preview / combat phase: show the attack queue. Per-location combat orders
+    // concatenated; each location resolves in its own Tempo order. For tracker display we flatten
+    // them by Tempo, side, location, pos. In combat-reveal, this is a preview of what's about to
+    // fire when the player advances; in combat, items mark resolved as they swing.
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const order = computeCombatOrder(loc);
+      for (const c of order) {
+        items.push({
+          id: `attack-${c.creature.instId}`,
+          kind: "attack",
+          side: c.side,
+          loc, pos: c.pos,
+          tempo: c.creature.tempo || 0,
+          card: c.creature,
+          faceUp: c.creature.revealed !== false || c.side === "player"
+        });
+      }
+    }
+  } else {
+    // Interactive / flip phases: collect what endOfPhaseRevealAndResolve would queue.
+    for (const sideName of ["player", "ai"]) {
+      for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+        const lc = L(sideName, loc);
+        // Face-down committed creatures → flip events.
+        for (const pos of ["fl","fr","bl","br"]) {
+          const c = lc.creatures[pos];
+          if (c && c.revealed === false) {
+            items.push({ id: `flip-${c.instId}`, kind: "flip", side: sideName, loc, pos, tempo: c.tempo || 0, card: c, faceUp: sideName === "player" });
+          }
+        }
+        // Face-down committed structure.
+        if (lc.structure && lc.structure.revealed === false) {
+          items.push({ id: `flip-${lc.structure.instId}`, kind: "flip", side: sideName, loc, pos: "structure", tempo: lc.structure.tempo || 0, card: lc.structure, faceUp: sideName === "player" });
+        }
+        // Action in slot (action queue — non-quest, or face-down quest).
+        const locTextKey = LOC_TEXT_KEYS[loc];
+        const suppressed = locTextKey && LOCATION_TEXTS[locTextKey] && LOCATION_TEXTS[locTextKey].suppressActionFlipUp;
+        if (lc.action && !suppressed) {
+          const isQuest = lc.action.subtype === "quest";
+          if (!isQuest || lc.action.revealed === false) {
+            items.push({ id: `action-${lc.action.instId}`, kind: "action", side: sideName, loc, pos: "action", tempo: lc.action.tempo || 0, card: lc.action, faceUp: sideName === "player" || lc.action.revealed !== false });
+          }
+        }
+        // Pending equipment.
+        for (const pos of ["fl","fr","bl","br"]) {
+          const arr = lc.pending.equipment[pos];
+          if (!arr) continue;
+          for (const eq of arr) {
+            items.push({ id: `equip-${eq.instId}`, kind: "equipment", side: sideName, loc, pos, tempo: eq.tempo || 0, card: eq, faceUp: sideName === "player" || eq.revealed !== false });
+          }
+        }
+        // Pending creature commits (visible to player; AI's pending isn't visible — but per
+        // design, after end-of-main both sides' pending become committed face-down, so during
+        // main the player's pending creatures preview their tracker position).
+        if (sideName === "player") {
+          for (const pos of ["fl","fr","bl","br"]) {
+            const c = lc.pending.creatures[pos];
+            if (c) items.push({ id: `pending-${c.instId}`, kind: "pending", side: sideName, loc, pos, tempo: c.tempo || 0, card: c, faceUp: true });
+          }
+          if (lc.pending.structure) items.push({ id: `pending-${lc.pending.structure.instId}`, kind: "pending", side: sideName, loc, pos: "structure", tempo: lc.pending.structure.tempo || 0, card: lc.pending.structure, faceUp: true });
+          if (lc.pending.action) items.push({ id: `pending-${lc.pending.action.instId}`, kind: "pending", side: sideName, loc, pos: "action", tempo: lc.pending.action.tempo || 0, card: lc.pending.action, faceUp: true });
+        }
+      }
+    }
+  }
+
+  // Sort: Tempo desc → side priority → loc → pos.
+  items.sort((a, b) => {
+    if (a.tempo !== b.tempo) return b.tempo - a.tempo;
+    if (a.side !== b.side) return a.side === state.firstSide ? -1 : 1;
+    if (a.loc !== b.loc) return a.loc - b.loc;
+    return (POS_RANK[a.pos] ?? 99) - (POS_RANK[b.pos] ?? 99);
+  });
+  return items;
+}
+
+function renderInitiativeTracker() {
+  const bar = $("initiative-tracker");
+  if (!bar) return;
+  bar.innerHTML = "";
+  if (state.view !== "encounter" || !state.sides) {
+    bar.style.display = "none";
+    return;
+  }
+  bar.style.display = "flex";
+  const lbl = document.createElement("span");
+  lbl.className = "init-label";
+  const phaseTitle = state.phase === "combat-reveal" ? "combat preview" :
+                     state.phase === "combat" ? "combat" :
+                     state.phase;
+  lbl.textContent = `Initiative — ${phaseTitle}`;
+  bar.appendChild(lbl);
+  const items = buildInitiativeQueue();
+  if (items.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "init-label";
+    empty.style.opacity = "0.5";
+    empty.textContent = "(nothing queued)";
+    bar.appendChild(empty);
+    return;
+  }
+  const KIND_TAG = { flip: "Flip", action: "Action", equipment: "Equip", pending: "Pending", attack: "Attack" };
+  for (const it of items) {
+    const el = document.createElement("div");
+    el.className = `init-item ${it.side}`;
+    if (!it.faceUp) el.classList.add("face-down");
+    if (_initResolved.has(it.id)) el.classList.add("resolved");
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = it.faceUp ? it.card.name : "?";
+    el.appendChild(name);
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `T${it.tempo} · ${KIND_TAG[it.kind] || it.kind}`;
+    el.appendChild(meta);
+    bar.appendChild(el);
+  }
+}
+
 function render() {
-  // v3: branch by view mode. Overworld vs encounter are visually distinct.
+  // v3: branch by view mode. Menu → Overworld → Encounter.
   if (state.runOver) {
     showGameOver();
+  }
+  if (state.view === "menu") {
+    renderMenu();
+    return;
   }
   if (state.view === "overworld") {
     renderOverworld();
@@ -3206,6 +4130,42 @@ function render() {
   }
   // Encounter view (the existing v2 render path).
   renderEncounter();
+}
+
+// Start menu: pick a starter deck (Red or Green) before the run begins.
+function renderMenu() {
+  $("locations-row").innerHTML = "";
+  $("hand").innerHTML = "";
+  $("ai-hand-info").textContent = "";
+  $("phase-info").textContent = "Choose your starter";
+  $("turn-info").textContent = "";
+  $("player-summoner").style.display = "none";
+  $("ai-summoner").style.display = "none";
+  const overworldEl = $("overworld") || createOverworldHost();
+  overworldEl.innerHTML = "";
+  const menu = document.createElement("div");
+  menu.className = "start-menu";
+  const title = document.createElement("h2");
+  title.textContent = "Pick a starter";
+  menu.appendChild(title);
+  const row = document.createElement("div");
+  row.className = "start-menu-row";
+  const decks = [
+    { key: "red", label: "Red", tag: "Force / melee combat", color: "var(--ai)" },
+    { key: "green", label: "Green", tag: "Tempo / movement / ranged / traps", color: "var(--ok)" }
+  ];
+  for (const d of decks) {
+    const btn = document.createElement("button");
+    btn.className = "start-menu-card";
+    btn.style.borderColor = d.color;
+    btn.innerHTML = `<div class="start-menu-label" style="color:${d.color}">${d.label}</div><div class="start-menu-tag">${d.tag}</div>`;
+    btn.addEventListener("click", () => chooseDeckAndStartRun(d.key));
+    row.appendChild(btn);
+  }
+  menu.appendChild(row);
+  overworldEl.appendChild(menu);
+  renderLog();
+  renderControls();
 }
 
 // Render the overworld view: map of nodes + edges, pawn marker, legal-move highlights.
@@ -3238,6 +4198,9 @@ function renderEncounter() {
   // Hide overworld panel.
   const overworldEl = $("overworld");
   if (overworldEl) overworldEl.innerHTML = "";
+
+  // Initiative tracker (top of UI).
+  renderInitiativeTracker();
 
   // Combat preview is only meaningful during combat-reveal, after both sides have committed.
   _combatPreview = (state.phase === "combat-reveal") ? computeCombatPreview() : null;
@@ -3478,6 +4441,14 @@ function buildStatRow(side, loc) {
     cell.innerHTML = `<div class="stat-cell-label">${stat.charAt(0).toUpperCase() + stat.slice(1)}</div><div class="stat-cell-value">${cmt}${vis > cmt ? `<span class="stat-pending">+${vis - cmt}</span>` : ""}</div>`;
     row.appendChild(cell);
   }
+  // Ammo stockpile for this side at this location. Only show when nonzero to avoid clutter.
+  const ammo = L(side, loc).ammo || 0;
+  if (ammo > 0) {
+    const cell = document.createElement("div");
+    cell.className = "stat-cell stat-ammo";
+    cell.innerHTML = `<div class="stat-cell-label">Ammo</div><div class="stat-cell-value">${ammo}</div>`;
+    row.appendChild(cell);
+  }
   return row;
 }
 
@@ -3520,8 +4491,9 @@ function buildCreatureGrid(side, loc) {
 
     if (side === "player") {
       const inMain = state.phase === "main";
-      const inCombatReveal = state.phase === "combat-reveal";
-      const movementAllowed = inMain || inCombatReveal;
+      // Movement allowed in any interactive phase. The moveCommittedCreature engine call applies
+      // the per-card per-turn budget plus the flipped-this-turn and sleep/groggy gates.
+      const movementAllowed = ["upkeep","draw","main","combat-reveal","cleanup"].includes(state.phase);
 
       // Hand-card placement (creatures only commit during main).
       if (inMain) {
@@ -3529,12 +4501,6 @@ function buildCreatureGrid(side, loc) {
         if (sel && sel.type === "creature" && !slotOccupied("player", loc, "creature", pos) && canPay("player", loc, sel)) {
           cell.classList.add("legal-target");
           cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "creature", pos }));
-        }
-        // Equipment placement: target a slot that has a face-up committed creature here.
-        // Pending or face-down hosts don't qualify — equipment needs an actual landed host.
-        if (sel && sel.type === "equipment" && committedCard && committedCard.revealed !== false && canPay("player", loc, sel)) {
-          cell.classList.add("legal-target");
-          cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "equipment", pos }));
         }
         // Pending creature cancel.
         if (pendingCard && !sel && !state.selectedCommittedId) {
@@ -3545,6 +4511,16 @@ function buildCreatureGrid(side, loc) {
           });
         }
       }
+      // Equipment placement: available in any interactive phase. Target a slot that has a
+      // face-up committed creature here. Pending or face-down hosts don't qualify — equipment
+      // needs a landed host. Cap: skip hosts already at the per-host equipment cap.
+      if (isCommitWindowFor("equipment")) {
+        const sel = state.selectedCardId ? findHandCard(state.selectedCardId) : null;
+        if (sel && sel.type === "equipment" && committedCard && committedCard.revealed !== false && canPay("player", loc, sel) && (committedCard.equipment || []).length < EQUIPMENT_CAP_PER_HOST) {
+          cell.classList.add("legal-target");
+          cell.addEventListener("click", () => placeSelectedAt({ loc, kind: "equipment", pos }));
+        }
+      }
 
       // Committed-creature selection for movement (within this location only — v2 scope).
       if (movementAllowed && committedCard && !state.selectedCardId) {
@@ -3553,7 +4529,13 @@ function buildCreatureGrid(side, loc) {
             state.selectedCommittedId = null;
             render();
           });
-        } else if (!lc.movedThisTurn.has(committedCard.instId)) {
+        } else if (
+          committedCard.revealed !== false &&
+          !committedCard.flippedThisTurn &&
+          !lc.movedThisTurn.has(committedCard.instId) &&
+          committedCard.sleepCounter === 0 &&
+          committedCard.wokeInPhase !== state.phase
+        ) {
           cell.classList.add("can-select-move");
           cell.addEventListener("click", () => {
             state.selectedCommittedId = committedCard.instId;
@@ -3590,6 +4572,22 @@ function findCommittedCreatureAndLoc(side, instId) {
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = lc.creatures[pos];
       if (c && c.instId === instId) return { loc, pos, creature: c };
+    }
+  }
+  return null;
+}
+
+// Locate a card's in-play position (any side, creature or structure). Returns { side, loc, pos }
+// or null. Used by the renderer to read live `effectiveStat` for stat badges.
+function findCardInPlay(card) {
+  if (!state.sides) return null;
+  for (const side of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(side, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        if (lc.creatures[pos] === card) return { side, loc, pos };
+      }
+      if (lc.structure === card) return { side, loc, pos: "structure" };
     }
   }
   return null;
@@ -3660,6 +4658,18 @@ function makeCardEl(card, inSlot = false) {
     back.className = "card-back";
     back.textContent = "?";
     el.appendChild(back);
+    // Marks leak through fog of war — visible even on face-down opposing cards.
+    if (card.marks && card.marks.length > 0) {
+      const marksRow = document.createElement("div");
+      marksRow.className = "marks-row";
+      for (const m of card.marks) {
+        const tag = document.createElement("span");
+        tag.className = `badge mark mark-${m.kind}`;
+        tag.textContent = `${m.kind} (${m.side})`;
+        marksRow.appendChild(tag);
+      }
+      el.appendChild(marksRow);
+    }
     return el;
   }
   // Player's own face-down cards: render normally but with a subtle "pending reveal" outline so
@@ -3673,54 +4683,40 @@ function makeCardEl(card, inSlot = false) {
   nameEl.textContent = card.name;
   el.appendChild(nameEl);
 
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  if (card.cost > 0) {
-    const b = document.createElement("span");
-    b.className = "badge cost";
-    b.textContent = `≥${card.cost} ${(card.costStat || "force").toUpperCase()}`;
-    meta.appendChild(b);
-  }
-  // Stat badges show on creatures only. Structure stats are conveyed through the rules text.
-  if (card.type === "creature") {
-    if (card.force > 0) {
-      const b = document.createElement("span");
-      b.className = "badge force";
-      b.textContent = `Force ${card.force}`;
-      meta.appendChild(b);
+  // Marks: visible in all zones, all sides, even through fog. Per-instance permanent.
+  if (card.marks && card.marks.length > 0) {
+    const marksRow = document.createElement("div");
+    marksRow.className = "marks-row";
+    for (const m of card.marks) {
+      const tag = document.createElement("span");
+      tag.className = `badge mark mark-${m.kind}`;
+      tag.textContent = `${m.kind} (${m.side})`;
+      marksRow.appendChild(tag);
     }
-    if (card.tempo > 0) {
+    el.appendChild(marksRow);
+  }
+
+  // Top row: cost ("Requires:") badges, one color-coded badge per stat in the cost.
+  // Use effectiveCosts so Forage's escalating cost shows the current cost, not the base.
+  const costs = effectiveCosts(card);
+  const costStats = Object.keys(costs);
+  if (costStats.length > 0) {
+    const reqRow = document.createElement("div");
+    reqRow.className = "requires-row";
+    const lbl = document.createElement("span");
+    lbl.className = "requires-label";
+    lbl.textContent = "Requires:";
+    reqRow.appendChild(lbl);
+    const letterMap = { force: "F", tempo: "T", insight: "I", resolve: "R", spite: "S" };
+    for (const stat of costStats) {
+      const letter = letterMap[stat] || stat.charAt(0).toUpperCase();
       const b = document.createElement("span");
-      b.className = "badge tempo";
-      b.textContent = `Tempo ${card.tempo}`;
-      meta.appendChild(b);
+      b.className = `badge ${stat}`;
+      b.textContent = `${costs[stat]} ${letter}`;
+      reqRow.appendChild(b);
     }
-    if (card.insight > 0) {
-      const b = document.createElement("span");
-      b.className = "badge insight";
-      b.textContent = `Insight ${card.insight}`;
-      meta.appendChild(b);
-    }
+    el.appendChild(reqRow);
   }
-  if (card.durabilityMax != null) {
-    const b = document.createElement("span");
-    b.className = "badge durability";
-    b.textContent = `Durability ${card.durability}/${card.durabilityMax}`;
-    meta.appendChild(b);
-  }
-  if (card.sleepCounter > 0) {
-    const b = document.createElement("span");
-    b.className = "badge sleep";
-    b.textContent = `Sleep ${card.sleepCounter}`;
-    meta.appendChild(b);
-  }
-  if (card.wokeInPhase && card.wokeInPhase === state.phase) {
-    const b = document.createElement("span");
-    b.className = "badge groggy";
-    b.textContent = `Groggy (this ${state.phase})`;
-    meta.appendChild(b);
-  }
-  el.appendChild(meta);
 
   // Attached equipment list (for hosts that have any equipped).
   if (card.equipment && card.equipment.length > 0) {
@@ -3772,13 +4768,44 @@ function makeCardEl(card, inSlot = false) {
     }
   }
 
+  // Bottom row: live stat badges. Creatures show Force/Tempo/Insight/Durability; structures show
+  // nothing (their stats are conveyed via rules text); equipment/actions show nothing here.
+  // Stats are computed via effectiveStat using the card's in-play location, so conditional buffs,
+  // equipment grants, sleep zeroing, etc. are reflected. Cards in hand or pending use base stats.
+  const statBadges = [];
+  if (card.type === "creature") {
+    const inPlay = findCardInPlay(card);
+    const ctx = inPlay || { side: null, loc: null };
+    const fVal = inPlay ? effectiveStat(card, ctx.side, ctx.loc, "force") : (card.force || 0);
+    const tVal = inPlay ? effectiveStat(card, ctx.side, ctx.loc, "tempo") : (card.tempo || 0);
+    const iVal = inPlay ? effectiveStat(card, ctx.side, ctx.loc, "insight") : (card.insight || 0);
+    if (fVal > 0) statBadges.push({ stat: "force", label: `${fVal} Force` });
+    if (tVal > 0) statBadges.push({ stat: "tempo", label: `${tVal} Tempo` });
+    if (iVal > 0) statBadges.push({ stat: "insight", label: `${iVal} Insight` });
+    if (card.durabilityMax != null) statBadges.push({ stat: "durability", label: `${card.durability}/${card.durabilityMax} Durability` });
+  }
+  if (card.sleepCounter > 0) statBadges.push({ stat: "sleep", label: `${card.sleepCounter} Sleep` });
+  if (card.wokeInPhase && card.wokeInPhase === state.phase) statBadges.push({ stat: "groggy", label: `Groggy (this ${state.phase})` });
+  if (statBadges.length > 0) {
+    const statsRow = document.createElement("div");
+    statsRow.className = "stats-row";
+    for (const sb of statBadges) {
+      const b = document.createElement("span");
+      b.className = `badge ${sb.stat}`;
+      b.textContent = sb.label;
+      statsRow.appendChild(b);
+    }
+    el.appendChild(statsRow);
+  }
+
   return el;
 }
 
 function renderHand() {
   const hand = $("hand");
   hand.innerHTML = "";
-  const inAnyCommitWindow = state.phase === "main" || state.phase === "combat-reveal";
+  // Any interactive phase is a potential commit window for some card type.
+  const inAnyCommitWindow = ["upkeep","draw","main","combat-reveal","cleanup"].includes(state.phase);
   for (const card of state.sides.player.hand) {
     const el = makeCardEl(card, false);
     const cardWindow = isCommitWindowFor(card.type);
@@ -3791,18 +4818,26 @@ function renderHand() {
         return;
       }
       if (!playable) {
-        // Provide a useful message: do we have *any* location with the cost paid?
-        const statName = (card.costStat || "force");
-        const statLabel = statName.charAt(0).toUpperCase() + statName.slice(1);
-        const haveByLoc = [];
+        // Provide a useful message: do we have *any* location with all costs paid?
+        const costs = card.costs || {};
+        const costStats = Object.keys(costs);
+        const costStr = costStats.length === 0 ? "no cost" :
+          costStats.map(s => `${costs[s]} ${s.charAt(0).toUpperCase() + s.slice(1)}`).join(" + ");
         let canPayAnywhere = false;
+        const reportByLoc = [];
         for (let loc = 0; loc < LOCATION_COUNT; loc++) {
-          const have = committedStatTotal("player", loc, statName);
-          haveByLoc.push(`${LOC_NAMES[loc]}: ${have}`);
-          if (have >= (card.cost || 0)) canPayAnywhere = true;
+          let payed = true;
+          const parts = [];
+          for (const s of costStats) {
+            const have = committedStatTotal("player", loc, s);
+            parts.push(`${have} ${s.charAt(0).toUpperCase() + s.slice(1)}`);
+            if (have < costs[s]) payed = false;
+          }
+          reportByLoc.push(`${LOC_NAMES[loc]}: ${parts.join("/") || "—"}`);
+          if (payed) canPayAnywhere = true;
         }
         if (!canPayAnywhere) {
-          flashLog(`${card.name}: need ≥${card.cost} ${statLabel} at the target location. Committed — ${haveByLoc.join(" · ")}.`);
+          flashLog(`${card.name}: need ${costStr} at the target location. Committed — ${reportByLoc.join(" · ")}.`);
         } else {
           flashLog(`${card.name}: no legal target slot at any location where the cost is paid.`);
         }
@@ -3831,8 +4866,8 @@ function renderLog() {
 function renderControls() {
   const btn = $("btn-advance");
   const leaveBtn = $("btn-leave-encounter");
-  // Overworld view: hide both phase buttons.
-  if (state.view === "overworld") {
+  // Menu or overworld view: hide both phase buttons.
+  if (state.view === "menu" || state.view === "overworld") {
     btn.style.display = "none";
     if (leaveBtn) leaveBtn.style.display = "none";
     return;
@@ -3850,19 +4885,28 @@ function renderControls() {
     return;
   }
   switch (state.phase) {
+    case "upkeep":
+      btn.disabled = false;
+      btn.textContent = "End Upkeep → Draw";
+      break;
+    case "draw":
+      btn.disabled = false;
+      btn.textContent = "End Draw → Main";
+      break;
     case "main":
       btn.disabled = false;
-      btn.textContent = "End Main Phase";
+      btn.textContent = "End Main → Combat";
       break;
     case "combat-reveal":
       btn.disabled = false;
       btn.textContent = "Resolve Combat";
       break;
+    case "cleanup":
+      btn.disabled = false;
+      btn.textContent = "End Cleanup → Next Turn";
+      break;
     case "reveal":
     case "combat-resolve":
-    case "cleanup":
-    case "upkeep":
-    case "draw":
       btn.disabled = true;
       btn.textContent = "…";
       break;
@@ -3913,7 +4957,7 @@ function hideGameOver() {
 function start() {
   state = freshState();
   hideGameOver();
-  logEntry(`v3 prototype — overworld map, hand-authored encounters, neutral puzzles. Move the pawn to begin.`);
+  logEntry(`v3 prototype — pick a starter deck to begin.`);
   render();
 }
 
