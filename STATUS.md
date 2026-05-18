@@ -55,11 +55,11 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 
 19. ~~**Deathwish and other leave-play triggers.**~~ **FIXED (dispatch).** Generic `fireLeavePlayTriggers(card, side, loc)` runs at every creature-death site BEFORE sendToPile (so triggers see original side/position, before destination redirect). `card.deathwish` field on def holds the effect tag; `fireDeathwish()` dispatches by tag. No deathwish effects implemented yet — Pathfinder's "drop a token quest" will be the first.
 
-20. **Run-end / win condition.** Slice has no boss and no "you won" check. Player wanders the cleared overworld with nothing to declare victory.
+20. ~~**Run-end / win condition.**~~ **FIXED (tutorial shape).** Map adds an `end` node (kind: "end") at x=5 connected only to C1/C2. End is the boss summoner's seat — *not* pulled into the T3 encounter as a location. Instead, T3 is flagged `encounterKind === "boss"` because at least one of its pulled-in locations is adjacent to an end node. The boss is the AI summoner of T3; reducing AI summoner Durability to 0 sets `runOver = "playerWin"` and visually moves the pawn to end. End has no encounter content of its own — the boss's entourage lives at the C nodes.
 
 ## Polish / minor
 
-21. **Fog of war on overworld.** Kind icons (hostile/neutral) leak through. Player should see only that *something* is at adjacent nodes, not what kind.
+21. ~~**Fog of war on overworld.**~~ **FIXED.** Node labels (location names) are always visible — the player knows the *place*. The fog hides only the *kind icon* (hostile vs neutral vs end), replaced with a `?`. The player can see "Champion's Rest" or "Ogre Hideaway" on the map but doesn't know whether the AI has shown up to contest it. Kind icons reveal for pawn-current, completed, and pawn-adjacent nodes (which would be in the next encounter). Per design: peace-time text is the location's "name"; war-time AI presence is what fog hides.
 
 22. **Side priority via local Tempo total.** Design says higher local Tempo wins side priority within a Tempo tier. Currently implements only the alternation fallback. Local-Tempo tiebreaker not built.
 
@@ -108,6 +108,12 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 - Pathfinder (g2): assembles deathwish → quest token → mark + reroute → acquisition.
 - Stealth keyword: `stealth(card)` flips a face-up card face-down. Card re-flips at the next end-of-phase pass, firing flip-up triggers a second time. Rebel Outrider (g5) flips up and stealths same-row friendlies on this side — re-flip payoff is Green's foundational synergy.
 - Ranged combat + ammo: `card.ranged + ammoCost` enables back-row (or front-row) firing that consumes ammo from the side's per-location stockpile. `lc.ammo` initialized 0 per encounter. Slinger (g4) is ranged 1F/1T/2D consuming 1 ammo per shot. Forage (g6) is an action that adds 1 ammo to your stockpile here; per-instance escalating cost via `effectiveCosts(card)` (+1 Tempo per previous cast of that card-instance, counter resets per encounter).
+- **Per-color stat effects** (per CARD_DESIGN.md):
+  - **Red Force** at the location scales damage payloads ("deal damage equal to your Force here"). Already used by Bombardment + Recruit threshold. No new wiring.
+  - **Green Tempo** at the location sets the reveal-order Tempo for non-creature plays (actions, structures, equipment). The caster's Tempo total at the location replaces the card's printed (always 0) Tempo at queue-build time. Wired in `endOfPhaseRevealAndResolve`, `computeCombatPreview` action sort, and the initiative tracker.
+  - **Blue Insight** (globalStatTotal across the side's locations) adds to per-turn draw count. `BASE_DRAW_TARGET = 5`; draw fills to `5 + Insight` each turn.
+  - **White Resolve** (globalStatTotal across the side's locations) sets how many leftmost hand cards survive cleanup. Player can drag-reorder hand throughout the turn; leftmost N are visually marked with a white top border. Cleanup keeps the leftmost N; discards the rest.
+  - **Black Spite** (committedStatTotal at the location, per-side) — summoner thorns. When a creature attack damages a summoner via fall-through (empty slot or no front-row defender), the defending side's Spite at that location deals retaliation damage back to the attacker. Per-location. Fires only when summoner Durability actually drops. Action damage to summoners does NOT trigger Spite — only creature combat.
 - Starter-deck menu at run start (Red or Green). Picking sets `state.deckKey` and builds the runDeck.
 - Initiative tracker at top of UI: shows the current phase's queue (face-down face-down items rendered as `?` for opposing side) sorted by Tempo → side priority → loc → pos. Items fade to `resolved` state as they fire during the phase. Combat phase shows the attack queue. Animation between events (so the player can watch the queue resolve card-by-card) is deferred — all events currently fire in a single synchronous beat per phase.
 
@@ -115,11 +121,14 @@ Audit of the prototype implementation against the design as locked in DESIGN.md 
 
 CARD_DEFS uses flat keys r1–r13 (Red pool only). Display names are UI-only and may change without engine impact.
 
-**Starter decks:** two per-color starters selected from a menu before the run begins.
+**Starter decks:** three per-color starters selected from a menu before the run begins.
 - **Red:** r1, r2, r3, r4, r5, r6, r10, r12, r14.
 - **Green:** g1, g2, g3, g4, g5, g6, g7, g8.
+- **Blue (WIP):** b1 Magus Apprentice (per-action Insight aura), b2 Keeper of the Flame (summon Fire Golem + Pyroblast token), b3 Study (draw 1), b4 Spark (≥1I, deal 1 damage here), b5 Keeper of the Font (summon Water Golem + Blizzard token), b6 Mana Rock (Inert; +1 Insight to same-row creatures), b7 Mirror Image (escalating ≥Insight; token-copy any face-up creature here to discard), b8 Tome Golem (Golem; at cleanup, leftmost action → top of deck), b9 Spellbook (≥1I equipment; 3 pages; opposing actions flipping here copy to your discard; destroyed at 0 pages). Tokens: b_fire_golem (3F/1D), b_water_golem (1F/3D), b_pyroblast (≥2I; 1 damage to each face-up creature on opposing side here), b_blizzard (≥2I; opposing front creature at each location skips attack this turn).
 
-`DECKS` registry indexed by `deckKey` ("red" | "green"). AI uses the same deck list as the chosen color (custom AI decks per color land later).
+`DECKS` registry indexed by `deckKey`. AI uses the same deck list as the chosen color (custom AI decks per color land later).
+
+**Apprentice's per-action Insight:** `state.sides[side].actionsThisTurn` counter, ticked at the top of every `resolveAction`, reset at upkeep start. Apprentice has `apprenticeInsightFromActions: true`; `effectiveStat` adds `actionsThisTurn` to its Insight read. Living Insight value reflects on the card via the live-stat badge.
 
 **Deployed at encounter locations:** A1 (Ogre Hideaway): r9 ogre. A2 (Champion's Rest): r3 + r13. B1 (Goblin Armaments): 4×r1 + r2 axe + r11 pike. B2 (Skirmish): r1 + r7 + r6. C1 (Forward Line): r8 (+r2) + r3 (+r11). C2 (Rear Camp): r9 + r1.
 

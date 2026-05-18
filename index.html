@@ -175,6 +175,9 @@
   .card.action { border-left: 3px solid var(--warn); }
   .card.selected { outline: 2px solid var(--accent); transform: translateY(-2px); }
   .card.unplayable { opacity: 0.45; cursor: not-allowed; }
+  .card.will-keep { border-top: 3px solid #f0f0f0; }
+  .card.dragging { opacity: 0.5; }
+  .card.drag-over { outline: 2px dashed var(--accent); outline-offset: 2px; }
   .card .name { font-weight: 600; line-height: 1.1; }
   .card .meta { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
   .card .badge { font-size: 10px; padding: 1px 5px; background: var(--panel-2); border-radius: 3px; color: var(--muted); }
@@ -305,6 +308,8 @@
   .ow-node-hostile  { fill: rgba(239, 90, 90, 0.3); stroke: var(--ai); }
   .ow-node-neutral  { fill: rgba(96, 192, 224, 0.25); stroke: #60c0e0; }
   .ow-node-boss     { fill: rgba(240, 192, 64, 0.25); stroke: var(--accent); stroke-width: 3; }
+  .ow-node-end      { fill: rgba(240, 192, 64, 0.25); stroke: var(--accent); stroke-width: 3; }
+  .ow-node-fog      { fill: rgba(80, 80, 90, 0.35); stroke: #555; stroke-dasharray: 4 3; }
   .ow-node-status-completed { opacity: 0.4; }
   .ow-node-pawn  { stroke: var(--player); stroke-width: 4; }
   .ow-node-legal { filter: drop-shadow(0 0 6px var(--accent)); }
@@ -368,7 +373,7 @@
 </div>
 
 <div id="hand-area">
-  <div class="hand-label">Your hand (click a card, then click a legal target slot to play)</div>
+  <div class="hand-label">Your hand — click to play, drag to reorder. White-bar cards survive cleanup (Resolve).</div>
   <div id="hand"></div>
 </div>
 
@@ -723,6 +728,200 @@ const CARD_DEFS = {
     deathwish: "explosiveTrap",
     text: "Inert. Deathwish: deal 2 damage to adjacent friendlies and any creature that melee'd this on this turn.",
     aiHints: {}
+  },
+  // b1 — Magus Apprentice. Fragile 1-Durability creature that prints +1 Insight here per action
+  // this side has resolved this turn. The history-tracking engine that defines Blue's identity.
+  b1: {
+    name: "Magus Apprentice",
+    type: "creature",
+    cost: 0,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: 1,
+    apprenticeInsightFromActions: true,
+    text: "+1 Insight here for each action you've resolved this turn.",
+    aiHints: {}
+  },
+  // b3 — Study. Action: draw 1. Also counts as an action played this turn, feeding Apprentice's
+  // Insight (so Study and Apprentice ramp together).
+  b3: {
+    name: "Study",
+    type: "action",
+    cost: 0,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    effect: "study",
+    text: "Draw 1.",
+    aiHints: {}
+  },
+  // b2 — Keeper of the Flame. Fragile flip-up engine: summons a Fire Golem token in front + adds
+  // a Pyroblast action token to your discard. If the slot in front is occupied, the entire
+  // flip-up fizzles.
+  b2: {
+    name: "Keeper of the Flame",
+    type: "creature",
+    cost: 0,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: 1,
+    onFlipUp: "keeperFlame",
+    text: "Flip-up: summon a Fire Golem token in front of this; add a Pyroblast token to your discard pile.",
+    aiHints: {}
+  },
+  // b5 — Keeper of the Font. Same shape as b2 but the water variant.
+  b5: {
+    name: "Keeper of the Font",
+    type: "creature",
+    cost: 0,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: 1,
+    onFlipUp: "keeperFont",
+    text: "Flip-up: summon a Water Golem token in front of this; add a Blizzard token to your discard pile.",
+    aiHints: {}
+  },
+  // b4 — Spark. ≥1 Insight. Deal 1 damage to a creature on the other side here.
+  b4: {
+    name: "Spark",
+    type: "action",
+    costs: { insight: 1 },
+    cost: 1,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    effect: "spark",
+    text: "Deal 1 damage to a creature on the other side here.",
+    aiHints: {}
+  },
+  // b6 — Mana Rock. Inert 0/0/2D. Same-side, same-row creatures gain +1 Insight (aura).
+  // Inert: can't be equipped, can't gain stats.
+  b6: {
+    name: "Mana Rock",
+    type: "creature",
+    cost: 0,
+    costStat: "insight",
+    inert: true,
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: 2,
+    manaRockAura: true,
+    text: "Inert. Creatures in the same row gain +1 Insight.",
+    aiHints: {}
+  },
+  // b7 — Mirror Image. Escalating +1 Insight per cast of this instance per encounter. Add a
+  // token copy of any face-up creature here (either side) to your discard.
+  b7: {
+    name: "Mirror Image",
+    type: "action",
+    cost: 0,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    effect: "mirrorImage",
+    text: "Add a token copy of a creature here to your discard. Each subsequent cast of this card needs +1 Insight here (this encounter).",
+    aiHints: {}
+  },
+  // b8 — Tome Golem. 2F/2D Golem creature. At start of cleanup, the leftmost action in your
+  // hand goes on top of your draw pile (Resolve-bypass for one action per turn).
+  b8: {
+    name: "Tome Golem",
+    type: "creature",
+    tribe: "golem",
+    cost: 0,
+    costStat: "insight",
+    force: 2,
+    tempo: 0,
+    insight: 0,
+    durability: 2,
+    text: "At the start of cleanup, put the leftmost action in your hand on top of your draw pile.",
+    aiHints: {}
+  },
+  // b9 — Spellbook. ≥1 Insight equipment. 3 pages. When an action on the other side flips at
+  // this location, the spellbook loses 1 page and adds a copy of that action to your discard.
+  // At 0 pages the spellbook is destroyed (junkyard).
+  b9: {
+    name: "Spellbook",
+    type: "equipment",
+    costs: { insight: 1 },
+    cost: 1,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    spellbookPages: 3,
+    text: "Equip. 3 pages. When an opposing action flips here: lose 1 page; add a copy of that action to your discard. At 0 pages: destroyed.",
+    aiHints: {}
+  },
+  // Token creature defs — created dynamically by Keeper flip-ups. Not in any deck.
+  b_fire_golem: {
+    name: "Fire Golem",
+    type: "creature",
+    tribe: "golem",
+    cost: 0,
+    costStat: "insight",
+    force: 3,
+    tempo: 0,
+    insight: 0,
+    durability: 1,
+    text: "",
+    aiHints: {}
+  },
+  b_water_golem: {
+    name: "Water Golem",
+    type: "creature",
+    tribe: "golem",
+    cost: 0,
+    costStat: "insight",
+    force: 1,
+    tempo: 0,
+    insight: 0,
+    durability: 3,
+    text: "",
+    aiHints: {}
+  },
+  // Token action defs — added to discard by Keeper flip-ups. Exile on resolve (token rule).
+  b_pyroblast: {
+    name: "Pyroblast",
+    type: "action",
+    costs: { insight: 2 },
+    cost: 2,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    effect: "pyroblast",
+    text: "Deal 1 damage to each creature on the other side here.",
+    aiHints: {}
+  },
+  b_blizzard: {
+    name: "Blizzard",
+    type: "action",
+    costs: { insight: 2 },
+    cost: 2,
+    costStat: "insight",
+    force: 0,
+    tempo: 0,
+    insight: 0,
+    durability: null,
+    effect: "blizzard",
+    text: "A creature in the front on the other side at each location does not attack this turn.",
+    aiHints: {}
   }
 };
 
@@ -982,7 +1181,8 @@ const WORLD_DEFS = {
       ]}
     },
 
-    // Stage 3 — both hostile. C1 Forward Line, C2 Rear Camp.
+    // Stage 3 — both hostile. C1 Forward Line, C2 Rear Camp. Both adjacent to the end node where
+    // the boss summoner sits — pulled in to form a 3-location boss encounter.
     { id: "C1", x: 4, y: 1, biome: "Mountain", kind: "hostile",
       label: "Forward Line",
       contents: { aiPlacements: [
@@ -996,6 +1196,13 @@ const WORLD_DEFS = {
         { defKey: "r9", slot: { kind: "creature", pos: "fl" } },
         { defKey: "r1", slot: { kind: "creature", pos: "br" } }
       ]}
+    },
+    // End node — the boss summoner's seat. Sits behind C1/C2 on the map. Not pulled into the
+    // T3 encounter; instead the boss is the AI summoner of T3, detected via end-adjacency on
+    // the encounter's locations. Walking onto end after winning T3 ends the run.
+    { id: "end", x: 5, y: 2, biome: "Mountain", kind: "end",
+      label: "Boss's Seat",
+      contents: null
     }
   ],
   edges: [
@@ -1006,17 +1213,26 @@ const WORLD_DEFS = {
     ["A2", "B1"], ["A2", "B2"],
     // Stage 2 → Stage 3 (full bipartite)
     ["B1", "C1"], ["B1", "C2"],
-    ["B2", "C1"], ["B2", "C2"]
+    ["B2", "C1"], ["B2", "C2"],
+    // Stage 3 → end node. End is the boss's seat, connected to C1/C2 only. The boss is the
+    // AI summoner for the T3 encounter (presence detected by any pulled-in node being adjacent
+    // to an `end`-kind node — see loadEncounterFromPawn). End is not pulled into the encounter;
+    // it sits behind C as the boss's spatial location and the run-win destination.
+    ["C1", "end"], ["C2", "end"]
   ],
   startNode: "start",
-  bossNode: null   // slice has no boss — final encounter is the Stage 3 pair
+  bossNode: "end"
 };
 
 // Per-color starter decks. Player picks one in the start menu; the AI uses the same list as
 // the chosen color (custom AI decks land later).
 const DECKS = {
   red: ["r1", "r2", "r3", "r4", "r5", "r6", "r10", "r12", "r14"],
-  green: ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"]
+  green: ["g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8"],
+  // Blue: spread of the printed pool. b1 Apprentice (Insight engine), b2/b5 Keepers (token engines),
+  // b3 Study (draw), b4 Spark (damage), b6 Mana Rock (aura), b7 Mirror Image (copy), b8 Tome Golem
+  // (deck-top stack), b9 Spellbook (counter-equipment).
+  blue: ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9"]
 };
 
 function buildStartingDeck() {
@@ -1052,9 +1268,13 @@ function createCard(defKey, owner) {
                                  // Ranged creatures cannot melee — they only fire (ammo-gated).
     ammoCost: def.ammoCost || 0, // For ranged creatures: ammo consumed per attack (printed as "Ammo N").
     forageCasts: 0, // Per-instance Forage cast counter (escalating cost). Resets at encounter end.
+    mirrorCasts: 0, // Per-instance Mirror Image cast counter (escalating Insight). Resets per encounter.
     inert: def.inert || false, // Inert keyword: cannot gain Force/Tempo/Insight/Resolve
     pitFighterWhileAlone: def.pitFighterWhileAlone || false, // Pit-Fighter's while-alone flag
     provocationChallenger: def.provocationChallenger || false, // Challenger's while-vs-opposing flag
+    apprenticeInsightFromActions: def.apprenticeInsightFromActions || false, // Apprentice's per-action Insight
+    manaRockAura: def.manaRockAura || false, // Mana Rock: same-row same-side aura grants +1 Insight to neighbors
+    spellbookPages: def.spellbookPages || 0, // Spellbook: page counter, destroyed at 0
     enraged: def.enraged || false, // Enraged keyword: +1 Force this turn per damage instance taken
     tribe: def.tribe || null,  // creature tribe (e.g., "goblin") — used by tribal-as-resource effects
     attackPatterns: def.attackPatterns ? [...def.attackPatterns] : [], // copied — equipment may mutate
@@ -1065,6 +1285,7 @@ function createCard(defKey, owner) {
     wokeInPhase: null,  // phase name where damage woke this sleeper. Gates awake-actions (attack,
                         // move) while state.phase === wokeInPhase. Self-clears via the phase compare.
     flippedThisTurn: false, // true the turn a creature flips up; blocks movement that turn.
+    skipAttackThisTurn: false, // set by Blizzard etc.; cleared at upkeep. Suppresses combat attack.
     meleeAttackersThisTurn: [], // instIds of creatures that dealt melee damage to this this turn.
                                 // Read by Explosive Trap's deathwish. Reset at upkeep start.
     lastPos: null,      // last known position in a slot; recorded by fireLeavePlayTriggers so
@@ -1325,10 +1546,18 @@ function loadEncounterFromPawn(clickedNodeId) {
   LOC_NAMES = encounterNodeIds.map(id => getNode(id).label);
   LOC_TEXT_KEYS = encounterNodeIds.map(id => getNode(id).locationTextKey || null);
 
-  // Determine the encounter's overall kind. If any pulled-in node is hostile, encounter is hostile;
-  // else if any is boss, boss; else neutral. (The slice has no boss; this is just future-proofing.)
+  // Determine the encounter's overall kind. Boss: any pulled-in node is adjacent to an `end`
+  // node (the boss is the AI summoner behind C). Hostile: any pulled-in node is kind hostile.
+  // Else neutral.
   let encounterKind = "neutral";
-  if (encounterNodeIds.some(id => getNode(id).kind === "boss")) encounterKind = "boss";
+  function nodeIsBossAdjacent(nodeId) {
+    for (const [a, b] of state.world.edges) {
+      if (a === nodeId && getNode(b)?.kind === "end") return true;
+      if (b === nodeId && getNode(a)?.kind === "end") return true;
+    }
+    return false;
+  }
+  if (encounterNodeIds.some(nodeIsBossAdjacent)) encounterKind = "boss";
   else if (encounterNodeIds.some(id => getNode(id).kind === "hostile")) encounterKind = "hostile";
 
   state.sides = { player: freshPlayerSide(), ai: freshAiSide() };
@@ -1515,6 +1744,8 @@ function endEncounter(result) {
   }
   if (result === "bossKilled") {
     state.runOver = "playerWin";
+    // Visually move the pawn to the end node so the map shows the player reached the boss.
+    if (WORLD_DEFS.bossNode) state.world.pawnAt = WORLD_DEFS.bossNode;
   }
   cleanup();
   render();
@@ -1643,6 +1874,24 @@ function effectiveStat(card, side, loc, stat) {
           }
         }
       }
+      // Magus Apprentice: +1 Insight here for each action this side has resolved this turn.
+      if (card.apprenticeInsightFromActions && stat === "insight") {
+        bonus += state.sides[side].actionsThisTurn || 0;
+      }
+      // Mana Rock aura: +1 Insight to creatures in the same row, same side. We check the OTHER
+      // slots in this card's row for a Mana Rock — "next to" means literal adjacent same-row neighbor.
+      if (stat === "insight" && !card.manaRockAura) {
+        // Find this card's position.
+        let myPos = null;
+        for (const p of ["fl","fr","bl","br"]) {
+          if (lc.creatures[p] === card) { myPos = p; break; }
+        }
+        if (myPos) {
+          const sameRowNeighbor = { fl: "fr", fr: "fl", bl: "br", br: "bl" }[myPos];
+          const neighbor = lc.creatures[sameRowNeighbor];
+          if (neighbor && neighbor.manaRockAura && neighbor.revealed !== false) bonus += 1;
+        }
+      }
     }
   }
 
@@ -1739,8 +1988,13 @@ function canPay(side, loc, card) {
 // of that same instance pays `base + forageCasts` Tempo. Counter resets at encounter end.
 function effectiveCosts(card) {
   const base = card.costs ? { ...card.costs } : {};
+  // Forage's escalating per-instance Tempo cost.
   if (card.effect === "forageAddAmmo" && card.forageCasts > 0) {
     base.tempo = (base.tempo || 0) + card.forageCasts;
+  }
+  // Mirror Image's escalating per-instance Insight cost.
+  if (card.effect === "mirrorImage" && card.mirrorCasts > 0) {
+    base.insight = (base.insight || 0) + card.mirrorCasts;
   }
   return base;
 }
@@ -1991,7 +2245,7 @@ function computeCombatPreview() {
     const cs = {};
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = lc.creatures[pos] || lc.pending.creatures[pos] || null;
-      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed, sleepCounter: c.sleepCounter || 0, wokeInPhase: c.wokeInPhase || null, ranged: !!c.ranged, ammoCost: c.ammoCost || 0 } : null;
+      cs[pos] = c ? { instId: c.instId, name: c.name, force: c.force || 0, tempo: c.tempo || 0, durability: c.durability, revealed: c.revealed, sleepCounter: c.sleepCounter || 0, wokeInPhase: c.wokeInPhase || null, ranged: !!c.ranged, ammoCost: c.ammoCost || 0, skipAttackThisTurn: !!c.skipAttackThisTurn } : null;
     }
     const action = lc.action || lc.pending.action || null;
     return {
@@ -2066,10 +2320,13 @@ function computeCombatPreview() {
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     const actionCandidates = [];
     for (const sideName of ["player", "ai"]) {
-      if (sim[sideName].locs[loc].action) actionCandidates.push({ side: sideName, action: sim[sideName].locs[loc].action });
+      // Action queue Tempo = caster-side Tempo at this location (per design).
+      if (sim[sideName].locs[loc].action) {
+        actionCandidates.push({ side: sideName, action: sim[sideName].locs[loc].action, tempo: simLocalTempo(sideName, loc) });
+      }
     }
     actionCandidates.sort((a, b) => {
-      if (a.action.tempo !== b.action.tempo) return b.action.tempo - a.action.tempo;
+      if (a.tempo !== b.tempo) return b.tempo - a.tempo;
       return a.side === state.firstSide ? -1 : 1;
     });
     for (const ac of actionCandidates) {
@@ -2107,6 +2364,7 @@ function computeCombatPreview() {
         if (isBack && !c.ranged) continue;
         if (c.sleepCounter > 0) continue;
         if (c.wokeInPhase === state.phase) continue;
+        if (c.skipAttackThisTurn) continue;
         if (c.force <= 0) continue;
         if (c.ranged && (sim[sideName].locs[loc].ammo || 0) < (c.ammoCost || 1)) continue;
         candidates.push({
@@ -2200,15 +2458,20 @@ function firePhaseHook(hookName) {
 function runUpkeepStart() {
   state.phase = "upkeep";
   logEntry(`— Upkeep, turn ${state.turn} —`, "phase");
-  // Reset per-turn move trackers — committed creatures may move once per main this turn at each location.
+  // Reset per-turn trackers.
   for (const sideName of ["player", "ai"]) {
+    state.sides[sideName].actionsThisTurn = 0;   // Apprentice reads this for live Insight.
     for (let loc = 0; loc < LOCATION_COUNT; loc++) {
       L(sideName, loc).movedThisTurn = new Set();
       // Reset per-turn melee-attacker trackers on all creatures here (used by Explosive Trap).
+      // Also clear skip-attack flags (Blizzard etc.) so combat eligibility resets each turn.
       const lc = L(sideName, loc);
       for (const pos of ["fl","fr","bl","br"]) {
         const c = lc.creatures[pos];
-        if (c) c.meleeAttackersThisTurn = [];
+        if (c) {
+          c.meleeAttackersThisTurn = [];
+          c.skipAttackThisTurn = false;
+        }
       }
     }
   }
@@ -2285,13 +2548,33 @@ function resolveNeutralUpkeep() {
   }
 }
 
+// Base draw target. Each side's global Insight (summed across the encounter's locations) adds
+// to this — see globalStatTotal("insight"). So drawing fills the hand up to 5 + Insight cards.
+const BASE_DRAW_TARGET = 5;
+
+// Draw a single card. Used by effects like Study (Blue) that draw one card on resolve. Reshuffles
+// the discard if the deck is empty. Returns the drawn card or null if both deck and discard are
+// empty.
+function drawOne(sideName) {
+  const s = state.sides[sideName];
+  if (s.deck.length === 0) {
+    if (s.discard.length === 0) return null;
+    s.deck = shuffle(s.discard);
+    s.discard = [];
+    logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+  }
+  const card = s.deck.shift();
+  s.hand.push(card);
+  return card;
+}
 function runDraw() {
   state.phase = "draw";
   logEntry(`— Draw —`, "phase");
   firePhaseHook("onDrawStart");
   for (const sideName of ["player", "ai"]) {
     const s = state.sides[sideName];
-    const target = 5;
+    const insight = globalStatTotal(sideName, "insight");
+    const target = BASE_DRAW_TARGET + insight;
     while (s.hand.length < target) {
       if (s.deck.length === 0) {
         if (s.discard.length === 0) break; // truly out
@@ -2302,8 +2585,11 @@ function runDraw() {
       const card = s.deck.shift();
       s.hand.push(card);
     }
+    if (insight > 0 && sideName === "player") {
+      logEntry(`Insight ${insight} → drew up to ${target} cards.`, "draw");
+    }
   }
-  logEntry(`Drew up to hand size 5.`, "draw");
+  logEntry(`Draw phase complete.`, "draw");
   firePhaseHook("onDrawEnd");
 }
 
@@ -2567,7 +2853,11 @@ function runCombat() {
         logEntry(`    ${liveAttacker.name} (${pos}): just woke up this phase — does not attack.`, "combat-detail");
         continue;
       }
-      if ((liveAttacker.force || 0) <= 0) {
+      if (liveAttacker.skipAttackThisTurn) {
+        logEntry(`    ${liveAttacker.name} (${pos}): skip-attack flag (Blizzard etc.) — does not attack.`, "combat-detail");
+        continue;
+      }
+      if (effectiveStat(liveAttacker, side, loc, "force") <= 0) {
         logEntry(`    ${liveAttacker.name} (${pos}): no Force — does not attack.`, "combat-detail");
         continue;
       }
@@ -2619,7 +2909,10 @@ function computeCombatOrder(loc) {
       if (isBack && !c.ranged) continue;
       if (c.sleepCounter > 0) continue;
       if (c.wokeInPhase === state.phase) continue;
-      if ((c.force || 0) <= 0) continue;
+      if (c.skipAttackThisTurn) continue;  // Blizzard / similar — no attack this turn
+      // Effective Force gates combat — conditional buffs (Provocation reverse-buff, Pit-Fighter
+      // alone, equipment grants) all count toward whether this creature can swing.
+      if (effectiveStat(c, sideName, loc, "force") <= 0) continue;
       // Ranged creatures need ammo to attack (any row — they only fire, never melee).
       if (c.ranged) {
         const cost = c.ammoCost || 1;
@@ -2856,7 +3149,42 @@ function fireFlipUpTrigger(side, loc, card) {
   } else if (effect === "dropTrapOpposingFront") {
     // g8 Rebel Saboteur: plant an Explosive Trap on the opposing side's front row at this location.
     dropExplosiveTrap(other(side), loc);
+  } else if (effect === "keeperFlame") {
+    keeperSummon(card, side, loc, "b_fire_golem", "b_pyroblast");
+  } else if (effect === "keeperFont") {
+    keeperSummon(card, side, loc, "b_water_golem", "b_blizzard");
   }
+}
+
+// Keeper flip-up shape: summon a token creature in the slot directly in front of the keeper
+// (same column, front row). If that slot is occupied, the entire flip-up fizzles — no creature
+// summoned AND no action token added. Otherwise: creature placed, action token added to discard.
+function keeperSummon(keeperCard, side, loc, golemKey, actionKey) {
+  const lc = L(side, loc);
+  let keeperPos = null;
+  for (const p of ["fl","fr","bl","br"]) {
+    if (lc.creatures[p] === keeperCard) { keeperPos = p; break; }
+  }
+  if (!keeperPos) return;
+  // "In front of this" = same column, front row. fl/bl → fl. fr/br → fr.
+  const column = (keeperPos === "fl" || keeperPos === "bl") ? "fl" : "fr";
+  const frontSlot = column;
+  if (lc.creatures[frontSlot]) {
+    logEntry(`  ${keeperCard.name}: slot ${frontSlot} occupied — fizzles.`, "combat-detail");
+    return;
+  }
+  // Summon the golem token.
+  const golem = createCard(golemKey, side);
+  golem.isToken = true;
+  golem.revealed = true;
+  lc.creatures[frontSlot] = golem;
+  logEntry(`  ${keeperCard.name}: summons ${golem.name} at ${LOC_NAMES[loc]} ${frontSlot}.`, "combat-detail");
+  // Add the action token to discard.
+  const actionToken = createCard(actionKey, side);
+  actionToken.isToken = true;
+  actionToken.revealed = true;
+  state.sides[side].discard.push(actionToken);
+  logEntry(`  ${keeperCard.name}: adds ${actionToken.name} token to discard.`, "combat-detail");
 }
 
 // Stealth: flip a face-up card face-down. Per the unified face-down rule, the card becomes
@@ -3269,9 +3597,8 @@ function dealDamageAtLoc(sourceSide, loc, dmg, actionName, actionLocLabel) {
     logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) targets at ${LOC_NAMES[loc]}: [${inLabel}]${exLabel}`, "combat-detail");
   }
   if (targets.length === 0) {
-    // Fall-through: no face-up creatures here, damage hits the opposing summoner.
-    state.sides[enemySide].durability -= dmg;
-    logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) → ${enemySide} summoner for ${dmg}. (${enemySide} Durability: ${state.sides[enemySide].durability}) [fall-through]`, "combat-detail");
+    // Fall-through: no face-up creatures here, damage hits the opposing summoner (if any).
+    damageSummoner(enemySide, dmg, `${actionName} (${sourceSide}${actionLocLabel}) [fall-through]`, loc);
     return;
   }
   const pick = targets[Math.floor(Math.random() * targets.length)];
@@ -3296,6 +3623,9 @@ function resolveAction(side, loc) {
   if (!lc.action) return;
   const action = lc.action;
   let exitZone = "discard";
+
+  // Track actions resolved this turn (per side). Read by Apprentice's Insight rule.
+  s.actionsThisTurn = (s.actionsThisTurn || 0) + 1;
 
   if (action.effect === "deal2") {
     // Deal 2 damage to a random enemy creature *here* (or fall through to summoner).
@@ -3401,6 +3731,70 @@ function resolveAction(side, loc) {
     lc2.ammo = (lc2.ammo || 0) + 1;
     action.forageCasts = (action.forageCasts || 0) + 1;
     logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — +1 ammo (stockpile now ${lc2.ammo}). Next cast of this card needs ≥${action.forageCasts} Tempo extra.`, "combat-detail");
+  } else if (action.effect === "study") {
+    // Study: draw 1 card. Counts as an action played this turn (already tracked via the counter
+    // bump at the top of resolveAction) — Apprentice's Insight rises by 1.
+    const drawn = drawOne(side);
+    if (drawn) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — drew ${side === "player" ? drawn.name : "a card"}.`, "combat-detail");
+    } else {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — deck and discard empty; nothing to draw.`, "combat-detail");
+    }
+  } else if (action.effect === "spark") {
+    // b4 Spark: deal 1 damage to a creature on the other side here. Single target via universal
+    // damage rule (random face-up creature, fall through to summoner if none).
+    dealDamageAtLoc(side, loc, 1, action.name, ` @${LOC_NAMES[loc]}`);
+  } else if (action.effect === "pyroblast") {
+    // b_pyroblast token: deal 1 damage to each face-up creature on the other side here. Face-down
+    // creatures are not "really in play yet" — skipped.
+    const enemySide = other(side);
+    const enemyLoc = L(enemySide, loc);
+    for (const pos of ["fl","fr","bl","br"]) {
+      const target = enemyLoc.creatures[pos];
+      if (!target || target.revealed === false) continue;
+      applyCombatDamage(enemySide, loc, pos, 1, action.name, null);
+    }
+  } else if (action.effect === "blizzard") {
+    // b_blizzard token: at each location in the encounter, the front-row creature on the other
+    // side does not attack this turn. Pillar 10 random pick if both front slots occupied. Sets a
+    // skipAttackThisTurn flag the combat order check honors.
+    const enemySide = other(side);
+    for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
+      const eLoc = L(enemySide, l2);
+      const frontCandidates = [];
+      for (const pos of ["fl","fr"]) {
+        const c = eLoc.creatures[pos];
+        if (c && c.revealed !== false) frontCandidates.push({ pos, c });
+      }
+      if (frontCandidates.length === 0) continue;
+      const pick = frontCandidates[Math.floor(Math.random() * frontCandidates.length)];
+      pick.c.skipAttackThisTurn = true;
+      logEntry(`  ${action.name}: ${pick.c.name} (${enemySide} ${LOC_NAMES[l2]} ${pick.pos}) won't attack this turn.`, "combat-detail");
+    }
+  } else if (action.effect === "mirrorImage") {
+    // b7 Mirror Image: add a token copy of a face-up creature at this location (any side) to
+    // your discard. Per-instance escalating Insight cost — bump the cast counter.
+    const candidates = [];
+    for (const s2 of ["player", "ai"]) {
+      const lc2 = L(s2, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc2.creatures[pos];
+        if (!c || c.revealed === false) continue;
+        if (c.isToken) continue;  // don't copy tokens — would explode the run-deck cleanup
+        candidates.push(c);
+      }
+    }
+    if (candidates.length === 0) {
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — no legal creature to copy. Fizzles.`, "combat-detail");
+    } else {
+      const pick = candidates[Math.floor(Math.random() * candidates.length)];
+      const copy = createCard(pick.defKey, side);
+      copy.isToken = true;
+      copy.revealed = true;
+      state.sides[side].discard.push(copy);
+      logEntry(`  ${action.name} (${side} @${LOC_NAMES[loc]}) — token copy of ${pick.name} to your discard.`, "combat-detail");
+      action.mirrorCasts = (action.mirrorCasts || 0) + 1;
+    }
   }
   lc.action = null;
   sendToPile(action, side, exitZone);
@@ -3458,9 +3852,13 @@ function endOfPhaseRevealAndResolve() {
           events.push({ kind: "flip", side: sideName, loc, where: "creature", pos, card: c, tempo: c.tempo || 0 });
         }
       }
+      // Non-creature reveal order: actions, structures, equipment do NOT print their own Tempo.
+      // Per design (CARD_DESIGN.md): their queue Tempo = the location's Tempo (caster's side).
+      // Killing your Tempo-printing creatures mid-phase slows your action reveals.
+      const locTempo = committedStatTotal(sideName, loc, "tempo");
       // Face-down structures: flip events.
       if (lc.structure && lc.structure.revealed === false) {
-        events.push({ kind: "flip", side: sideName, loc, where: "structure", card: lc.structure, tempo: lc.structure.tempo || 0 });
+        events.push({ kind: "flip", side: sideName, loc, where: "structure", card: lc.structure, tempo: locTempo });
       }
       // Actions in slots: action-resolve events (they flip up as part of resolving).
       // Locations whose printed text suppresses action flip-up skip this — actions sit in the slot
@@ -3473,7 +3871,7 @@ function endOfPhaseRevealAndResolve() {
         // shouldn't normally be in the slot at end-of-phase (resolveAction clears them).
         const isQuest = lc.action.subtype === "quest";
         if (!isQuest || lc.action.revealed === false) {
-          events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: lc.action.tempo || 0 });
+          events.push({ kind: "action", side: sideName, loc, card: lc.action, tempo: locTempo });
         }
       }
       // Pending equipment: flip events. Attaches to host on flip; fizzles to junkyard if host gone.
@@ -3482,7 +3880,7 @@ function endOfPhaseRevealAndResolve() {
         if (!arr) continue;
         for (const eq of arr) {
           if (eq.revealed === false) {
-            events.push({ kind: "equipment", side: sideName, loc, where: "equipment", pos, card: eq, tempo: eq.tempo || 0 });
+            events.push({ kind: "equipment", side: sideName, loc, where: "equipment", pos, card: eq, tempo: locTempo });
           }
         }
       }
@@ -3549,6 +3947,9 @@ function endOfPhaseRevealAndResolve() {
         ev.card.revealed = true;
         if (ev.side === "ai") logEntry(`  → Revealed: ${ev.card.name} (AI action at ${LOC_NAMES[ev.loc]}).`, "combat-detail");
         if (isQuest) logEntry(`  → ${ev.card.name} (Quest) sits in slot, watching for completion.`, "combat-detail");
+        // Spellbook trigger: any opposing-side Spellbook at this location loses 1 page and copies
+        // this action to the owner's discard. Multiple spellbooks each fire independently.
+        triggerSpellbooksOnActionFlip(ev.card, ev.side, ev.loc);
       }
       if (!isQuest) resolveAction(ev.side, ev.loc);
       _initResolved.add(`action-${ev.card.instId}`);
@@ -3585,14 +3986,49 @@ function other(side) { return side === "player" ? "ai" : "player"; }
 // Apply combat damage to a creature at a specific (side, loc, pos). Handles death-resolution and
 // fires onCreatureTookDamage. Used by resolveAttack's main hit + extra-target attack patterns
 // (cleave hits adjacent same-row slots; pierce hits the back-row slot behind the front-row target).
+// Black Spite — summoner thorns. When a creature attack damages the summoner, the defending
+// side's Spite at the attack's location deals retaliation damage to the attacker. Per-location
+// (not global). Fires only if the summoner actually lost Durability (caller guarantees this).
+function fireSpiteThorns(defendingSide, loc, attacker, attackerLabel) {
+  if (!attacker) return;
+  const spite = committedStatTotal(defendingSide, loc, "spite");
+  if (spite <= 0) return;
+  // Find attacker's current position on the board (it's on the OTHER side from defending).
+  const attackerSide = other(defendingSide);
+  const aLoc = L(attackerSide, loc);
+  let atkPos = null;
+  for (const p of ["fl","fr","bl","br"]) {
+    if (aLoc.creatures[p] === attacker) { atkPos = p; break; }
+  }
+  if (!atkPos) return;  // attacker moved/died — can't retaliate
+  logEntry(`    Spite (${defendingSide} ${LOC_NAMES[loc]}, ${spite}) → ${attackerLabel} for ${spite}.`, "combat-detail");
+  applyCombatDamage(attackerSide, loc, atkPos, spite, `Spite (${defendingSide} ${LOC_NAMES[loc]})`, null);
+}
+
+// Apply damage to a summoner. In non-boss encounters there's no real AI summoner — the AI side
+// is just a holder for neutral / hostile content. Damage that falls through to that side has
+// nowhere to go and just dissipates. The player summoner is always real (their Durability is the
+// run-Durability across encounters). Returns true if the damage actually landed.
+function damageSummoner(side, dmg, label, loc) {
+  if (dmg <= 0) return false;
+  if (side === "ai" && state.encounterKind !== "boss") {
+    logEntry(`    ${label} → ${side} side has no summoner here — damage fizzles.`, "combat-detail");
+    return false;
+  }
+  state.sides[side].durability -= dmg;
+  const locLabel = loc != null ? ` ${LOC_NAMES[loc]}` : "";
+  logEntry(`    ${label} →${locLabel} ${side} summoner for ${dmg}. (${side} Durability: ${state.sides[side].durability})`, "combat-detail");
+  return true;
+}
+
 function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel, attacker) {
   if (dmg <= 0) return;
   const lc = L(targetSide, loc);
   const target = lc.creatures[pos];
   if (!target) {
-    // No creature at this slot — damage falls through to the summoner.
-    state.sides[targetSide].durability -= dmg;
-    logEntry(`    ${attackerLabel} → ${targetSide} summoner for ${dmg} (empty ${pos}). (${targetSide} Durability: ${state.sides[targetSide].durability})`, "combat-detail");
+    // No creature at this slot — damage falls through to the summoner (if any).
+    const landed = damageSummoner(targetSide, dmg, `${attackerLabel} (empty ${pos})`, loc);
+    if (landed) fireSpiteThorns(targetSide, loc, attacker, attackerLabel);
     return;
   }
   // Record this melee attacker on the target for the Explosive Trap deathwish (only non-ranged
@@ -3634,8 +4070,8 @@ function resolveAttack(side, loc, pos, attacker) {
   if (targetPos) {
     applyCombatDamage(enemySide, loc, targetPos, dmg, label, attacker);
   } else {
-    state.sides[enemySide].durability -= dmg;
-    logEntry(`    ${label} → ${enemySide} summoner for ${dmg}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
+    const landed = damageSummoner(enemySide, dmg, label, loc);
+    if (landed) fireSpiteThorns(enemySide, loc, attacker, label);
   }
 
   // Attack-pattern extras (cleave, pierce). attackPatterns is an array of { type, value? }.
@@ -3658,16 +4094,16 @@ function resolveAttack(side, loc, pos, attacker) {
       const pierceVal = p.value || 1;
       if (!targetPos) {
         // Front + back both empty → main damage already hit summoner. Pierce also hits summoner.
-        state.sides[enemySide].durability -= pierceVal;
-        logEntry(`    ${label} (pierce ${pierceVal}) → ${enemySide} summoner for ${pierceVal}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
+        const landed = damageSummoner(enemySide, pierceVal, `${label} (pierce ${pierceVal})`, loc);
+        if (landed) fireSpiteThorns(enemySide, loc, attacker, `${label} (pierce ${pierceVal})`);
       } else if (targetPos === "fl" || targetPos === "fr") {
         const backPos = targetPos === "fl" ? "bl" : "br";
         if (enemyLoc.creatures[backPos]) {
           applyCombatDamage(enemySide, loc, backPos, pierceVal, `${label} (pierce ${pierceVal})`, attacker);
         } else {
           // No back-row creature → pierce falls through to summoner.
-          state.sides[enemySide].durability -= pierceVal;
-          logEntry(`    ${label} (pierce ${pierceVal}) → ${enemySide} summoner for ${pierceVal}. (${enemySide} Durability: ${state.sides[enemySide].durability})`, "combat-detail");
+          const landed = damageSummoner(enemySide, pierceVal, `${label} (pierce ${pierceVal})`, loc);
+          if (landed) fireSpiteThorns(enemySide, loc, attacker, `${label} (pierce ${pierceVal})`);
         }
       }
       // If main target was a back-row creature (front was empty), pierce doesn't go further.
@@ -3679,12 +4115,24 @@ function resolveAttack(side, loc, pos, attacker) {
 // pending cleanup-phase commits have been committed and flipped. Discards hands, reverts
 // end-of-turn buffs, fires onCleanupEnd hooks, runs neutral end-of-cleanup, advances priority/turn.
 function runCleanupEnd() {
+  // White Resolve: each side keeps the leftmost N cards in hand (where N = side's global Resolve)
+  // through cleanup; the rest discards. Player can reorder their hand throughout the turn — the
+  // leftmost N are a standing decision, "locked" by the time cleanup fires.
   for (const sideName of ["player", "ai"]) {
     const s = state.sides[sideName];
+    const resolve = globalStatTotal(sideName, "resolve");
     if (s.hand.length > 0) {
-      logEntry(`${sideName === "player" ? "You" : "AI"} discards hand (${s.hand.length} card${s.hand.length === 1 ? "" : "s"}).`, "cleanup");
-      s.discard.push(...s.hand);
-      s.hand = [];
+      const keep = s.hand.slice(0, resolve);
+      const discard = s.hand.slice(resolve);
+      if (discard.length > 0) {
+        s.discard.push(...discard);
+      }
+      if (sideName === "player") {
+        logEntry(`Resolve ${resolve} → ${sideName === "player" ? "you" : "AI"} keep ${keep.length}, discard ${discard.length}.`, "cleanup");
+      } else {
+        logEntry(`AI keeps ${keep.length}, discards ${discard.length} (Resolve ${resolve}).`, "cleanup");
+      }
+      s.hand = keep;
     }
   }
   revertEndOfTurnBuffs();
@@ -3869,9 +4317,66 @@ function resolveCombatPhase() {
     state.phase = "cleanup";
     logEntry(`— Cleanup —`, "phase");
     firePhaseHook("onCleanupStart");
+    runTomeGolemCleanup();
     render();
     maybeAutoAdvance();
   }, 700);
+}
+
+// Spellbook (b9): when an opposing action flips at the equipped creature's location, every
+// Spellbook on the OTHER side at this location loses 1 page and copies the action into its
+// owner's discard. At 0 pages, the Spellbook is destroyed (junkyard).
+function triggerSpellbooksOnActionFlip(actionCard, actionSide, loc) {
+  const bookSide = other(actionSide);
+  const lc = L(bookSide, loc);
+  // Walk every creature's equipment looking for spellbooks.
+  for (const pos of ["fl","fr","bl","br"]) {
+    const host = lc.creatures[pos];
+    if (!host || !host.equipment || host.equipment.length === 0) continue;
+    for (let i = host.equipment.length - 1; i >= 0; i--) {
+      const eq = host.equipment[i];
+      if (eq.defKey !== "b9" || eq.revealed === false) continue;
+      // Lose a page.
+      eq.spellbookPages = (eq.spellbookPages || 0) - 1;
+      // Copy the action to the spellbook side's discard.
+      const copy = createCard(actionCard.defKey, bookSide);
+      copy.isToken = true;
+      copy.revealed = true;
+      state.sides[bookSide].discard.push(copy);
+      logEntry(`  Spellbook (${bookSide} ${LOC_NAMES[loc]} ${pos}): copies ${actionCard.name} to discard. Pages left: ${eq.spellbookPages}.`, "combat-detail");
+      if (eq.spellbookPages <= 0) {
+        // Destroy the spellbook — junkyard.
+        host.equipment.splice(i, 1);
+        // Equipment leaves play: pile via sendToPile (handles reroute marks too).
+        sendToPile(eq, bookSide, "junkyard");
+        logEntry(`    Spellbook destroyed — to ${bookSide} junkyard.`, "combat-detail");
+      }
+    }
+  }
+}
+
+// Tome Golem: at start of cleanup, the leftmost action in your hand goes on top of your draw
+// pile. Fires once per Tome Golem in play, per side. Silent fizzle if no actions in hand.
+function runTomeGolemCleanup() {
+  for (const sideName of ["player", "ai"]) {
+    const s = state.sides[sideName];
+    // Count Tome Golems on this side in play.
+    let count = 0;
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(sideName, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (c && c.defKey === "b8" && c.revealed !== false) count++;
+      }
+    }
+    for (let i = 0; i < count; i++) {
+      const idx = s.hand.findIndex(c => c.type === "action");
+      if (idx === -1) break;
+      const action = s.hand.splice(idx, 1)[0];
+      s.deck.unshift(action);
+      logEntry(`  Tome Golem (${sideName}): ${action.name} → top of deck.`, "combat-detail");
+    }
+  }
 }
 
 // End cleanup: commit any pending cleanup commits, flip them, fire onCleanupEnd, run discard
@@ -4026,9 +4531,11 @@ function buildInitiativeQueue() {
             items.push({ id: `flip-${c.instId}`, kind: "flip", side: sideName, loc, pos, tempo: c.tempo || 0, card: c, faceUp: sideName === "player" });
           }
         }
+        // Non-creature reveal order uses the location's Tempo (caster's side) — see CARD_DESIGN.md.
+        const locTempo = committedStatTotal(sideName, loc, "tempo");
         // Face-down committed structure.
         if (lc.structure && lc.structure.revealed === false) {
-          items.push({ id: `flip-${lc.structure.instId}`, kind: "flip", side: sideName, loc, pos: "structure", tempo: lc.structure.tempo || 0, card: lc.structure, faceUp: sideName === "player" });
+          items.push({ id: `flip-${lc.structure.instId}`, kind: "flip", side: sideName, loc, pos: "structure", tempo: locTempo, card: lc.structure, faceUp: sideName === "player" });
         }
         // Action in slot (action queue — non-quest, or face-down quest).
         const locTextKey = LOC_TEXT_KEYS[loc];
@@ -4036,7 +4543,7 @@ function buildInitiativeQueue() {
         if (lc.action && !suppressed) {
           const isQuest = lc.action.subtype === "quest";
           if (!isQuest || lc.action.revealed === false) {
-            items.push({ id: `action-${lc.action.instId}`, kind: "action", side: sideName, loc, pos: "action", tempo: lc.action.tempo || 0, card: lc.action, faceUp: sideName === "player" || lc.action.revealed !== false });
+            items.push({ id: `action-${lc.action.instId}`, kind: "action", side: sideName, loc, pos: "action", tempo: locTempo, card: lc.action, faceUp: sideName === "player" || lc.action.revealed !== false });
           }
         }
         // Pending equipment.
@@ -4044,7 +4551,7 @@ function buildInitiativeQueue() {
           const arr = lc.pending.equipment[pos];
           if (!arr) continue;
           for (const eq of arr) {
-            items.push({ id: `equip-${eq.instId}`, kind: "equipment", side: sideName, loc, pos, tempo: eq.tempo || 0, card: eq, faceUp: sideName === "player" || eq.revealed !== false });
+            items.push({ id: `equip-${eq.instId}`, kind: "equipment", side: sideName, loc, pos, tempo: locTempo, card: eq, faceUp: sideName === "player" || eq.revealed !== false });
           }
         }
         // Pending creature commits (visible to player; AI's pending isn't visible — but per
@@ -4152,7 +4659,8 @@ function renderMenu() {
   row.className = "start-menu-row";
   const decks = [
     { key: "red", label: "Red", tag: "Force / melee combat", color: "var(--ai)" },
-    { key: "green", label: "Green", tag: "Tempo / movement / ranged / traps", color: "var(--ok)" }
+    { key: "green", label: "Green", tag: "Tempo / movement / ranged / traps", color: "var(--ok)" },
+    { key: "blue", label: "Blue", tag: "Insight engine / draw / Study (work-in-progress)", color: "#60c0e0" }
   ];
   for (const d of decks) {
     const btn = document.createElement("button");
@@ -4296,28 +4804,50 @@ function buildOverworldSvg() {
   }
 
   const legalSet = new Set(legalMovesFromPawn());
+  // Fog rule: a node's kind is revealed if it's the pawn's current node, has been completed, or
+  // is directly adjacent to the pawn (i.e., it would be in an encounter if the pawn engages).
+  const adjacentToPawn = new Set();
+  for (const [a, b] of state.world.edges) {
+    if (a === state.world.pawnAt) adjacentToPawn.add(b);
+    if (b === state.world.pawnAt) adjacentToPawn.add(a);
+  }
+  function isRevealed(n) {
+    if (n.id === state.world.pawnAt) return true;
+    if (n.status === "completed") return true;
+    if (adjacentToPawn.has(n.id)) return true;
+    return false;
+  }
   for (const n of nodes) {
     const cx = px(n), cy = py(n);
     const g = document.createElementNS(ns, "g");
     g.setAttribute("class", "ow-node-group");
 
+    const revealed = isRevealed(n);
     const c = document.createElementNS(ns, "circle");
     c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", 28);
-    let cls = "ow-node ow-node-" + n.kind + " ow-node-status-" + n.status;
+    let cls = "ow-node ow-node-" + (revealed ? n.kind : "fog") + " ow-node-status-" + n.status;
     if (legalSet.has(n.id)) cls += " ow-node-legal";
     if (state.world.pawnAt === n.id) cls += " ow-node-pawn";
     c.setAttribute("class", cls);
     g.appendChild(c);
 
-    // Label
+    // Kind icon: fully revealed (shows hostile vs neutral vs end) only when the node has been
+    // approached. Fogged nodes show a `?` — the player knows the place but not whether the AI
+    // has shown up there.
     const t = document.createElementNS(ns, "text");
     t.setAttribute("x", cx); t.setAttribute("y", cy + 4);
     t.setAttribute("text-anchor", "middle");
     t.setAttribute("class", "ow-node-label");
-    t.textContent = (n.kind === "boss" ? "★" : n.kind === "neutral" ? "?" : n.kind === "hostile" ? "⚔" : "•");
+    if (revealed) {
+      t.textContent = (n.kind === "end" ? "★" : n.kind === "neutral" ? "?" : n.kind === "hostile" ? "⚔" : "•");
+    } else {
+      t.textContent = "?";  // fogged — could be neutral or hostile
+    }
     g.appendChild(t);
 
-    // Label below
+    // Node label is always visible — the player knows the *place*, just not whether the AI is
+    // there. (Per design: peace-time text is the location's "name"; the war-time presence is what
+    // fog hides.)
     const tl = document.createElementNS(ns, "text");
     tl.setAttribute("x", cx); tl.setAttribute("y", cy + 50);
     tl.setAttribute("text-anchor", "middle");
@@ -4344,7 +4874,7 @@ function buildOverworldHelp() {
     <div><strong>Overworld.</strong> Click your pawn's node to engage with adjacent unvisited nodes. After clearing, click a cleared adjacent to walk there.</div>
     <div>You're at: <strong>${node ? node.label : "?"}</strong></div>
     <div>Run Durability: <strong>${state.runDurability}</strong> &nbsp;·&nbsp; Run deck: <strong>${state.runDeck.length}</strong> cards</div>
-    <div class="muted">⚔ hostile · ? neutral encounter · ★ boss · • empty/start</div>
+    <div class="muted">⚔ hostile · ? neutral · ★ boss · • start · fogged: name shown, presence hidden</div>
   `;
   return help;
 }
@@ -4806,11 +5336,48 @@ function renderHand() {
   hand.innerHTML = "";
   // Any interactive phase is a potential commit window for some card type.
   const inAnyCommitWindow = ["upkeep","draw","main","combat-reveal","cleanup"].includes(state.phase);
-  for (const card of state.sides.player.hand) {
+  // White Resolve: leftmost N cards survive cleanup. Player can drag to reorder; the leftmost
+  // N get a visual marker so they know which will be kept.
+  const resolveKeep = state.sides ? globalStatTotal("player", "resolve") : 0;
+  const handArr = state.sides.player.hand;
+  for (let i = 0; i < handArr.length; i++) {
+    const card = handArr[i];
     const el = makeCardEl(card, false);
     const cardWindow = isCommitWindowFor(card.type);
     const playable = cardWindow && cardHasAnyLegalPlay("player", card);
     if (inAnyCommitWindow && !playable) el.classList.add("unplayable");
+    if (i < resolveKeep) el.classList.add("will-keep");
+    // Drag-to-reorder
+    el.draggable = true;
+    el.dataset.handIdx = String(i);
+    el.addEventListener("dragstart", (ev) => {
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", String(i));
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+    });
+    el.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "move";
+      el.classList.add("drag-over");
+    });
+    el.addEventListener("dragleave", () => {
+      el.classList.remove("drag-over");
+    });
+    el.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      el.classList.remove("drag-over");
+      const fromIdx = parseInt(ev.dataTransfer.getData("text/plain"), 10);
+      const toIdx = parseInt(el.dataset.handIdx, 10);
+      if (Number.isInteger(fromIdx) && Number.isInteger(toIdx) && fromIdx !== toIdx) {
+        const moved = handArr.splice(fromIdx, 1)[0];
+        handArr.splice(toIdx, 0, moved);
+        state.selectedCardId = null;
+        render();
+      }
+    });
     el.addEventListener("click", () => {
       if (!inAnyCommitWindow) return;
       if (!cardWindow) {
