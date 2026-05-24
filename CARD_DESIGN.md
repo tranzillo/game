@@ -545,6 +545,15 @@ The starter Spark is **strictly weaker than the reward-tier Spark** (which deals
 
 The trio is **Apprentice + Study + Spark**. Without any one of them, the deck's whole arc breaks. The remaining 3 (Adept, Sage, Archmage) are *protectors and Force economy* — they exist to keep the Apprentice alive long enough to cast Spark.
 
+### Past-targeting cards (Magus of Echoes)
+
+The prototype Blue pool was extended in 2026-05-22 with **Magus of Echoes (b10)** — a creature that prints a Past-targeting flip-up trigger. Echoes makes The Past (see DESIGN.md *The Past, the Future, and the Present*) a real, played-with resource in the slice rather than a deferred mechanic.
+
+- **Magus of Echoes:** 1F / 0T / 1D creature; cost ≥2 Insight. Flip-up: add a token copy of a *random* action from the Past to your discard. Per Pillar 10, the entry is picked at random from legal Past entries; no resolve-time targeting.
+- **What it teaches the player.** The Past is a shared resource — Echoes can copy your own Study or an AI's Spark. Building a Past, and noticing what the opponent put in it, becomes a play pattern. Echoes is the *cheap* Past-form (token copy to discard); a future premium printing will use the **Recall** keyword to trigger Past actions directly without paying their costs.
+- **Cost shape:** front-loaded (typical Blue). The Echoes mage is fragile (1 Durability) — kill it before it flips up and the copy fizzles.
+- **Why this is the right entry point for Past mechanics.** Token-copy-to-discard means the copy still has to be played normally — the opponent has a turn to react, and the copied action still has its own cost-gating. That bounds the power level appropriately for a starter-adjacent printing.
+
 ### Open questions on Blue
 
 - **Is the Apprentice at 1 Durability too fragile?** Yes, by design. A Black Hexer kills her in one hit. Red Brawler kills her in one hit. The deck's whole strategic shape is *protecting her*. Defensive creatures (Adept Mage in front) are the answer. If 1 Durability feels too punishing, can be tuned to 2 — but then the protect-her tension flattens.
@@ -573,7 +582,7 @@ All three express the same Blue verb — **copy, never steal** — with distinct
 
 ### Card-by-card rationale
 
-**BR1 Spellbook** — Blue's *ongoing study* equipment. ≥2 Insight gates it to Insight-rich locations (Blue's mage-heavy boards). Once equipped to a creature on your side, every opposing action that resolves at the wielder's location burns 1 of 3 pages and adds a copy to your discard pile (cycles back into your deck via reshuffle).
+**BR1 Spellbook** — Blue's *ongoing study* equipment. ≥2 Insight gates it to Insight-rich locations (Blue's mage-heavy boards). Once equipped to a creature on your side, every opposing action that resolves at the wielder's location burns 1 of 3 pages and adds a token copy to your discard pile (cycles back into your deck via reshuffle).
 
 The wielder is the load-bearing defense — kill the wielder, equipment goes to junkyard. Spellbook is an *infrastructure investment that demands protection*. Cross-color synergies light up: White Bodyswap to put a tank in front of the wielder, Green stealth to skip combat, Red walls defending the wielder's column. Blue alone struggles to defend Spellbook; Blue + a defensive splash is the natural shape.
 

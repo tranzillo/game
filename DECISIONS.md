@@ -14,6 +14,106 @@ Format:
 
 ---
 
+## 2026-05-23 — Engine emits outcomes, UI plays them — first attempt entangled the boundary
+
+**Decision (architectural, not game-rules):** The visual layer should treat the engine's outcome stream as the *authoritative source of what happened*. The UI's job is to play those events back over time, with pacing and per-event animations. The engine should not call into the UI's animation state, and the UI should not need to coordinate with engine-internal state to know when to play what.
+
+**Why:** First attempt at coordinated animations (scene queue with deathwish sequencing and chip-through-present transit) entangled four parallel mutable state machines: `state.outcomes` (engine), `_dyingInstIds` (scene), `dataset.flipHeld` on DOM elements (FLIP), `_lastPlayedOutcomeId` (render). Each was mutated from multiple modules. Diagnosing a freeze became impossible because there was no single source of truth for "what is happening right now." The instinct to add a watchdog timer to break the freeze was a clear signal the architecture had grown too tangled.
+
+**What worked and stays:**
+- Outcome events as a write-only stream emitted by the engine — clean.
+- Persistent card DOM identity (one `<div>` per card instance, reparented between zones) — clean.
+- FLIP animation as a generic between-render slide — clean.
+- Real card elements rendered in piles so the cycle from board to graveyard, hand to discard, etc. animates as actual physical movement — load-bearing for player comprehension and worth preserving.
+
+**What didn't work and is paused:**
+- The scene queue calling back into render to "release" deferred FLIP holds via DOM-marker attributes.
+- Engine modules importing UI scene-control to gate their beat loops.
+- Out-of-band sets ("currently dying") that have to be kept in sync with what the engine and DOM separately believe.
+
+**Path forward (sketch, not locked):** the engine produces a complete *scene description* per beat — a list of typed steps with all data they need including captured rect positions — and the UI consumes it as a pure stream, with no callbacks crossing the boundary in the other direction. State stays single-source-of-truth on the engine side; the UI does not maintain its own parallel state about what's happening.
+
+**Alternatives considered:** keeping the existing scene queue and adding watchdog timeouts to recover from hangs (rejected — covers symptoms, doesn't fix tangling); reverting to fully decorative animations with no engine pacing (rejected — loses the death-then-slide visual readability that the player needs to understand combat).
+
+**Supersedes:** nothing in DECISIONS.md (this is a new architectural concern, not a rules change).
+
+---
+
+## 2026-05-22 — The Past: shared encounter-scoped log of action resolutions
+
+**Decision:** The game has a **Past** — a shared, encounter-scoped, append-only log of action resolutions. Both sides write to it on every action that resolves (including quest reward firings). Both sides can read it. It clears at encounter start. Cards (currently Blue, planned Black) target Past entries positionally or randomly per Pillar 10.
+
+Each entry is a minimal snapshot: `{ defKey, side, loc, name, tempo, turn }`. `defKey` is enough to re-create the action as a token if a Past-copy effect fires.
+
+**Why:** Blue's identity is "history-aware engine that pays off resolved actions." The Past is the substrate that makes that real. Without a shared log, Blue's copy/echo/recall mechanics either have to scry into private state (breaks fog) or recreate a per-side history (duplicates work and limits cross-side interactions). One shared log handles both Blue's read access and a planned Black "erase the past" mechanic uniformly.
+
+The Past being shared means Blue can copy *opposing* actions, not just its own. That's a major design space — Blue learns from the enemy.
+
+**Alternatives considered:** per-side action log (rejected: Blue couldn't copy AI actions; less interesting). Persisting Past across encounters (rejected: too much memory for the cards to navigate; encounter-scoped is the natural unit).
+
+---
+
+## 2026-05-22 — Recall (Blue keyword) reserved; token-copy is the cheaper printed form
+
+**Decision:** **Recall** is a keyword reserved for premium Blue cards — "trigger an action from the Past, ignoring its requirements." Recall directly resolves a past action without paying its Insight cost or meeting its stat-presence requirements. It's a powerful effect and prints on high-rarity Blue cards only.
+
+The cheaper Blue form for prototype play is **token-copy-to-discard**: add a token copy of a Past action to your discard pile. The token has to be played normally next turn (still pays cost, still goes through commit). Magus of Echoes (b10) is the first card to use this form.
+
+**Why:** "Recall" as a verb is too strong for starter Blue cards — it lets you replay an opponent's high-cost spell for free. Token-copy makes the copy cost-gated when it eventually resolves. Reserving the keyword for premium printings keeps the design space.
+
+**Alternatives considered:** making Recall the only Past-targeting verb (rejected: too strong for starter cards). Calling the cheaper version "Echo" instead of "token copy" (deferred — terminology can be set later when more Blue cards are sketched).
+
+---
+
+## 2026-05-22 — Black erases the Past (planned mechanic, not built)
+
+**Decision:** Black gets verbs that selectively delete entries from the Past. The Past is currently write-only — both sides append, never remove. Black's effects will remove specific Past entries (e.g., "remove the most recent opposing action from the Past," "remove an action of a chosen type") to deny Blue's copy/recall plays.
+
+**Why:** Black's identity is denial and decay. The Past is a resource Blue spent effort to build (every action they resolve adds to it); a denial color should be able to attack that resource. This also creates a natural Black-vs-Blue color rivalry without needing color-locked counters.
+
+The mechanic mirrors how Black "stealswap" disrupts Blue's research by taking a creature mid-encounter — both are "Black removes what Blue was setting up."
+
+**Alternatives considered:** Black writing fake entries to the Past (rejected: too clever, hard to telegraph). Black erasing per-side history (n/a — the Past is shared by design). Not implemented; deferred.
+
+---
+
+## 2026-05-22 — Per-color stat effects locked; each stat is triple-duty
+
+**Decision:** Each color's printed stat triples as:
+1. Combat math (Force / Tempo / Spite)
+2. Global economy (Insight → draw count, Resolve → hand retention)
+3. Local cost-paying (every card prints a stat-presence requirement at its location)
+
+The specific per-color effects:
+
+- **Red Force** at the location scales damage payloads of effects that print "deal damage equal to your Force here." Already used by Goblin Bombardment and as Recruit's superiority threshold.
+- **Green Tempo** at the location sets the **reveal-order Tempo for non-creature plays** (actions, structures, equipment). The caster's Tempo total at the location replaces the card's printed Tempo at queue-build time. Cards print 0 Tempo by default; the location's Green presence is what makes them resolve early. Killing your Tempo-printing creatures mid-phase slows your action reveals.
+- **Blue Insight** (global, summed across all your locations) adds to per-turn draw count. `BASE_DRAW = 5`; draw fills to `5 + Insight`.
+- **White Resolve** (global) sets how many leftmost hand cards survive cleanup. Player can reorder hand throughout the turn; the leftmost N are the kept set.
+- **Black Spite** (per-location) — summoner thorns. When a creature attack fall-throughs to damage a summoner (empty front-row or no defender), the defending side's Spite at that location deals retaliation damage back to the attacker. Per-location, not global. Only fires when summoner Durability actually drops. Action damage to summoners does NOT trigger Spite — only creature combat fall-through.
+
+**Why:** Triple-duty stats are the load-bearing design choice that lets a stat printed on one creature have meaning across combat, economy, and gating. It also lets the same stat read be the relevant cost-gate at any location — no separate resources to manage. Each color's specific effect is what makes commitment to that stat strategically interesting: Force is direct damage scaling, Tempo gates your own resolve order, Insight literally fills your hand, Resolve preserves it, Spite retaliates.
+
+The asymmetry between local (Force, Tempo, Spite) and global (Insight, Resolve) is deliberate. Local stats reward concentrated investment at a location; global stats reward distributed presence across the encounter.
+
+**Alternatives considered:** Black Spite as global (rejected: per-location creates positioning decisions). Insight as local (rejected: drawing is a turn-level resource, not location-level). Tempo affecting creature reveal too (rejected: creatures already print their own Tempo; non-creatures need a way to inherit it from somewhere).
+
+---
+
+## 2026-05-22 — Suppress framework for location text replaces ad-hoc force-flip
+
+**Decision:** Location texts that need to gate when an action flips up declare a **`shouldSuppressAction(card, loc)` predicate**. The predicate is checked at every end-of-phase reveal pass. When it returns true, the action's chip stays in the future bar (suppressed) and does not flip up that pass. When it returns false on any subsequent pass, the action flips up and resolves normally.
+
+Champion's Rest (locP1) uses this: `shouldSuppressAction` returns `creatureCount !== 1`, so the action is suppressed unless exactly one creature is at the location. As soon as the player engineers "exactly one creature here" at any end-of-phase, the suppressed action flips that pass.
+
+**Why:** Previous Champion's Rest implementation used `suppressActionFlipUp: true` plus an `onCleanupEnd` force-flip hook that bypassed the normal reveal queue. Two hooks for one concept, and the force-flip path skipped chip resolution (breaking the Past). The suppress predicate unifies both concerns into one re-checked condition, with the flip flowing through the normal reveal queue (and through the present chip, into the Past).
+
+The framework generalizes: any future location text or card effect that wants "hold this action in the future until a condition is met" declares a `shouldSuppressAction` predicate. No special timing — the phase end where the condition is met IS the timing.
+
+**Supersedes:** `suppressActionFlipUp` + `onCleanupEnd` force-flip pattern. Removed.
+
+---
+
 ## 2026-05-09 — Marks as a foundational mechanic; Convert (White) defined; war/peace framing for locations vs. neutrals
 
 **Marks.** A mark is a physical alteration to a specific card instance — torn, stamped, "cheated." Marks are per-instance and permanent (persist through pile cycling, encounters, side changes). Marks are visible in all zones including face-down piles — leaking information through fog of war is intentional. Marks change behavior, not stats. Each color has one kind of mark; no within-color variants.

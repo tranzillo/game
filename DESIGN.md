@@ -1294,6 +1294,19 @@ The vector pattern generalizes across all five conversion verbs. Each color's ve
 
 **Color identity is preserved at the verb level; variety is created at the vector level.** Blue does not steal. Red does not corrupt. Black does not heal. The verb is the principle; the vectors are the printed expressions.
 
+#### The Past as Blue's signature resource
+
+Blue's copy mechanics depend on **the Past** — a shared, encounter-scoped log of every action that resolved (see *The Past, the Future, and the Present* below). Both sides write to the Past; both sides can read it; Blue's copy verbs target Past entries.
+
+The shared nature is load-bearing: Blue can copy an *opposing* spell as easily as its own — Blue learns from the enemy. The Past is what makes Blue's "history-aware engine" identity concrete in the rules rather than purely flavorful.
+
+Two printed Past-targeting forms:
+
+- **Copy** (cheap): add a token copy of a Past action to your discard. The token still has to be played normally — costs are paid, commit window applies. Magus of Echoes is the canonical creature; the equipment / structure / persistent-action vectors above are the corresponding copy mechanisms differentiated by trigger, destination, and timing.
+- **Recall** (premium, reserved keyword): trigger a Past action directly, ignoring its requirements. The free-resolution form; reserved for high-rarity Blue printings to keep the design space.
+
+The Past is also the surface Black attacks: erase-the-past verbs remove specific entries from the Past, denying Blue's copy/recall plays. That natural rivalry is part of Blue's positioning in the color wheel.
+
 ### White — Resolve — the color of belief and channeled intervention
 
 - **Identity:** belief in things outside one's control; reliance on intervention from beyond. The slow inevitability color.
@@ -1439,6 +1452,16 @@ The Pillar 10 question: where does the traitor land in the enemy's slots? Random
 #### Black's mixed synergy with Red
 
 Red's friendly-fire / cleave attack patterns kill Red's own creatures — and Black's **death-feeder** cards (graveyard recursion, sacrifice payoffs, "creatures dying" triggers) work brilliantly with that. Black's **thorns** retaliation, by contrast, hurts Red attackers. So Red+Black produces *card-level* synergy *and* anti-synergy at the same time, depending on which Black cards are present. (See Red's *Anti-synergies and conditional Black-synergy*.)
+
+#### Black erases the Past (planned, not built)
+
+Black gets verbs that selectively delete entries from **the Past** (see *The Past, the Future, and the Present* below). The Past is the shared encounter-scoped action log that Blue's copy and recall mechanics target. By removing specific entries, Black denies Blue the ability to copy or recall those actions.
+
+The flavor: Black destroys the record. The mage who would have copied your spell finds nothing in the historical record to reach for; the recall fails because the resolution never happened — or no longer did. Black's denial mirror to Blue's accumulation.
+
+The mechanic shape (sketch, not locked): an action that removes the most recent opposing entry from the Past, or removes entries by type filter, or by position. Per Pillar 10, the target is chosen by a positional rule (newest, oldest, random) — not by player pick at resolve time.
+
+Anti-Past mechanics also generalize the *stealswap-is-mid-encounter-disruption* pattern: both are Black acting on a resource Blue spent effort to build (a marked Convert candidate / a logged Past entry). Black removes what Blue was setting up.
 
 ### Cross-color affinity (emergent, not hard-coded)
 
@@ -1922,6 +1945,42 @@ Counterspell is a Blue Spell-subtype action — *not* a persistent action. It re
 - **Hard counter to persistent-action strategies.** Black's Curses and White's Prayers must play around Blue presence; if Blue has counterspell available, persistent actions are vulnerable.
 - **Curse vs. counterspell timing:** if both are played the same turn at the same location, Tempo order resolves it. If counterspell reveals first, the curse dies before migration. If the curse reveals first and migrates, counterspell (now in Blue's own slot) still resolves and clears the migrated curse.
 - **Cost:** likely high Insight (specifics Pass 2). Itself prints minimal stats. As a Blue spell, subject to Blue's front-loaded cost-shape — needs an Insight mage at the location to cast.
+
+## The Past, the Future, and the Present
+
+The encounter has a **shared temporal substrate** — a single timeline that represents every card resolution flowing through the present moment. Cards live in three states with respect to this timeline:
+
+- **Future**: committed but not yet flipped up. A card committed face-down has a *chip* in the future bar. The chip's Tempo determines its position relative to other future chips.
+- **Present**: the moment of resolution. When the end-of-phase reveal pass reaches a chip, the chip passes briefly through the *present node* — the card flips face-up, its flip-up trigger fires, its action resolves. This is the moment the player sees "this card is doing its thing right now."
+- **Past**: resolved. After passing through the present, the chip falls into the past column. Resolved action chips are also recorded in the **Past log** (the data structure cards target).
+
+The visual representation is an L-shape: the future bar runs horizontally to the right of the present node (high-Tempo chips closest to the present); the past column hangs vertically below the present.
+
+### The Past as a targetable resource
+
+The **Past** is a shared, encounter-scoped, append-only log of action resolutions. Both sides write on every action that resolves (including quest reward firings). Both sides can read it. The Past clears at encounter start.
+
+Each Past entry is a minimal snapshot — enough to identify the action that resolved (its def key, the side that played it, the location, the turn). It is not the card itself; it is the *record that the action happened*.
+
+The Past is a **first-class targetable resource**, not just a visualization. Cards target Past entries — randomly, positionally (oldest/newest/N back), or by some filter. Per Pillar 10 (no on-resolve targeting), Past-targeting cards either pick randomly from legal entries or pick by a positional rule, not by player choice at resolve time.
+
+The Past makes Blue's identity concrete: a color that pays off the history of the encounter. The Past is also the substrate for a planned Black mechanic — selectively *erasing* past entries to deny Blue's recall/copy plays.
+
+### Cards that target the Past — design space
+
+- **Copy** an action from the Past as a token to your discard (e.g., Magus of Echoes). The token has to be played normally next turn — still pays cost, still goes through commit. This is the cheap form.
+- **Recall** an action from the Past — trigger it directly, ignoring requirements. The premium form, reserved for high-rarity Blue printings.
+- **Erase** an entry from the Past (planned Black mechanic). Removes the record, denying copy/recall on that action.
+
+The shared nature of the Past is load-bearing: Blue can copy *opposing* actions, not just its own. That's a major design space — Blue learns from the enemy.
+
+### Why the future bar matters
+
+The future bar is not just a UI affordance — it telegraphs Tempo. When both sides have committed, the future bar shows the resolution order (own-side chips face-up, opposing-side face-down with `?`). This lets the player reason about Tempo races, action-counter ordering, and whether their cast is fast enough to land before a hostile interrupt.
+
+A face-down opposing chip still reveals **Tempo and slot location** through the chip's position in the bar — the player knows *when* an opposing card will resolve and *where*, just not *what*. Marks on chips leak through fog by design.
+
+The future bar is also where **suppressed actions** sit indefinitely. An action whose location text declares `shouldSuppressAction(card, loc) → true` keeps its chip in the future bar across passes; the chip moves to the present only when the suppression condition resolves to false at an end-of-phase pass. Champion's Rest's "actions suppressed unless exactly one creature is here" is the canonical example.
 
 ## Color home phases and the phase-doubling mechanic
 
