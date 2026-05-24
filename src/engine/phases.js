@@ -457,9 +457,11 @@ export function endCleanupPhase() {
 // Gates on isPlaying(): if the engine is mid-sequence, the click is dropped. Per
 // REBUILD_PLAN section 20 — the player can't double-advance during a beat chain.
 export function advancePhase() {
+  // Note: click gating happens at the UI call site (in export.js), not here. Internal
+  // scheduled callers (maybeAutoAdvance, etc.) call advancePhase as a continuation and
+  // must NOT be gated by isPlaying — they fire while the engine is mid-sequence by design.
   if (state.gameOver) return;
   if (state.view !== "encounter" || !state.sides) return;
-  if (isPlaying()) return;  // engine busy, drop the click
   state.selectedCardId = null;
   state.selectedCommittedId = null;
   resetInitResolved();

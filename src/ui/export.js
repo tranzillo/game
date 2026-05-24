@@ -7,6 +7,7 @@ import { flashLog } from "./render.js";
 import { logEntry } from "../engine/log.js";
 import { start } from "../main.js";
 import { setSpeed } from "./animations.js";
+import { isPlaying } from "../engine/scheduler.js";
 
 // ---------- Export ----------
 export function buildExport() {
@@ -155,7 +156,12 @@ export function exportToFile() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("btn-advance").addEventListener("click", advancePhase);
+  // Player-driven Advance Phase button. Click gating happens HERE (not in advancePhase) so
+  // internal scheduled callbacks can call advancePhase freely. Per REBUILD_PLAN sec 20.
+  document.getElementById("btn-advance").addEventListener("click", () => {
+    if (isPlaying()) return;
+    advancePhase();
+  });
   document.getElementById("btn-restart").addEventListener("click", start);
   document.getElementById("btn-go-restart").addEventListener("click", start);
   document.getElementById("btn-leave-encounter").addEventListener("click", () => {
