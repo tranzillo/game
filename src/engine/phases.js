@@ -10,6 +10,8 @@ import { endOfPhaseRevealAndResolve, resetInitResolved } from "./timeline.js";
 import { runCombat } from "./combat.js";
 import { aiPlaceMain, checkAiRetreat } from "./ai.js";
 import { revertEndOfTurnBuffs } from "./marks.js";
+import { isPlaying, startSequence, endSequence, runBeat } from "./scheduler.js";
+import { durationFor } from "../ui/animations.js";
 
 // ---------- Phases ----------
 // Upkeep is split into "start of upkeep" (per-turn resets and start-of-upkeep neutral effects like
@@ -90,6 +92,12 @@ export function runUpkeepEnd(onDone) {
     checkGameOver();
     if (onDone) onDone();
   });
+}
+
+// Brief between-phase pause — gives the player a moment to read the phase label before the
+// next thing happens. Uses scheduler.runBeat so it composes with the busy flag and speed mult.
+function phaseTransitionPause(then) {
+  runBeat(durationFor("phase-divider"), then);
 }
 
 // Fire neutral cards' upkeep effects across all locations.
@@ -311,91 +319,92 @@ export function checkGameOver() {
 }
 
 // ---------- Turn flow ----------
+//
+// Per REBUILD_PLAN.md section 20: every phase orchestrator is a beat-chained function. The
+// engine never awaits the UI; all pacing is via scheduler.runBeat. Each terminal beat that
+// lands the engine in an interactive phase calls endSequence() so click handlers re-enable.
+
 export function startNewTurn() {
   if (state.gameOver) return;
   if (state.view !== "encounter" || !state.sides) return;
   resetInitResolved();
+  startSequence();
   runUpkeepStart();
-  if (state.gameOver || state.view !== "encounter") { render(); return; }
+  if (state.gameOver || state.view !== "encounter") {
+    render();
+    endSequence();
+    return;
+  }
   render();
+  // Upkeep is interactive — release the busy flag and let the player play actions or advance.
+  endSequence();
   maybeAutoAdvance();
 }
 
-// If the current phase is interactive but the player has nothing legal to do, auto-advance to
-// the next phase. Delay long enough that the player can read the phase label and any log entries
-// that fired this phase (upkeep tick, draw, etc.) before the next phase starts.
+// If the current phase is interactive but the player has nothing legal to do, auto-advance
+// to the next phase after a brief readable pause.
 export function maybeAutoAdvance() {
   const interactive = ["upkeep","draw","main","combat-reveal","cleanup"];
   if (!interactive.includes(state.phase)) return;
   if (state.gameOver || state.view !== "encounter") return;
+  if (isPlaying()) return;  // already mid-sequence
   if (playerHasAnyLegalActionThisPhase()) return;
-  setTimeout(() => {
+  runBeat(1500, () => {
     if (state.view !== "encounter" || state.gameOver) return;
-    if (playerHasAnyLegalActionThisPhase()) return;  // re-check after delay
+    if (playerHasAnyLegalActionThisPhase()) return;
     advancePhase();
-  }, 1500);
+  });
 }
 
-// End main: AI places its main-phase plays, both sides commit pending, fire onMainEnd,
-// run end-of-phase reveal/resolve, advance to combat-reveal.
+// End main: AI places its main-phase plays, both sides commit, fire onMainEnd, run reveal,
+// transition to combat-reveal (interactive).
 export function endMainPhase() {
   if (state.phase !== "main") return;
   if (state.gameOver || state.view !== "encounter") return;
-  // AI places into pending (cost-checks against committed only; can't see player's pending).
+  startSequence();
   aiPlaceMain();
-  // Both sides commit. AI cards are face-down at this point.
   commitPendingPlays();
   firePhaseHook("onMainEnd");
   state.phase = "reveal";
   logEntry(`— Reveal —`, "phase");
   render();
-  setTimeout(() => {
-    if (state.gameOver || state.view !== "encounter") return;
+  phaseTransitionPause(() => {
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
     endOfPhaseRevealAndResolve(() => {
-      if (state.gameOver || state.view !== "encounter") {
-        render();
-        showGameOver();
-        return;
-      }
+      if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
       state.phase = "combat-reveal";
       logEntry(`— Combat preview — commit actions/equipment, then advance to combat. —`, "phase");
       render();
+      endSequence();
       maybeAutoAdvance();
     });
-  }, 700);
+  });
 }
 
-// End combat-reveal: commit any pending combat-reveal commits, flip them, run creature combat,
-// then transition to cleanup (interactive — player can still play actions/equipment / move).
+// End combat-reveal: commit any pending combat-reveal commits, flip them, run combat,
+// transition to cleanup (interactive).
 export function resolveCombatPhase() {
   if (state.phase !== "combat-reveal") return;
   if (state.gameOver || state.view !== "encounter") return;
+  startSequence();
   commitPendingPlays();
   endOfPhaseRevealAndResolve(() => {
-    if (state.gameOver || state.view !== "encounter") {
-      render();
-      showGameOver();
-      return;
-    }
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
     state.phase = "combat-resolve";
     render();
-    setTimeout(() => {
-      if (state.view !== "encounter") return;
+    phaseTransitionPause(() => {
+      if (state.view !== "encounter") { endSequence(); return; }
       runCombat(() => {
-        if (state.gameOver || state.view !== "encounter") {
-          render();
-          showGameOver();
-          return;
-        }
-        // Enter cleanup as interactive phase.
+        if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
         state.phase = "cleanup";
         logEntry(`— Cleanup —`, "phase");
         firePhaseHook("onCleanupStart");
         runTomeGolemCleanup();
         render();
+        endSequence();
         maybeAutoAdvance();
       });
-    }, 700);
+    });
   });
 }
 
@@ -423,61 +432,59 @@ export function runTomeGolemCleanup() {
   }
 }
 
-// End cleanup: commit any pending cleanup commits, flip them, fire onCleanupEnd, run discard
-// + side-priority alternation, end encounter if applicable, start next turn otherwise.
+// End cleanup: commit any pending cleanup commits, flip them, fire onCleanupEnd, discard,
+// alternate priority, end encounter if applicable, start next turn otherwise.
 export function endCleanupPhase() {
   if (state.phase !== "cleanup") return;
   if (state.gameOver || state.view !== "encounter") return;
+  startSequence();
   commitPendingPlays();
   endOfPhaseRevealAndResolve(() => {
-    if (state.gameOver || state.view !== "encounter") {
-      render();
-      showGameOver();
-      return;
-    }
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
     runCleanupEnd();
-    if (state.gameOver || state.view !== "encounter") {
-      render();
-      showGameOver();
-      return;
-    }
+    if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
     render();
-    setTimeout(() => {
-      if (state.view !== "encounter") return;
+    runBeat(400, () => {
+      if (state.view !== "encounter") { endSequence(); return; }
+      endSequence();   // released before startNewTurn re-acquires
       startNewTurn();
-    }, 400);
+    });
   });
 }
 
-// Single advance handler — picks the right action based on current phase. Each phase ends by
-// firing its onPhaseEnd hook, running end-of-phase reveal/resolve (which flips face-down cards
-// committed during the phase), then transitioning to the next phase.
+// Single advance handler — picks the right action based on current phase.
+//
+// Gates on isPlaying(): if the engine is mid-sequence, the click is dropped. Per
+// REBUILD_PLAN section 20 — the player can't double-advance during a beat chain.
 export function advancePhase() {
   if (state.gameOver) return;
   if (state.view !== "encounter" || !state.sides) return;
+  if (isPlaying()) return;  // engine busy, drop the click
   state.selectedCardId = null;
   state.selectedCommittedId = null;
-  // New phase = clear the resolved tracker.
   resetInitResolved();
 
   if (state.phase === "upkeep") {
-    // Commit anything pending (actions/equipment played during upkeep) before the upkeep flip pass.
+    startSequence();
     commitPendingPlays();
     runUpkeepEnd(() => {
-      if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); return; }
+      if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
       runDraw();
       render();
+      endSequence();
       maybeAutoAdvance();
     });
     return;
   }
   if (state.phase === "draw") {
+    startSequence();
     commitPendingPlays();
     firePhaseHook("onDrawEnd");
     endOfPhaseRevealAndResolve(() => {
-      if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); return; }
+      if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
       runMain();
       render();
+      endSequence();
       maybeAutoAdvance();
     });
     return;

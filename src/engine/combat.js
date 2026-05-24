@@ -1,23 +1,32 @@
+// Combat.
+//
+// Per REBUILD_PLAN.md sections 17, 18, 20:
+// - Time-based pacing via scheduler.runBeat. Engine never awaits UI.
+// - Deferred-death pattern: applyCombatDamage emits damage/death events but does NOT remove
+//   the dying creature from its slot or fire deathwish. The orchestrator (runCombat) calls
+//   finalizeOneDeath in a follow-up beat — that's the beat where deathwish fires and the
+//   card moves to the graveyard pile.
+// - Result: the player sees creature take damage → die in slot (death animation) → deathwish
+//   triggers → creature slides to graveyard. Each is its own visible beat.
+
 import { state, L } from "./state.js";
 import { LOCATION_COUNT, LOC_NAMES } from "./config.js";
 import { logEntry } from "./log.js";
 import { committedStatTotal, effectiveStat, other } from "./stats.js";
 import { render } from "../ui/render.js";
-import { drainScene, enqueueHold } from "../ui/scene.js";
+import { emit } from "./events.js";
+import { runBeat } from "./scheduler.js";
+import { durationFor } from "../ui/animations.js";
 import { _initResolved, emitOutcome } from "./timeline.js";
 import { firePhaseHook, checkGameOver } from "./phases.js";
 import { fireLeavePlayTriggers, detachAllEquipmentFromHost, sendToPile, onCreatureTookDamage } from "./marks.js";
 
 // ---------- Combat preview ----------
-// Returns:
-//   attackers:   instId -> { targetLabel, damage, killsTarget }
-//   willDie:     Set of instIds that die in simulated combat
+// Pure simulation — no state mutation. Returns:
+//   attackers: instId -> { targetLabel, damage, killsTarget }
+//   willDie: Set of instIds that die in simulated combat
 //   summonerHits: { player, ai }
-//
-// Combat is per-location: creatures at location L attack creatures at the same location L.
-// Cross-location attacks don't exist in v2. Per-location, we use the same Tempo hierarchy as v1.
 export function computeCombatPreview() {
-  // Per-location snapshot of the side's creatures + the side's action at that location.
   function snapshotLoc(side, loc) {
     const lc = L(side, loc);
     const cs = {};
@@ -32,15 +41,12 @@ export function computeCombatPreview() {
       ammo: lc.ammo || 0
     };
   }
-  // Build per-location snapshots for both sides; summoner durabilities are global per side.
   const sim = { player: { durability: state.sides.player.durability, locs: [] },
                  ai:     { durability: state.sides.ai.durability,     locs: [] } };
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     sim.player.locs.push(snapshotLoc("player", loc));
     sim.ai.locs.push(snapshotLoc("ai", loc));
   }
-
-  // Per-location side-priority based on local Tempo (within a single location).
   function simLocalTempo(side, loc) {
     const cs = sim[side].locs[loc].creatures;
     let t = 0;
@@ -57,50 +63,25 @@ export function computeCombatPreview() {
     if (atempo > ptempo) return side === "ai" ? 0 : 1;
     return side === state.firstSide ? 0 : 1;
   }
-
-  // First simulate action resolution per location in Tempo order. Counterspell here removes the
-  // opposing action at this location; damage actions consume targets ahead of creature combat.
-  // (default scope is "here").
-  // Tracks summoner hits from spell fall-through during preview, fed into summonerHits below.
   const spellFallThrough = { player: 0, ai: 0 };
-
-  // Helper: simulate a damage instance with fall-through. Mirrors dealDamageAtLoc in real resolve.
-  // Face-down cards are inert per the unified rule and not legal damage targets.
-  //
-  // PILLAR 10 / preview-honesty rule: if there are multiple legal random targets, we DO NOT pick
-  // one — we leave the sim board untouched. This prevents the preview from leaking the random
-  // pick by consequence (e.g., "combat preview shows my Recruit swinging through to summoner →
-  // therefore the Spark must have killed the Mage"). The player sees combat as it would play out
-  // *if the spell didn't fire*; they know the spell will fire but not which target it picks.
-  //
-  // Deterministic cases (0 targets → fall-through to summoner; 1 target → known pick) DO apply,
-  // because the outcome is knowable without random information.
   function simDamageAtLoc(sourceSide, lx, dmg) {
     const enemySide = other(sourceSide);
     const enemyLoc = sim[enemySide].locs[lx];
     const targets = ["fl", "fr", "bl", "br"]
       .map(pos => ({ pos, c: enemyLoc.creatures[pos] }))
       .filter(x => x.c && x.c.revealed !== false);
-    if (targets.length === 0) {
-      // Deterministic fall-through to summoner.
-      spellFallThrough[enemySide] += dmg;
-      return;
-    }
+    if (targets.length === 0) { spellFallThrough[enemySide] += dmg; return; }
     if (targets.length === 1) {
-      // Deterministic single-target pick.
       const pick = targets[0];
       pick.c.durability -= dmg;
       if (pick.c.durability <= 0) enemyLoc.creatures[pick.pos] = null;
       return;
     }
-    // Multiple legal random targets: don't apply the damage. Combat preview reflects pre-spell
-    // board state so the random pick remains hidden until reveal.
+    // Multiple legal random targets: don't apply (preview honesty per Pillar 10).
   }
-
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     const actionCandidates = [];
     for (const sideName of ["player", "ai"]) {
-      // Action queue Tempo = caster-side Tempo at this location (per design).
       if (sim[sideName].locs[loc].action) {
         actionCandidates.push({ side: sideName, action: sim[sideName].locs[loc].action, tempo: simLocalTempo(sideName, loc) });
       }
@@ -117,7 +98,6 @@ export function computeCombatPreview() {
       } else if (ac.action.effect === "deal2") {
         simDamageAtLoc(ac.side, loc, 2);
       } else if (ac.action.effect === "deal1all") {
-        // Scope-extended damage: 1 per location, with fall-through per empty location.
         for (let l2 = 0; l2 < LOCATION_COUNT; l2++) {
           simDamageAtLoc(ac.side, l2, 1);
         }
@@ -125,21 +105,17 @@ export function computeCombatPreview() {
       sim[ac.side].locs[loc].action = null;
     }
   }
-
   const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3 };
   const attackers = {};
   const willDie = new Set();
   const summonerHits = { player: spellFallThrough.player, ai: spellFallThrough.ai };
-
-  // Per-location creature combat. Each location resolves in its own Tempo order; locations are
-  // simulated left-to-right but their orderings are independent.
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     const candidates = [];
     for (const sideName of ["player", "ai"]) {
       for (const pos of ["fl", "fr", "bl", "br"]) {
         const c = sim[sideName].locs[loc].creatures[pos];
         if (!c) continue;
-        if (c.revealed === false) continue;  // face-down cards don't attack (unified rule)
+        if (c.revealed === false) continue;
         const isBack = pos === "bl" || pos === "br";
         if (isBack && !c.ranged) continue;
         if (c.sleepCounter > 0) continue;
@@ -159,11 +135,9 @@ export function computeCombatPreview() {
       }
       return 0;
     });
-
     for (const cand of candidates) {
       const live = sim[cand.side].locs[loc].creatures[cand.pos];
       if (!live || live.instId !== cand.creature.instId) continue;
-      // Ranged ammo simulation: must still have ammo at swing time; consume it.
       if (live.ranged) {
         const cost = live.ammoCost || 1;
         const myLoc = sim[cand.side].locs[loc];
@@ -176,10 +150,7 @@ export function computeCombatPreview() {
       const backPos = column === "fl" ? "bl" : "br";
       let target = enemyLoc.creatures[frontPos];
       let targetPos = frontPos;
-      if (!target) {
-        target = enemyLoc.creatures[backPos];
-        targetPos = backPos;
-      }
+      if (!target) { target = enemyLoc.creatures[backPos]; targetPos = backPos; }
       const dmg = live.force;
       if (target) {
         target.durability -= dmg;
@@ -205,16 +176,17 @@ export function computeCombatPreview() {
       }
     }
   }
-
   return { attackers, willDie, summonerHits };
 }
 
-// Combat resolves one swing at a time with a render+delay between each swing, so the player
-// sees the attack queue unfold in Tempo order. Takes an `onDone` callback because the resolution
-// is now async-chained via setTimeout. State still mutates synchronously inside each beat.
-// Legacy constant kept for compatibility; combat beat spacing is now controlled by the scene
-// queue (each beat waits for drainScene before processing the next attacker).
-export const COMBAT_STEP_MS = 700;
+// ---------- Combat orchestrator (runCombat) ----------
+//
+// Beat-chained. Each attacker is one beat (attack + damage). If the attack killed something,
+// the next beat finalizes that death (deathwish + leave-play). Then more pending deaths are
+// drained one beat at a time. Then the next attacker steps up.
+
+export const COMBAT_STEP_MS = 700;  // Legacy reference. Actual pacing per-event via durationFor().
+
 export function runCombat(onDone) {
   state.phase = "combat";
   logEntry(`— Combat —`, "phase");
@@ -223,8 +195,6 @@ export function runCombat(onDone) {
 
   if (state.gameOver) { if (onDone) onDone(); return; }
 
-  // Flatten all per-location attack queues into one sequenced list. Each loc still uses its own
-  // Tempo ordering; locations process left-to-right (existing behavior).
   const queue = [];
   for (let loc = 0; loc < LOCATION_COUNT; loc++) {
     const orderedAttackers = computeCombatOrder(loc);
@@ -240,13 +210,20 @@ export function runCombat(onDone) {
     }
   }
 
+  if (queue.length === 0) { finish(); return; }
+  processOne(0);
+
   function processOne(idx) {
     if (state.gameOver) { finish(); return; }
-    if (idx >= queue.length) { finish(); return; }
+    if (idx >= queue.length) {
+      // Queue empty — drain any final pending deaths, then finish.
+      drainPendingDeaths(() => finish());
+      return;
+    }
     const ev = queue[idx];
     if (ev.kind === "loc-header") {
       logEntry(`At ${LOC_NAMES[ev.loc]}:`, "combat-header");
-      processOne(idx + 1);  // headers are instant, no delay
+      processOne(idx + 1);
       return;
     }
     if (ev.kind === "side-header") {
@@ -255,76 +232,10 @@ export function runCombat(onDone) {
       return;
     }
     // attack
-    const { side, pos, creature, loc } = ev;
-    const liveAttacker = L(side, loc).creatures[pos];
-    if (!liveAttacker || liveAttacker.instId !== creature.instId) {
-      logEntry(`    ${creature.name} (${pos}): killed before its swing — does not attack.`, "combat-detail");
-      render();
-      enqueueHold(300);
-      drainScene(() => processOne(idx + 1));
-      return;
-    }
-    if (liveAttacker.sleepCounter > 0) {
-      logEntry(`    ${liveAttacker.name} (${pos}): asleep — does not attack.`, "combat-detail");
-      render();
-      enqueueHold(300);
-      drainScene(() => processOne(idx + 1));
-      return;
-    }
-    if (liveAttacker.wokeInPhase === state.phase) {
-      logEntry(`    ${liveAttacker.name} (${pos}): just woke up this phase — does not attack.`, "combat-detail");
-      render();
-      enqueueHold(300);
-      drainScene(() => processOne(idx + 1));
-      return;
-    }
-    if (liveAttacker.skipAttackThisTurn) {
-      logEntry(`    ${liveAttacker.name} (${pos}): skip-attack flag (Blizzard etc.) — does not attack.`, "combat-detail");
-      render();
-      enqueueHold(300);
-      drainScene(() => processOne(idx + 1));
-      return;
-    }
-    if (effectiveStat(liveAttacker, side, loc, "force") <= 0) {
-      logEntry(`    ${liveAttacker.name} (${pos}): no Force — does not attack.`, "combat-detail");
-      render();
-      enqueueHold(300);
-      drainScene(() => processOne(idx + 1));
-      return;
-    }
-    if (liveAttacker.ranged) {
-      const cost = liveAttacker.ammoCost || 1;
-      const lc2 = L(side, loc);
-      if ((lc2.ammo || 0) < cost) {
-        logEntry(`    ${liveAttacker.name} (${pos}): out of ammo — can't fire.`, "combat-detail");
-        render();
-        enqueueHold(300);
-        drainScene(() => processOne(idx + 1));
-        return;
-      }
-      lc2.ammo -= cost;
-      logEntry(`    ${liveAttacker.name} (${pos}): spends ${cost} ammo (${side} ${LOC_NAMES[loc]} stockpile now ${lc2.ammo}).`, "combat-detail");
-    }
-    // Look ahead at the target slot the same way resolveAttack will, so the outcome can
-    // include the targetInstId (used by the UI to compute the crash-animation vector).
-    const enemySideLook = other(side);
-    const enemyLocLook = L(enemySideLook, loc);
-    const columnLook = (pos === "fl" || pos === "bl") ? "fl" : "fr";
-    const backLook = columnLook === "fl" ? "bl" : "br";
-    const targetPosLook = enemyLocLook.creatures[columnLook] ? columnLook : (enemyLocLook.creatures[backLook] ? backLook : null);
-    const targetCard = targetPosLook ? enemyLocLook.creatures[targetPosLook] : null;
-    emitOutcome("attack", {
-      instId: liveAttacker.instId,
-      name: liveAttacker.name,
-      side, loc, pos,
-      force: effectiveStat(liveAttacker, side, loc, "force"),
-      ranged: !!liveAttacker.ranged,
-      targetInstId: targetCard ? targetCard.instId : null
+    runAttackBeat(ev, () => {
+      // After the attack beat, drain any pending deaths (each as its own beat), then next attack.
+      drainPendingDeaths(() => processOne(idx + 1));
     });
-    resolveAttack(side, loc, pos, liveAttacker);
-    _initResolved.add(`attack-${liveAttacker.instId}`);
-    render();
-    drainScene(() => processOne(idx + 1));
   }
 
   function finish() {
@@ -332,19 +243,76 @@ export function runCombat(onDone) {
     checkGameOver();
     if (onDone) onDone();
   }
-
-  if (queue.length === 0) { finish(); return; }
-  processOne(0);
 }
 
-// Compute combat order at a single location. Per-location Tempo hierarchy:
-//   1. Tempo descending
-//   2. Side priority (higher local Tempo total at THIS location wins; ties go to state.firstSide)
-//   3. Position rank (front-row left, then front-row right; back-row ranged after)
-// Ranged creatures attack from any row, melee creatures attack from the front row only.
+// Run one attacker's beat — pre-checks, do the attack (sync state mutation + event emission),
+// render, then schedule the next call via runBeat.
+function runAttackBeat(ev, onBeatDone) {
+  const { side, pos, creature, loc } = ev;
+  const liveAttacker = L(side, loc).creatures[pos];
+
+  // No-attack branches: log it, brief hold, on to next.
+  function noAttack(reason) {
+    logEntry(`    ${(liveAttacker || creature).name} (${pos}): ${reason} — does not attack.`, "combat-detail");
+    render();
+    runBeat(durationFor("no-attack"), onBeatDone);
+  }
+
+  if (!liveAttacker || liveAttacker.instId !== creature.instId) {
+    return noAttack("killed before its swing");
+  }
+  if (liveAttacker.sleepCounter > 0) return noAttack("asleep");
+  if (liveAttacker.wokeInPhase === state.phase) return noAttack("just woke up this phase");
+  if (liveAttacker.skipAttackThisTurn) return noAttack("skip-attack flag (Blizzard etc.)");
+  if (effectiveStat(liveAttacker, side, loc, "force") <= 0) return noAttack("no Force");
+
+  if (liveAttacker.ranged) {
+    const cost = liveAttacker.ammoCost || 1;
+    const lc2 = L(side, loc);
+    if ((lc2.ammo || 0) < cost) return noAttack("out of ammo — can't fire");
+    lc2.ammo -= cost;
+    logEntry(`    ${liveAttacker.name} (${pos}): spends ${cost} ammo (${side} ${LOC_NAMES[loc]} stockpile now ${lc2.ammo}).`, "combat-detail");
+  }
+
+  // Look ahead at the target slot so the `attack` event includes targetInstId for the crash anim.
+  const enemySideLook = other(side);
+  const enemyLocLook = L(enemySideLook, loc);
+  const columnLook = (pos === "fl" || pos === "bl") ? "fl" : "fr";
+  const backLook = columnLook === "fl" ? "bl" : "br";
+  const targetPosLook = enemyLocLook.creatures[columnLook] ? columnLook : (enemyLocLook.creatures[backLook] ? backLook : null);
+  const targetCard = targetPosLook ? enemyLocLook.creatures[targetPosLook] : null;
+  emit("attack", {
+    instId: liveAttacker.instId,
+    name: liveAttacker.name,
+    side, loc, pos,
+    force: effectiveStat(liveAttacker, side, loc, "force"),
+    ranged: !!liveAttacker.ranged,
+    targetInstId: targetCard ? targetCard.instId : null
+  });
+
+  // resolveAttack synchronously applies damage to all targets (main + cleave + pierce).
+  // Each applyCombatDamage call may set creatures' pendingLeavePile if they die — but does
+  // NOT remove them from slots or fire deathwish yet. Those happen in the drain that follows.
+  resolveAttack(side, loc, pos, liveAttacker);
+  _initResolved.add(`attack-${liveAttacker.instId}`);
+  render();
+  runBeat(durationFor("attack"), onBeatDone);
+}
+
+// Drain pending deaths one at a time. Each death is its own beat (death anim + deathwish
+// triggers + slide to pile). Calls onDrained when no pending deaths remain.
+function drainPendingDeaths(onDrained) {
+  if (state.gameOver) { onDrained(); return; }
+  const pending = findFirstPendingDeath();
+  if (!pending) { onDrained(); return; }
+  finalizeOneDeath(pending);
+  render();
+  runBeat(durationFor("leave-play"), () => drainPendingDeaths(onDrained));
+}
+
+// Compute combat order at a single location. Per-location Tempo hierarchy.
 export function computeCombatOrder(loc) {
   const POS_RANK = { fl: 0, fr: 1, bl: 2, br: 3 };
-
   const localTempoTotal = {
     player: committedStatTotal("player", loc, "tempo"),
     ai: committedStatTotal("ai", loc, "tempo")
@@ -354,22 +322,17 @@ export function computeCombatOrder(loc) {
     if (localTempoTotal.ai > localTempoTotal.player) return side === "ai" ? 0 : 1;
     return side === state.firstSide ? 0 : 1;
   }
-
   const candidates = [];
   for (const sideName of ["player", "ai"]) {
     for (const pos of ["fl", "fr", "bl", "br"]) {
       const c = L(sideName, loc).creatures[pos];
       if (!c) continue;
-      // Melee: front row only. Ranged: any row but needs ammo to fire.
       const isBack = pos === "bl" || pos === "br";
       if (isBack && !c.ranged) continue;
       if (c.sleepCounter > 0) continue;
       if (c.wokeInPhase === state.phase) continue;
-      if (c.skipAttackThisTurn) continue;  // Blizzard / similar — no attack this turn
-      // Effective Force gates combat — conditional buffs (Provocation reverse-buff, Pit-Fighter
-      // alone, equipment grants) all count toward whether this creature can swing.
+      if (c.skipAttackThisTurn) continue;
       if (effectiveStat(c, sideName, loc, "force") <= 0) continue;
-      // Ranged creatures need ammo to attack (any row — they only fire, never melee).
       if (c.ranged) {
         const cost = c.ammoCost || 1;
         if ((L(sideName, loc).ammo || 0) < cost) continue;
@@ -389,100 +352,84 @@ export function computeCombatOrder(loc) {
   return candidates;
 }
 
-// Apply combat damage to a creature at a specific (side, loc, pos). Handles death-resolution and
-// fires onCreatureTookDamage. Used by resolveAttack's main hit + extra-target attack patterns
-// (cleave hits adjacent same-row slots; pierce hits the back-row slot behind the front-row target).
-// Black Spite — summoner thorns. When a creature attack damages the summoner, the defending
-// side's Spite at the attack's location deals retaliation damage to the attacker. Per-location
-// (not global). Fires only if the summoner actually lost Durability (caller guarantees this).
+// Spite — summoner thorns. Fires when a creature attack damages a summoner.
 export function fireSpiteThorns(defendingSide, loc, attacker, attackerLabel) {
   if (!attacker) return;
   const spite = committedStatTotal(defendingSide, loc, "spite");
   if (spite <= 0) return;
-  // Find attacker's current position on the board (it's on the OTHER side from defending).
   const attackerSide = other(defendingSide);
   const aLoc = L(attackerSide, loc);
   let atkPos = null;
   for (const p of ["fl","fr","bl","br"]) {
     if (aLoc.creatures[p] === attacker) { atkPos = p; break; }
   }
-  if (!atkPos) return;  // attacker moved/died — can't retaliate
+  if (!atkPos) return;
   logEntry(`    Spite (${defendingSide} ${LOC_NAMES[loc]}, ${spite}) → ${attackerLabel} for ${spite}.`, "combat-detail");
   applyCombatDamage(attackerSide, loc, atkPos, spite, `Spite (${defendingSide} ${LOC_NAMES[loc]})`, null);
 }
 
-// Apply damage to a summoner. In non-boss encounters there's no real AI summoner — the AI side
-// is just a holder for neutral / hostile content. Damage that falls through to that side has
-// nowhere to go and just dissipates. The player summoner is always real (their Durability is the
-// run-Durability across encounters). Returns true if the damage actually landed.
+// Damage to a summoner. In non-boss encounters, AI side has no summoner — fizzles.
 export function damageSummoner(side, dmg, label, loc) {
   if (dmg <= 0) return false;
   if (side === "ai" && state.encounterKind !== "boss") {
     logEntry(`    ${label} → ${side} side has no summoner here — damage fizzles.`, "combat-detail");
-    emitOutcome("summoner-damage-fizzle", { side, amount: dmg, source: label, loc });
+    emit("summoner-damage-fizzle", { side, amount: dmg, source: label, loc });
     return false;
   }
   state.sides[side].durability -= dmg;
   const locLabel = loc != null ? ` ${LOC_NAMES[loc]}` : "";
   logEntry(`    ${label} →${locLabel} ${side} summoner for ${dmg}. (${side} Durability: ${state.sides[side].durability})`, "combat-detail");
-  emitOutcome("summoner-damage", { side, amount: dmg, source: label, loc, newDurability: state.sides[side].durability });
+  emit("summoner-damage", { side, amount: dmg, source: label, loc, newDurability: state.sides[side].durability });
   return true;
 }
 
+// Apply damage to a creature. SYNC. Emits damage + (if lethal) death events. Does NOT remove
+// the card from its slot, fire deathwish, or sendToPile. Those happen in finalizeOneDeath in
+// a subsequent beat. Per REBUILD_PLAN sec 17 (death sequence).
 export function applyCombatDamage(targetSide, loc, pos, dmg, attackerLabel, attacker) {
   if (dmg <= 0) return;
   const lc = L(targetSide, loc);
   const target = lc.creatures[pos];
   if (!target) {
-    // No creature at this slot — damage falls through to the summoner (if any).
     const landed = damageSummoner(targetSide, dmg, `${attackerLabel} (empty ${pos})`, loc);
     if (landed) fireSpiteThorns(targetSide, loc, attacker, attackerLabel);
     return;
   }
-  // Record this melee attacker on the target for the Explosive Trap deathwish (only non-ranged
-  // attackers count as melee — ranged shots don't trigger the trap).
+  // Skip already-pending-death targets (defensive — re-damaging a dying creature is a no-op).
+  if (target.pendingLeavePile) return;
+  // Record melee attacker for Explosive Trap deathwish tracking.
   if (attacker && !attacker.ranged) {
     if (!target.meleeAttackersThisTurn) target.meleeAttackersThisTurn = [];
     if (!target.meleeAttackersThisTurn.includes(attacker.instId)) target.meleeAttackersThisTurn.push(attacker.instId);
   }
   target.durability -= dmg;
   logEntry(`    ${attackerLabel} → ${target.name} (${targetSide} ${pos}) for ${dmg}.`, "combat-detail");
-  emitOutcome("damage", { targetInstId: target.instId, targetName: target.name, targetSide, loc, pos, amount: dmg, source: attackerLabel });
+  emit("damage", { targetInstId: target.instId, targetName: target.name, targetSide, loc, pos, amount: dmg, source: attackerLabel });
   onCreatureTookDamage(target, targetSide, loc, dmg);
   if (target.durability <= 0) {
     logEntry(`      ${target.name} is destroyed.`, "combat-detail");
-    // Gameplay order (per MtG-style state-based-actions): card leaves the battlefield BEFORE
-    // its leave-play triggers resolve. That means the slot is empty when deathwish runs, so
-    // deathwishes that spawn into the front row can use the dying card's slot.
-    //
-    // Animation order: the UI plays death (in slot via FLIP-hold) → deathwish-trigger →
-    // deathwish effects (summon, damage, etc.) → leave-play (slide to graveyard pile). The
-    // dying card visually overlays anything that takes its slot until the slide completes,
-    // then disappears. This is brief and reads as "the dying creature collapses into the
-    // graveyard, revealing what it left behind."
-    emitOutcome("death", { instId: target.instId, name: target.name, side: targetSide, loc, pos, isToken: !!target.isToken });
-    lc.creatures[pos] = null;
-    fireLeavePlayTriggers(target, targetSide, loc, pos);
-    detachAllEquipmentFromHost(target, targetSide, loc);
-    emitOutcome("leave-play", { instId: target.instId, name: target.name, side: targetSide, loc, pos });
-    sendToPile(target, targetSide, "graveyard");
+    emit("death", {
+      instId: target.instId,
+      name: target.name,
+      side: targetSide,
+      loc, pos,
+      killerInstId: attacker ? attacker.instId : null,
+      isToken: !!target.isToken
+    });
+    target.pendingLeavePile = "graveyard";
   }
 }
 
+// Resolve one attacker's swing — main hit + attack patterns (cleave / pierce).
 export function resolveAttack(side, loc, pos, attacker) {
-  // Front-row attackers always allowed. Back-row attackers must be ranged.
   const isBack = pos === "bl" || pos === "br";
   if (isBack && !attacker.ranged) return;
 
   const enemySide = other(side);
   const enemyLoc = L(enemySide, loc);
-  // Map attacker column to enemy front/back the way front-row attacks already do.
-  // fl/bl on player's side aligns with enemy's fl front-row column; fr/br with enemy's fr.
   const column = (pos === "fl" || pos === "bl") ? "fl" : "fr";
   const enemyFront = column;
   const enemyBack = column === "fl" ? "bl" : "br";
-
-  // Main target: front first, falling through to back if front is empty.
   const targetPos = enemyLoc.creatures[enemyFront] ? enemyFront : (enemyLoc.creatures[enemyBack] ? enemyBack : null);
   const dmg = effectiveStat(attacker, side, loc, "force");
   const label = `${attacker.name} (${pos})`;
@@ -494,26 +441,17 @@ export function resolveAttack(side, loc, pos, attacker) {
     if (landed) fireSpiteThorns(enemySide, loc, attacker, label);
   }
 
-  // Attack-pattern extras (cleave, pierce). attackPatterns is an array of { type, value? }.
   const patterns = attacker.attackPatterns || [];
   for (const p of patterns) {
     if (p.type === "cleave") {
-      // Cleave hits the *adjacent same-row slots* of the main target's location on the same
-      // side as the main target. On a 2-column grid, that's the *other* front-row slot
-      // (cleave fires from a front-row attacker → hits across-front; the cleave adjacency is
-      // the same-row other column on the enemy side, i.e., the slot next to the main target).
-      if (!targetPos) continue;  // no target hit, cleave has nothing adjacent
+      if (!targetPos) continue;
       const adjacent = targetPos === "fl" ? "fr" : (targetPos === "fr" ? "fl" : (targetPos === "bl" ? "br" : "bl"));
       if (enemyLoc.creatures[adjacent]) {
         applyCombatDamage(enemySide, loc, adjacent, dmg, `${label} (cleave)`, attacker);
       }
     } else if (p.type === "pierce") {
-      // Pierce X: deal X damage to the slot directly behind the main target's column on the
-      // enemy side. If the main target was already in the back row (front was empty), pierce
-      // has nothing further to pierce — fizzle the pierce portion.
       const pierceVal = p.value || 1;
       if (!targetPos) {
-        // Front + back both empty → main damage already hit summoner. Pierce also hits summoner.
         const landed = damageSummoner(enemySide, pierceVal, `${label} (pierce ${pierceVal})`, loc);
         if (landed) fireSpiteThorns(enemySide, loc, attacker, `${label} (pierce ${pierceVal})`);
       } else if (targetPos === "fl" || targetPos === "fr") {
@@ -521,12 +459,43 @@ export function resolveAttack(side, loc, pos, attacker) {
         if (enemyLoc.creatures[backPos]) {
           applyCombatDamage(enemySide, loc, backPos, pierceVal, `${label} (pierce ${pierceVal})`, attacker);
         } else {
-          // No back-row creature → pierce falls through to summoner.
           const landed = damageSummoner(enemySide, pierceVal, `${label} (pierce ${pierceVal})`, loc);
           if (landed) fireSpiteThorns(enemySide, loc, attacker, `${label} (pierce ${pierceVal})`);
         }
       }
-      // If main target was a back-row creature (front was empty), pierce doesn't go further.
     }
   }
+}
+
+// ---------- Pending-death helpers (used by orchestrators in combat + timeline) ----------
+
+// Scan all locations on both sides for a creature with pendingLeavePile set. Returns the
+// first found, or null.
+export function findFirstPendingDeath() {
+  if (!state || !state.sides) return null;
+  for (const side of ["player", "ai"]) {
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L(side, loc);
+      for (const pos of ["fl","fr","bl","br"]) {
+        const c = lc.creatures[pos];
+        if (c && c.pendingLeavePile) {
+          return { card: c, side, loc, pos, pile: c.pendingLeavePile };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Finalize one death: remove from slot, fire leave-play triggers (deathwish), emit
+// leave-play, send to pile. SYNC. May emit more events (deathwish-trigger, summon, damage,
+// further deaths). Caller is responsible for the surrounding beat scheduling.
+export function finalizeOneDeath({ card, side, loc, pos, pile }) {
+  const lc = L(side, loc);
+  card.pendingLeavePile = null;
+  lc.creatures[pos] = null;
+  fireLeavePlayTriggers(card, side, loc, pos);
+  detachAllEquipmentFromHost(card, side, loc);
+  emit("leave-play", { instId: card.instId, name: card.name, side, loc, pos, toPile: pile });
+  sendToPile(card, side, pile);
 }

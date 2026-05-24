@@ -340,12 +340,14 @@ export function sacrificeCreatureOnSide(side, loc, filterFn, sourceName) {
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
   const reason = candidates.length === 1 ? "[only legal target]" : `[random pick from ${candidates.length}]`;
   logEntry(`  ${sourceName} sacrifices ${pick.c.name} (${side} ${pick.pos}). ${reason}`, "combat-detail");
-  // Remove from slot; fire leave-play triggers (deathwish etc.) from original side/loc; detach
-  // equipment; route to pile (tokens exile, marks may redirect).
+  // Sacrifice is sync (no damage→checkpoint pattern — there's no intermediate state to show).
+  // We still emit death + leave-play events for visual continuity.
   const pos = pick.pos;
+  emitOutcome("death", { instId: pick.c.instId, name: pick.c.name, side, loc, pos, killerInstId: null, isToken: !!pick.c.isToken });
   lc.creatures[pos] = null;
   fireLeavePlayTriggers(pick.c, side, loc, pos);
   detachAllEquipmentFromHost(pick.c, side, loc);
+  emitOutcome("leave-play", { instId: pick.c.instId, name: pick.c.name, side, loc, pos, toPile: "graveyard" });
   sendToPile(pick.c, side, "graveyard");
   return pick.c;
 }
@@ -430,18 +432,28 @@ export function dealDamageAtLoc(sourceSide, loc, dmg, actionName, actionLocLabel
     return;
   }
   const pick = targets[Math.floor(Math.random() * targets.length)];
+  // Skip already-pending-death targets (defensive).
+  if (pick.c.pendingLeavePile) return;
   pick.c.durability -= dmg;
   const pickReason = targets.length === 1 ? "[only legal target]" : `[random pick from ${targets.length}]`;
   logEntry(`  ${actionName} (${sourceSide}${actionLocLabel}) → ${pick.c.name} (${enemySide} ${LOC_NAMES[loc]} ${pick.pos}) for ${dmg}. ${pickReason}`, "combat-detail");
+  emitOutcome("damage", { targetInstId: pick.c.instId, targetName: pick.c.name, targetSide: enemySide, loc, pos: pick.pos, amount: dmg, source: actionName });
   // Fire damage-taken triggers (Enraged etc.).
   onCreatureTookDamage(pick.c, enemySide, loc, dmg);
   if (pick.c.durability <= 0) {
     logEntry(`    ${pick.c.name} is destroyed.`, "combat-detail");
-    const dPos = pick.pos;
-    enemyLoc.creatures[dPos] = null;
-    fireLeavePlayTriggers(pick.c, enemySide, loc, dPos);
-    detachAllEquipmentFromHost(pick.c, enemySide, loc);
-    sendToPile(pick.c, enemySide, "graveyard");
+    // Deferred-death pattern: emit death + set pendingLeavePile. The orchestrator (the reveal
+    // queue's drain in timeline.js) will finalize this in a follow-up beat — that's where the
+    // deathwish fires and the card slides to the graveyard.
+    emitOutcome("death", {
+      instId: pick.c.instId,
+      name: pick.c.name,
+      side: enemySide,
+      loc, pos: pick.pos,
+      killerInstId: null,
+      isToken: !!pick.c.isToken
+    });
+    pick.c.pendingLeavePile = "graveyard";
   }
 }
 

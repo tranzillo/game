@@ -2,9 +2,10 @@ import { state, setState, createCard, freshLocation, L, shuffle } from "./state.
 import { buildStartingDeck, WORLD_DEFS } from "../data/worlds.js";
 import { LOCATION_COUNT, LOC_NAMES, setLocationConfig } from "./config.js";
 import { logEntry } from "./log.js";
-import { render, resetPlayedOutcomes } from "../ui/render.js";
+import { render } from "../ui/render.js";
 import { _cardRegistry, _chipRegistry } from "../ui/registries.js";
-import { clearQueue as clearScene } from "../ui/scene.js";
+import { resetEvents } from "./events.js";
+import { cancelAll as cancelAllBeats } from "./scheduler.js";
 import { attachEquipmentToHost, emitFutureChip, startNewTurn } from "./core.js";
 
 // ---------- v3 run / overworld state ----------
@@ -263,11 +264,11 @@ export function loadEncounterFromPawn(clickedNodeId) {
     if (el.parentNode) el.parentNode.removeChild(el);
   }
   _cardRegistry.clear();
-  // Same reset for the timeline chip registry, and for the outcome-played tracker so the
-  // next encounter's outcome IDs (which reset to 1) get animated.
+  // Same reset for the timeline chip registry.
   _chipRegistry.clear();
-  resetPlayedOutcomes();
-  clearScene();
+  // Reset the engine→UI event id counter and cancel any pending beat from a prior encounter.
+  resetEvents();
+  cancelAllBeats();
 
   // Place each node's contents into the AI side's slot grid at that node's location index.
   for (let loc = 0; loc < encounterNodeIds.length; loc++) {

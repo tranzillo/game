@@ -6,7 +6,7 @@ import { endEncounter } from "../engine/run.js";
 import { flashLog } from "./render.js";
 import { logEntry } from "../engine/log.js";
 import { start } from "../main.js";
-import { setSpeed } from "./scene.js";
+import { setSpeed } from "./animations.js";
 
 // ---------- Export ----------
 export function buildExport() {

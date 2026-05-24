@@ -244,16 +244,23 @@ async function runCombat() {
 
 The structure is the same; the pacing mechanism is different. `setTimeout` becomes `await`. The UI controls timing via its event playback.
 
-### Yield points (one per beat)
+### Yield points (visual checkpoints)
 
-The engine yields at phase-meaningful boundaries. A "beat" is one logical resolution unit:
+The engine yields whenever a state transition needs to be **visible** before the next state transition happens. Each yield is a render checkpoint: the engine renders before yielding, then waits for the UI to finish playing all events emitted up to this point.
 
-- **One attacker swinging** (in `runCombat`). The full chain — damage, death, deathwish, summon, leave-play — happens synchronously in engine state, emitting events. The yield happens AFTER the chain completes, with all events batched. The UI plays them serially.
-- **One reveal event** (in `endOfPhaseRevealAndResolve`). One flip, one action, one equipment attach. Same pattern: event chain emitted synchronously, single yield after.
-- **One creature movement** during interactive phases. Player clicks; engine moves; emits `move`; yields once.
-- **One auto-advance** in `maybeAutoAdvance`. The auto-advance fires after a single yield.
+Typical patterns:
 
-There is **never** a yield in the middle of resolving a single beat. The engine doesn't pause halfway through an effect to wait for animation. Effect resolution is atomic from the engine's perspective; the UI's view of pacing is what gives the *appearance* of mid-effect pauses.
+- **One reveal event** (in `endOfPhaseRevealAndResolve`). One flip, one action, one equipment attach. The card's state changes (revealed=true, action resolved); render captures it; yield. Next reveal event waits for this one to finish playing.
+- **One attacker swinging — non-lethal** (in `runCombat`). State changes: attacker spent ammo if any, defender took damage. Render. Yield with `attack` + `damage` events batched.
+- **One attacker swinging — lethal** (in `runCombat`). Two yields:
+  1. First yield: defender took damage, durability ≤ 0, but card still in slot. Render shows card in slot. Yield with `attack` + `damage` + `death` events. The UI plays `death` *in the slot*.
+  2. Second yield: engine fires leave-play triggers (deathwish), removes card from slot, sends to pile. Render shows card in pile. Yield with `deathwish-trigger` + `summon` + `leave-play` events. The render's FLIP slides the card from slot to pile.
+- **One creature movement** during interactive phases. Player clicks; engine moves; render; yield with `move` event.
+- **Auto-advance** in `maybeAutoAdvance`. Still uses a brief setTimeout (not a yield) — this isn't a "wait for UI" but "wait briefly so the player can react." Different concept; stays as setTimeout.
+
+The rule: **a yield happens between any two state transitions that need separate visual moments.** Most beats are single yields. Death-with-deathwish is the canonical multi-yield case because the card needs to die in its slot before sliding away. Other multi-yield cases will emerge as new mechanics ship — that's expected.
+
+The engine never yields *during* effect resolution; effect resolution within a single yield-bracketed step is synchronous. Yields are between effects, not within them.
 
 ### What "playEvents" does
 
@@ -467,8 +474,8 @@ The current `src/` has the scene queue attempt that hangs mid-combat. Rebuilding
 - Pile rendering using real card elements.
 
 **Phase 2 — rewrite:**
-- `src/engine/combat.js` — async runCombat with single yield per attacker.
-- `src/engine/timeline.js` — async endOfPhaseRevealAndResolve with single yield per reveal event.
+- `src/engine/combat.js` — async runCombat with yields at visual checkpoints (typically one per non-lethal swing; two per lethal swing — slot-death then pile-slide).
+- `src/engine/timeline.js` — async endOfPhaseRevealAndResolve with one yield per reveal event.
 - `src/engine/phases.js` — async phase transitions.
 - `src/engine/triggers.js` — fireFlipUpTrigger emits events along the way.
 - `src/ui/animations.js` — handler registry, playEvents function.

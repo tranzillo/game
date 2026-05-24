@@ -30,13 +30,9 @@ import {
   captureChipRects,
   applyChipFlipAnimations
 } from "./animations.js";
-import { enqueueOutcomes, DURATIONS, isDyingForFlip } from "./scene.js";
 
 // ---------- UI: rendering ----------
 const $ = (id) => document.getElementById(id);
-
-// Outcomes already played by playOutcomes(). Tracks `id` from emitOutcome to avoid replaying.
-let _lastPlayedOutcomeId = 0;
 
 // Most recent combat preview, computed at start of each render during main phase.
 let _combatPreview = null;
@@ -426,19 +422,22 @@ export function capturePreRenderRects() {
 // Per-card FLIP duration multipliers. Cards taking longer journeys (board → graveyard) feel
 // better with a slower transition so the player tracks the movement; cards just shifting one
 // slot animate quickly.
-function flipDurationFor(dx, dy, isDying) {
+function flipDurationFor(dx, dy) {
   const dist = Math.sqrt(dx * dx + dy * dy);
-  // Base 280ms for short moves. Distances over ~300px get up to 520ms.
+  // Base 280ms for short moves. Distances over ~300px get up to 480ms.
   let ms = 280;
   if (dist > 200) ms = 380;
   if (dist > 400) ms = 480;
-  // Dying cards already have a 400ms death animation playing — match the slide to that so the
-  // "death fade + fall to graveyard" reads as one unified motion.
-  if (isDying) ms = Math.max(ms, 420);
   return ms;
 }
 
-export function applyFlipAnimations(preRects, dyingInstIds = null) {
+// FLIP: for every persistent card element that has a previous rect AND a different current rect,
+// inverse-transform and transition to identity. The card visibly slides from old to new position.
+//
+// Per REBUILD_PLAN sec 17: this is the mechanism that makes "cards move seamlessly between
+// piles" work. The persistent DOM (one element per card.instId, kept across renders) plus FLIP
+// gives the visible card-cycle from board → graveyard, hand → discard, deck → hand, etc.
+export function applyFlipAnimations(preRects) {
   for (const [id, el] of _cardRegistry) {
     if (!el.isConnected) continue;
     const oldRect = preRects.get(id);
@@ -446,26 +445,14 @@ export function applyFlipAnimations(preRects, dyingInstIds = null) {
     const newRect = el.getBoundingClientRect();
     const dx = oldRect.left - newRect.left;
     const dy = oldRect.top - newRect.top;
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;  // didn't move
-    const isDying = dyingInstIds && dyingInstIds.has(id);
-    // Cancel any running animation transform.
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    const duration = flipDurationFor(dx, dy);
     el.style.transition = "none";
     el.style.transform = `translate(${dx}px, ${dy}px)`;
-    el.style.zIndex = "10";  // float above neighbors during animation
-    // Force reflow so the browser registers the transform before we start the transition.
-    void el.offsetWidth;
-    if (isDying) {
-      // Dying card: hold at the slot position. The leave-play scene step (later in the queue)
-      // will release the slide by calling releaseDyingSlide(instId). Mark the element so the
-      // scene step can find it.
-      el.dataset.flipHeld = "1";
-      // Don't start the transition. Inverse transform stays applied; card sticks to slot.
-    } else {
-      const duration = flipDurationFor(dx, dy, false);
-      el.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-      el.style.transform = "";
-    }
-    // Reset z-index when animation completes so cards layer normally afterward.
+    el.style.zIndex = "10";
+    void el.offsetWidth;  // reflow so the transform takes effect before the transition starts
+    el.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    el.style.transform = "";
     const onDone = () => {
       el.style.zIndex = "";
       el.style.transition = "";
@@ -475,27 +462,8 @@ export function applyFlipAnimations(preRects, dyingInstIds = null) {
   }
 }
 
-// Release a dying-card hold: triggers the slide from slot → pile that was deferred until the
-// leave-play scene step. Called by scene.js when the leave-play step plays.
-export function releaseDyingSlide(instId) {
-  const el = _cardRegistry.get(instId);
-  if (!el || !el.isConnected) return;
-  if (!el.dataset.flipHeld) return;
-  delete el.dataset.flipHeld;
-  // The element currently has an inverse translate. Transition to identity = slide to pile.
-  // Read the transform to compute distance for the timing.
-  const m = window.getComputedStyle(el).transform;
-  // m is like "matrix(1, 0, 0, 1, tx, ty)"; extract tx, ty for the heuristic duration.
-  let tx = 0, ty = 0;
-  const match = /matrix\(.*?,\s*.*?,\s*.*?,\s*.*?,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\)/.exec(m);
-  if (match) { tx = parseFloat(match[1]); ty = parseFloat(match[2]); }
-  const duration = flipDurationFor(-tx, -ty, true);
-  el.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-  el.style.transform = "";
-}
-
 export function render() {
-  // v3: branch by view mode. Menu → Overworld → Encounter.
+  // Branch by view mode. Menu → Overworld → Encounter.
   if (state.runOver) {
     showGameOver();
   }
@@ -507,37 +475,18 @@ export function render() {
     renderOverworld();
     return;
   }
-  // Encounter view — FLIP animation wraps the render: capture rects, render (DOM reparenting),
-  // apply inverse transforms, transition to identity. Cards visibly fly between zones.
+  // Encounter view — FLIP wraps the render: capture rects before, mutate DOM, apply inverse
+  // transforms, transition to identity. Cards visibly slide between zones (slot ↔ pile ↔ hand).
+  // Per REBUILD_PLAN sec 17 — this is the load-bearing visual mechanism. Engine events trigger
+  // their own animations (shake/pulse/etc.) via the subscribe handler in animations.js — those
+  // use non-transform CSS properties so they compose with FLIP.
   const preRects = capturePreRenderRects();
   const preChipRects = captureChipRects();
   renderEncounter();
-  // Sweep the persistent-card registry to remove elements whose cards no longer exist in any zone.
   sweepCardRegistry();
   sweepChipRegistry();
-  // Enqueue scene steps for new outcomes BEFORE computing dyingInstIds — enqueueOutcomes adds
-  // dying cards to the scene's internal _dyingInstIds set, which FLIP queries.
-  const fresh = (state.outcomes || []).filter(o => o.id > _lastPlayedOutcomeId);
-  if (fresh.length > 0) {
-    enqueueOutcomes(fresh, preRects);
-    _lastPlayedOutcomeId = fresh[fresh.length - 1].id;
-  }
-  // Determine which cards are mid-death so FLIP holds them at the slot position. The scene's
-  // leave-play step will release the hold when it plays.
-  const dyingInstIds = computeDyingInstIds();
-  // FLIP slides for cards that moved zones. Dying cards get held; non-dying slide immediately.
-  applyFlipAnimations(preRects, dyingInstIds);
+  applyFlipAnimations(preRects);
   applyChipFlipAnimations(preChipRects);
-}
-
-// A card is "dying" if its death scene step has been queued but its leave-play step has not
-// played yet. Scene tracks this via _dyingInstIds — FLIP queries it for the per-card hold.
-function computeDyingInstIds() {
-  const dying = new Set();
-  for (const [id] of _cardRegistry) {
-    if (isDyingForFlip(id)) dying.add(id);
-  }
-  return dying;
 }
 
 // Sweep chip registry: remove entries whose chips are no longer in state.timeline.
@@ -549,12 +498,6 @@ function sweepChipRegistry() {
       _chipRegistry.delete(id);
     }
   }
-}
-
-// Reset the outcome-played tracker. Called when an encounter starts/ends so stale ids don't
-// suppress animations on a new encounter's outcomes (whose ids start fresh).
-export function resetPlayedOutcomes() {
-  _lastPlayedOutcomeId = 0;
 }
 
 // Start menu: pick a starter deck (Red or Green) before the run begins.
