@@ -38,9 +38,11 @@ export const DURATIONS_MS = {
   "summoner-damage": 240,
   "summoner-damage-fizzle": 120,
   "token-to-discard": 240,
-  flip: 320,
-  "action-resolve": 240,
+  flip: 380,           // chip's stay in present + card's face-down→face-up animation
+  "action-resolve": 280,
   commit: 0,           // commit is the moment of player action; no UI pause
+  reshuffle: 480,      // discard pile visibly moves into deck pile via FLIP slide
+  draw: 320,           // top deck card visibly slides into hand
 
   // Engine-internal pacing beats (no specific event kind)
   "phase-divider": 500,
@@ -190,6 +192,8 @@ function handleEvent(ev) {
     case "trigger":
       animateCardEvent(ev.instId, "shake");
       break;
+    case "reshuffle":
+    case "draw":
     case "move":
     case "flip":
     case "action-resolve":

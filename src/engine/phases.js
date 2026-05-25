@@ -12,6 +12,7 @@ import { aiPlaceMain, checkAiRetreat } from "./ai.js";
 import { revertEndOfTurnBuffs } from "./marks.js";
 import { isPlaying, startSequence, endSequence, runBeat } from "./scheduler.js";
 import { durationFor } from "../ui/animations.js";
+import { emit } from "./events.js";
 
 // ---------- Phases ----------
 // Upkeep is split into "start of upkeep" (per-turn resets and start-of-upkeep neutral effects like
@@ -144,9 +145,12 @@ export function resolveNeutralUpkeep() {
 // to this — see globalStatTotal("insight"). So drawing fills the hand up to 5 + Insight cards.
 export const BASE_DRAW_TARGET = 5;
 
-// Draw a single card. Used by effects like Study (Blue) that draw one card on resolve. Reshuffles
-// the discard if the deck is empty. Returns the drawn card or null if both deck and discard are
-// empty.
+// Draw a single card SYNCHRONOUSLY. Used by effects mid-action-resolution (Study) where the
+// draw is one step inside a larger beat. Reshuffles the discard if the deck is empty.
+// Returns the drawn card or null if both deck and discard are empty.
+//
+// For batched, visible draws (the draw phase, multiple cards per side) use drawOneScheduled
+// — it splits reshuffle and draw into discrete beats so the player sees the cards move.
 export function drawOne(sideName) {
   const s = state.sides[sideName];
   if (s.deck.length === 0) {
@@ -154,35 +158,81 @@ export function drawOne(sideName) {
     s.deck = shuffle(s.discard);
     s.discard = [];
     logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+    emit("reshuffle", { side: sideName });
   }
   const card = s.deck.shift();
   s.hand.push(card);
+  emit("draw", { side: sideName, instId: card ? card.instId : null });
   return card;
 }
-export function runDraw() {
+
+// Draw a single card with VISIBLE BEATS. If a reshuffle is needed, that's one beat (discard
+// pile visibly moves into deck pile via FLIP). Then the draw is its own beat (top deck card
+// visibly slides into hand). Calls onDone(card) when done.
+export function drawOneScheduled(sideName, onDone) {
+  const s = state.sides[sideName];
+  if (s.deck.length === 0) {
+    if (s.discard.length === 0) { onDone(null); return; }
+    // Reshuffle beat — the discard pile moves into the deck pile. The cards are the same
+    // DOM elements (persistent _cardRegistry); FLIP slides them on render.
+    s.deck = shuffle(s.discard);
+    s.discard = [];
+    logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+    emit("reshuffle", { side: sideName });
+    render();
+    runBeat(durationFor("reshuffle"), () => doScheduledDraw(sideName, onDone));
+    return;
+  }
+  doScheduledDraw(sideName, onDone);
+}
+
+function doScheduledDraw(sideName, onDone) {
+  const s = state.sides[sideName];
+  if (s.deck.length === 0) { onDone(null); return; }
+  const card = s.deck.shift();
+  s.hand.push(card);
+  emit("draw", { side: sideName, instId: card.instId, name: card.name });
+  render();
+  runBeat(durationFor("draw"), () => onDone(card));
+}
+
+// Beat-chained draw phase. Draws for player then AI, one card at a time, with a beat between
+// each. Calls onDone() when both sides have drawn to their target hand size.
+export function runDraw(onDone) {
   state.phase = "draw";
   logEntry(`— Draw —`, "phase");
   firePhaseHook("onDrawStart");
-  for (const sideName of ["player", "ai"]) {
+  drawForSide("player", () => {
+    drawForSide("ai", () => {
+      logEntry(`Draw phase complete.`, "draw");
+      firePhaseHook("onDrawEnd");
+      if (onDone) onDone();
+    });
+  });
+}
+
+function drawForSide(sideName, onDone) {
+  const insight = globalStatTotal(sideName, "insight");
+  const target = BASE_DRAW_TARGET + insight;
+  function step() {
     const s = state.sides[sideName];
-    const insight = globalStatTotal(sideName, "insight");
-    const target = BASE_DRAW_TARGET + insight;
-    while (s.hand.length < target) {
-      if (s.deck.length === 0) {
-        if (s.discard.length === 0) break; // truly out
-        s.deck = shuffle(s.discard);
-        s.discard = [];
-        logEntry(`${sideName === "player" ? "Your" : "AI"} discard pile reshuffled into deck.`, "draw");
+    if (s.hand.length >= target) {
+      if (insight > 0 && sideName === "player") {
+        logEntry(`Insight ${insight} → drew up to ${target} cards.`, "draw");
       }
-      const card = s.deck.shift();
-      s.hand.push(card);
+      onDone();
+      return;
     }
-    if (insight > 0 && sideName === "player") {
-      logEntry(`Insight ${insight} → drew up to ${target} cards.`, "draw");
-    }
+    drawOneScheduled(sideName, (card) => {
+      if (!card) {
+        // Truly out — no deck, no discard. Stop drawing.
+        onDone();
+        return;
+      }
+      step();
+    });
   }
-  logEntry(`Draw phase complete.`, "draw");
-  firePhaseHook("onDrawEnd");
+  step();
 }
 
 export function runMain() {
@@ -471,10 +521,14 @@ export function advancePhase() {
     commitPendingPlays();
     runUpkeepEnd(() => {
       if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
-      runDraw();
-      render();
-      endSequence();
-      maybeAutoAdvance();
+      // runDraw is beat-chained now — draws each card as its own beat with a reshuffle beat
+      // if needed. onDone fires after both sides have drawn to target.
+      runDraw(() => {
+        if (state.gameOver || state.view !== "encounter") { render(); showGameOver(); endSequence(); return; }
+        render();
+        endSequence();
+        maybeAutoAdvance();
+      });
     });
     return;
   }

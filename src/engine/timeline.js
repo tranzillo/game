@@ -328,13 +328,25 @@ function processOne(events, idx, onDone) {
     return;
   }
   const ev = events[idx];
-  processEvent(ev);
+  // TWO-BEAT REVEAL per REBUILD_PLAN sec 15:
+  //   Beat A — chip enters present. Card flips face-up. Chip transit-to-present render.
+  //            (Triggers / action effects DO NOT fire yet.)
+  //   Beat B — effects fire (flip-up trigger, action resolve, equipment attach). Chip
+  //            falls into past. New events may emit (summon, damage, etc.).
+  // The split makes the chip visually stay in the present for a full beat alongside the
+  // card's flip-up animation.
+  beatA(ev);
   render();
-  // After the reveal event plays its beat, drain any pending deaths (e.g., the action's
-  // damage put creatures into lethal range). Each death is its own beat.
-  drainPendingDeaths(() => {
-    runBeat(durationFor(ev.kind === "flip" ? "flip" : "action-resolve"), () => {
-      processOne(events, idx + 1, onDone);
+  runBeat(durationFor("flip"), () => {
+    if (state.gameOver) { if (onDone) onDone(); return; }
+    beatB(ev);
+    render();
+    // After Beat B, drain any pending deaths (e.g., the action's damage put creatures into
+    // lethal range). Each death is its own beat.
+    drainPendingDeaths(() => {
+      runBeat(durationFor(ev.kind === "action" ? "action-resolve" : "trigger"), () => {
+        processOne(events, idx + 1, onDone);
+      });
     });
   });
 }
@@ -350,12 +362,14 @@ function drainPendingDeaths(onDrained) {
   runBeat(durationFor("leave-play"), () => drainPendingDeaths(onDrained));
 }
 
-function processEvent(ev) {
+// Beat A: just the visual flip and chip-to-present. No triggers, no resolution.
+function beatA(ev) {
   if (ev.kind === "flip") {
     const lc = L(ev.side, ev.loc);
     const stillThere = ev.where === "creature" ? lc.creatures[ev.pos] === ev.card : lc.structure === ev.card;
     if (!stillThere) {
       logEntry(`  → ${ev.card.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos || ev.where}) skipped: removed before flipping.`, "combat-detail");
+      ev._skipped = true;
       return;
     }
     ev.card.revealed = true;
@@ -370,32 +384,52 @@ function processEvent(ev) {
       const where = ev.where === "creature" ? `${LOC_NAMES[ev.loc]} ${ev.pos}` : `${LOC_NAMES[ev.loc]} (structure)`;
       logEntry(`  → Your ${ev.card.name} flips up at ${where}.`, "combat-detail");
     }
-    fireFlipUpTrigger(ev.side, ev.loc, ev.card);
-    checkQuestsForEvent({ kind: "flipUp", card: ev.card, side: ev.side, loc: ev.loc });
   } else if (ev.kind === "action") {
     const lc = L(ev.side, ev.loc);
     if (lc.action !== ev.card) {
       logEntry(`  → ${ev.card.name} (${ev.side} @${LOC_NAMES[ev.loc]}) was countered before resolving.`, "combat-detail");
+      ev._skipped = true;
       return;
     }
-    const isQuest = ev.card.subtype === "quest";
     if (ev.card.revealed === false) {
       ev.card.revealed = true;
       emit("flip", { instId: ev.card.instId, name: ev.card.name, side: ev.side, loc: ev.loc, pos: "action" });
       if (ev.side === "ai") logEntry(`  → Revealed: ${ev.card.name} (AI action at ${LOC_NAMES[ev.loc]}).`, "combat-detail");
-      if (isQuest) logEntry(`  → ${ev.card.name} (Quest) sits in slot, watching for completion.`, "combat-detail");
-      triggerSpellbooksOnActionFlip(ev.card, ev.side, ev.loc);
     }
-    if (!isQuest) resolveAction(ev.side, ev.loc);
-    _initResolved.add(`action-${ev.card.instId}`);
+    // Chip arrives in present for Beat A.
     resolveChipForCard(ev.card, ev.side, ev.loc, "action");
+    _initResolved.add(`action-${ev.card.instId}`);
   } else if (ev.kind === "equipment") {
     const lc = L(ev.side, ev.loc);
     const arr = lc.pending.equipment[ev.pos];
     const idx2 = arr ? arr.indexOf(ev.card) : -1;
-    if (idx2 === -1) return;
+    if (idx2 === -1) { ev._skipped = true; return; }
     arr.splice(idx2, 1);
     ev.card.revealed = true;
+    emit("flip", { instId: ev.card.instId, name: ev.card.name, side: ev.side, loc: ev.loc, pos: ev.pos });
+    resolveChipForCard(ev.card, ev.side, ev.loc, ev.pos);
+    _initResolved.add(`equip-${ev.card.instId}`);
+  }
+}
+
+// Beat B: triggers fire and effects resolve. Chip falls to past on this render via
+// _chipLastState transition. New events (summon/damage/etc.) emit from effects.
+function beatB(ev) {
+  if (ev._skipped) return;
+  if (ev.kind === "flip") {
+    fireFlipUpTrigger(ev.side, ev.loc, ev.card);
+    checkQuestsForEvent({ kind: "flipUp", card: ev.card, side: ev.side, loc: ev.loc });
+  } else if (ev.kind === "action") {
+    const isQuest = ev.card.subtype === "quest";
+    if (isQuest) {
+      logEntry(`  → ${ev.card.name} (Quest) sits in slot, watching for completion.`, "combat-detail");
+    } else {
+      // Spellbook trigger BEFORE resolveAction so the spellbook sees the action.
+      triggerSpellbooksOnActionFlip(ev.card, ev.side, ev.loc);
+      resolveAction(ev.side, ev.loc);
+    }
+  } else if (ev.kind === "equipment") {
+    const lc = L(ev.side, ev.loc);
     const host = lc.creatures[ev.pos];
     if (!host) {
       logEntry(`  → ${ev.card.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}) has no host — fizzles to junkyard.`, "combat-detail");
@@ -410,8 +444,6 @@ function processEvent(ev) {
     }
     logEntry(`  → ${ev.card.name} attaches to ${host.name} (${ev.side} ${LOC_NAMES[ev.loc]} ${ev.pos}).`, "combat-detail");
     fireFlipUpTrigger(ev.side, ev.loc, ev.card);
-    _initResolved.add(`equip-${ev.card.instId}`);
-    resolveChipForCard(ev.card, ev.side, ev.loc, ev.pos);
   }
 }
 
