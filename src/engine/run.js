@@ -412,6 +412,17 @@ export function endEncounter(result) {
     for (const c of [...p.hand, ...p.discard, ...p.graveyard, ...p.junkyard]) {
       if (c.acquired) acquired.push(c);
     }
+    // Per-location piles: canonically stored on the AI side's location object. Acquired cards
+    // can land here when a reroute mark sent the body to a summoner-less side.
+    for (let loc = 0; loc < LOCATION_COUNT; loc++) {
+      const lc = L("ai", loc);
+      if (!lc.piles) continue;
+      for (const zone of ["graveyard", "junkyard", "exile"]) {
+        for (const c of lc.piles[zone]) {
+          if (c.acquired) acquired.push(c);
+        }
+      }
+    }
     for (const c of acquired) {
       const mods = {};
       if (c.marks && c.marks.length > 0) {

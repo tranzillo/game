@@ -497,5 +497,5 @@ export function finalizeOneDeath({ card, side, loc, pos, pile }) {
   fireLeavePlayTriggers(card, side, loc, pos);
   detachAllEquipmentFromHost(card, side, loc);
   emit("leave-play", { instId: card.instId, name: card.name, side, loc, pos, toPile: pile });
-  sendToPile(card, side, pile);
+  sendToPile(card, side, pile, loc);
 }

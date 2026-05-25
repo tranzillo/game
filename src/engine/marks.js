@@ -1,4 +1,4 @@
-import { state, L, createCard } from "./state.js";
+import { state, L, createCard, summonerPresent } from "./state.js";
 import { LOCATION_COUNT, LOC_NAMES, LOC_TEXT_KEYS } from "./config.js";
 import { logEntry } from "./log.js";
 import { committedStatTotal, other } from "./stats.js";
@@ -97,7 +97,12 @@ export function exileFromPlay(card) {
 // Rerouted-to-player marks the card `acquired = true` so it joins runDeck at encounter end.
 // Triggers fire BEFORE this is called (per design: leave-play triggers from original side, then
 // destination modifies).
-export function sendToPile(card, intendedSide, zone) {
+//
+// `loc` (optional): the location the card is leaving from. When the destination side has no
+// summoner present at this encounter, the card routes to the LOCATION pile at `loc` rather than
+// the side root pile — bodies stay where they fell. When no `loc` is supplied (e.g., action exits,
+// equipment fizzles), routing always goes to the side root pile (summoner-driven dispositions).
+export function sendToPile(card, intendedSide, zone, loc) {
   if (card.isToken) { state.sides[intendedSide].exile.push(card); return; }
   const reroute = card.marks ? card.marks.find(m => m.kind === "reroute") : null;
   let destSide = intendedSide;
@@ -105,6 +110,13 @@ export function sendToPile(card, intendedSide, zone) {
     destSide = reroute.side;
     if (destSide === "player") card.acquired = true;
     logEntry(`  ${card.name}: rerouted to ${destSide}'s ${zone}.`, "combat-detail");
+  }
+  if (loc != null && !summonerPresent(destSide)) {
+    // The pile belongs to the LOCATION, not to a side. We canonically store it on the AI-side's
+    // location object (the side neutral cards spatially occupy) so the renderer has one place to
+    // read from.
+    L("ai", loc).piles[zone].push(card);
+    return;
   }
   state.sides[destSide][zone].push(card);
 }

@@ -82,7 +82,13 @@ export function freshLocation() {
     movedThisTurn: new Set(),
     // Ammo stockpile for this side at this location. Resets to 0 per encounter ("the wilderness
     // is fresh" — per CARD_DESIGN.md). Forage adds; ranged creatures consume on attack.
-    ammo: 0
+    ammo: 0,
+    // Per-location piles. The location itself owns these — when a creature dies on a side that
+    // has no summoner present (non-boss AI encounters, neutral encounters), the body stays here
+    // rather than vanishing into a global summoner pile. If a summoner later arrives, future
+    // deaths route to the summoner pile, but the existing location piles are not retroactively
+    // absorbed.
+    piles: { graveyard: [], junkyard: [], exile: [] }
   };
 }
 
@@ -103,6 +109,15 @@ export function freshSide(deckKeys, owner) {
 
 // Convenience accessor: side.locations[loc].
 export function L(sideName, loc) { return state.sides[sideName].locations[loc]; }
+
+// True iff the given side has a summoner conceptually present in this encounter.
+// Player: always present (the player is the summoner). AI: present only at boss encounters.
+// In a hostile (non-boss) AI encounter there is no AI summoner — the faction is a wave of
+// pre-placed forces with no central commander, so their dead don't get scooped into a pile.
+export function summonerPresent(sideName) {
+  if (sideName === "player") return true;
+  return state && state.encounterKind === "boss";
+}
 
 export let state = null;
 

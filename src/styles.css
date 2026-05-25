@@ -98,6 +98,20 @@ body { display: flex; flex-direction: column; min-height: 100vh; }
 }
 .pile-cards .pile-count { font-size: 11px; font-weight: 700; color: var(--muted); }
 
+/* Per-location pile rows. Sit just outside each side's play area — AI's row above the AI
+   structure row, player's row below the player structure row. Only render when at least one
+   zone is non-empty (the row is omitted entirely otherwise). Slots use the compact pile-stack
+   styling but are scaled down a bit so they don't dominate the column. */
+.location-pile-row {
+  display: flex; flex-direction: row; justify-content: center;
+  gap: 6px; margin: 4px 0;
+}
+.location-pile-row .loc-pile-stack {
+  width: 56px; padding: 3px;
+}
+.location-pile-row .loc-pile-stack .pile-label { font-size: 8px; margin-bottom: 2px; }
+.location-pile-row .loc-pile-cards { min-height: 72px; }
+
 /* Unified timeline (Phase 2a). L-shape that wraps the board: FUTURE bar across the top with
    the PRESENT node at the left end; PAST column runs down the left side alongside the board,
    starting right below the present. Past grows downward without pushing the board down. */

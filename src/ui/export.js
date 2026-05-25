@@ -65,6 +65,11 @@ export function buildExport() {
 
   // JSON snapshot for full reconstruction. Strip cyclic / Set fields.
   function serializableLocation(lc) {
+    const piles = lc.piles ? {
+      graveyard: lc.piles.graveyard.map(serializableCard),
+      junkyard: lc.piles.junkyard.map(serializableCard),
+      exile: lc.piles.exile.map(serializableCard)
+    } : null;
     return {
       creatures: Object.fromEntries(["fl","fr","bl","br"].map(p => [p, lc.creatures[p] ? serializableCard(lc.creatures[p]) : null])),
       structure: lc.structure ? serializableCard(lc.structure) : null,
@@ -74,7 +79,8 @@ export function buildExport() {
         structure: lc.pending.structure ? serializableCard(lc.pending.structure) : null,
         action: lc.pending.action ? serializableCard(lc.pending.action) : null
       },
-      movedThisTurn: Array.from(lc.movedThisTurn || [])
+      movedThisTurn: Array.from(lc.movedThisTurn || []),
+      piles
     };
   }
   function serializableSide(s) {

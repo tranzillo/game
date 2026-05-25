@@ -362,8 +362,8 @@ export function renderPiles() {
   fillPile("pile-exile-cards", p.exile, false);
 }
 
-export function fillPile(elId, cards, faceDown) {
-  const el = $(elId);
+export function fillPile(elOrId, cards, faceDown) {
+  const el = typeof elOrId === "string" ? $(elOrId) : elOrId;
   if (!el) return;
   el.innerHTML = "";
   if (!cards || cards.length === 0) {
@@ -846,7 +846,47 @@ export function buildLocationColumn(loc) {
   playerStructRow.appendChild(document.createElement("div"));
   col.appendChild(playerStructRow);
 
+  // Per-location piles row (graveyard / junkyard / exile that belong to the location itself).
+  // Populated when a card dies on a side with no summoner present. Renders nothing when all
+  // zones are empty.
+  const locPiles = buildLocationPileRow(loc);
+  if (locPiles) col.appendChild(locPiles);
+
   return col;
+}
+
+// Build a row of compact pile slots for one location's own piles. Returns null when all zones
+// are empty (so the row collapses out of layout entirely). Each non-empty zone is rendered as
+// a small pile via fillPile, reusing the persistent-card-DOM + FLIP-on-arrival behavior the
+// side-root piles already use. Slot ids follow `loc-pile-{loc}-{zone}` so subsequent renders
+// find the same container.
+export function buildLocationPileRow(loc) {
+  if (!state.sides) return null;
+  // Pull piles off either side's location — they share the location data via shared structure.
+  // (Both sides' `locations[loc].piles` should be the same per-location pile, but in the current
+  // model each side keeps its own location object, so we read from "ai" by convention.)
+  const lc = L("ai", loc);
+  if (!lc || !lc.piles) return null;
+  const zones = ["graveyard", "junkyard", "exile"];
+  const nonEmpty = zones.filter(z => lc.piles[z].length > 0);
+  if (nonEmpty.length === 0) return null;
+  const row = document.createElement("div");
+  row.className = "location-pile-row";
+  for (const zone of nonEmpty) {
+    const slot = document.createElement("div");
+    slot.className = "pile-stack loc-pile-stack";
+    const label = document.createElement("div");
+    label.className = "pile-label";
+    label.textContent = zone.toUpperCase().slice(0, 4);  // GRAV / JUNK / EXIL
+    slot.appendChild(label);
+    const cards = document.createElement("div");
+    cards.className = "pile-cards loc-pile-cards";
+    cards.id = `loc-pile-${loc}-${zone}`;
+    slot.appendChild(cards);
+    row.appendChild(slot);
+    fillPile(cards, lc.piles[zone], false);
+  }
+  return row;
 }
 
 export function buildStatRow(side, loc) {
@@ -1096,8 +1136,23 @@ export function getCardOuterEl(card) {
   // still fire on the old DOM-detached element, which is harmless (the user can't click an
   // element not in the document).
   el.innerHTML = "";
+  // Preserve in-flight animation state across renders. The event-handler in animations.js fires
+  // synchronously from emit(), then the engine calls render() immediately — without this
+  // preservation, the className wipe + style strip would erase the anim-* keyframe classes and
+  // any inline transform/transition (e.g., the attack lurch) before they could paint.
+  const preservedAnims = [];
+  for (const cls of el.classList) {
+    if (cls.startsWith("anim-")) preservedAnims.push(cls);
+  }
+  const preservedTransform = el.style.transform;
+  const preservedTransition = el.style.transition;
+  const preservedZIndex = el.style.zIndex;
   el.className = "";
   el.removeAttribute("style");
+  for (const cls of preservedAnims) el.classList.add(cls);
+  if (preservedTransform) el.style.transform = preservedTransform;
+  if (preservedTransition) el.style.transition = preservedTransition;
+  if (preservedZIndex) el.style.zIndex = preservedZIndex;
   el.draggable = false;
   return el;
 }
@@ -1131,6 +1186,12 @@ export function sweepCardRegistry() {
       for (const pos of ["fl","fr","bl","br"]) {
         const arr = lc.pending.equipment[pos];
         if (arr) for (const eq of arr) alive.add(eq.instId);
+      }
+      // Per-location piles (cards that died here when no summoner was present).
+      if (lc.piles) {
+        for (const zone of ["graveyard", "junkyard", "exile"]) {
+          for (const c of lc.piles[zone]) alive.add(c.instId);
+        }
       }
       // Attached equipment.
       for (const pos of ["fl","fr","bl","br"]) {
@@ -1184,7 +1245,14 @@ export function makeCardEl(card, inSlot = false) {
   const prevRevealed = _lastRevealed.has(card.instId) ? _lastRevealed.get(card.instId) : card.revealed;
   const justFlippedUp = prevRevealed === false && card.revealed !== false && card.owner !== "player";
   _lastRevealed.set(card.instId, card.revealed);
+  // Preserve in-flight anim-* classes (getCardOuterEl stripped className above; re-add them
+  // before we set the base `card ${type}` so the keyframe in progress survives.
+  const preservedAnims = [];
+  for (const cls of el.classList) {
+    if (cls.startsWith("anim-")) preservedAnims.push(cls);
+  }
   el.className = `card ${card.type}`;
+  for (const cls of preservedAnims) el.classList.add(cls);
   if (card.owner === "ai") el.classList.add("ai-owned");
   if (inSlot) el.classList.add("in-slot");
   if (state.selectedCardId === card.instId) el.classList.add("selected");
