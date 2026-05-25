@@ -600,77 +600,112 @@ The bet: rebuilding the prototype's scope on the new architecture should be poss
 
 ---
 
-## 23. Directory and module layout
+## 23. Tech stack and directory layout
 
-The rebuilt code lives in `src/`. Module boundaries match the architecture sections.
+### Tech stack
+
+- **TypeScript** — non-negotiable. Card defs, marks, stats, effect dispatch by string tag — the data shapes are polymorphic enough that TS catches whole classes of prototype bugs at compile time (e.g., the "neutral creature whose owner is 'neutral' but spatially side 'ai'" ambiguity becomes a discriminated union).
+- **React** — view layer. Persistent DOM identity per card via `<Card key={card.instId} />` — the React reconciler keeps the same DOM node across renders, which is exactly what §17's "cards visibly slide between zones" requires. We know React; the marginal correctness gains of Solid or Svelte are real but not worth the learning cost or ecosystem loss for this project.
+- **Framer Motion** — animation layer. Its `layout` prop is the FLIP pattern as a library primitive. When a card changes parent (slot → hand → graveyard), Framer measures old and new positions and animates the transform automatically. **Framer owns `transform` exclusively.** Per AL #5, our own CSS animations only touch non-transform properties (opacity, filter, box-shadow, background) so they compose. Crash/shake/damage flash/death fade are declarative Framer variants.
+- **Zustand** — state container. Plain TS object store, works outside React (so engine tests run headless without React loaded). React subscribes via hooks; the engine reads/writes via store.getState / store.setState. No reducer boilerplate.
+- **Vite** — dev server + bundler. Native ESM, TS support, fast HMR.
+- **Vitest** — kept from the prototype. Tests stay headless; no DOM, no timers.
+
+### Library responsibilities, in plain terms
+
+- The **engine** is pure functions. `(state, input) → { newState, events[] }`. No React, no DOM, no timers. Testable in vitest with no setup.
+- **Zustand** is just where the state object lives. The engine writes the state; React reads it.
+- **React** subscribes to the store and renders the DOM. It owns the structure of the page.
+- **Framer Motion** owns animation. When the DOM structure changes (cards moving between parents), Framer Motion animates the transition. The engine doesn't know Framer Motion exists.
+- The **scheduler** runs setTimeout-chained beats. Between beats the engine is dormant. The engine emits events to subscribers; one subscriber is the animation layer (CSS class flashes for shake/pulse/damage), another is React via Zustand.
+
+### Directory layout
 
 ```
 src/
-  main.js                  — boot, registers UI handler, kicks off the start menu
+  main.tsx                 — boot: mount React, register engine event handlers, render <App />
 
-  engine/
-    state.js               — the state shape, createCard, freshState, setState
-    events.js              — emit(), subscribe() — the synchronous engine→UI boundary
-    scheduler.js           — runBeat() / scheduleBeat() — the setTimeout-chained loop, isPlaying flag
-    config.js              — per-event-kind duration table; global speed multiplier
+  engine/                  — pure game logic. No React, no DOM, no timers. Tested with vitest.
+    state.ts               — the state shape, createCard, freshState, setState
+    events.ts              — emit(), subscribe() — the synchronous engine→world boundary
+    scheduler.ts           — runBeat() / scheduleBeat() — setTimeout-chained beats, isPlaying flag
+    config.ts              — per-event-kind duration table; global speed multiplier
 
-    run.js                 — overworld map, floor progression, encounter setup/teardown,
+    run.ts                 — overworld map, floor progression, encounter setup/teardown,
                              between-encounter persistence (deck, durability, structures)
-    encounter.js           — encounter loop: phases, turn flow, win condition check
-    profile.js             — slot profiles + spatial query helpers
+    encounter.ts           — encounter loop: phases, turn flow, win condition check
+    profile.ts             — slot profiles + spatial query helpers
 
-    cards.js               — CARD_DEFS template, instance fields, level/xp progression layer
-    stats.js               — effectiveStat layered reads (base + level + buffs + grants + conditionals)
-    legality.js            — canPay, legal targets, placement, commit window rules
-    marks.js               — applyMark, sendToPile, reroute/convert/damage behaviors
+    cards.ts               — CARD_DEFS template, instance fields, level/xp progression layer
+    stats.ts               — effectiveStat layered reads (base + level + buffs + grants + conditionals)
+    legality.ts            — canPay, legal targets, placement, commit window rules
+    marks.ts               — applyMark, sendToPile, reroute/convert/damage behaviors
 
-    combat.js              — combat order, beat-by-beat attack resolution
-    triggers.js            — flip-up dispatcher, on-leave triggers, deathwish dispatcher,
+    combat.ts              — combat order + pure attack resolution (returns events; no render calls)
+    triggers.ts            — flip-up dispatcher, on-leave triggers, deathwish dispatcher,
                              string-tag→handler map for all card effects
-    actions.js             — action effect handlers (resolveAction by effect tag)
+    actions.ts             — action effect handlers (resolveAction by effect tag)
 
-    ai.js                  — AI hand-to-board placement during hostile encounter main phases
+    ai.ts                  — AI hand-to-board placement during hostile encounter main phases
 
-    locations.js           — LOCATION_TEXTS registry (location-text behaviors + slot profile per key)
+    locations.ts           — LOCATION_TEXTS registry (location-text behaviors + slot profile per key)
 
-  data/
-    cards/                 — CARD_DEFS split by color/role
-      red.js
-      green.js
-      blue.js
-      tokens.js
-      ...
-    worlds.js              — map definition (nodes, edges, contents per node)
-    locations.js           — concrete location texts referenced by key
+    types.ts               — shared TS types (Card, Side, Phase, Event, etc.) used across engine
+
+  store/
+    index.ts               — Zustand store: holds engine state, exposes selectors + actions
+                             (actions are thin wrappers that call into engine/* and persist results)
 
   ui/
-    render.js              — pure render functions reading state, top-level render()
-    registries.js          — _cardRegistry, _chipRegistry (persistent DOM per instId / chipId)
-    animations.js          — the single subscribe handler that dispatches by event.kind;
-                             playClass, FLIP, crash, shake, pulse helpers
-    handlers.js            — click handlers, drag handlers; gate on isPlaying flag
+    App.tsx                — top-level component, routes between menu/overworld/encounter
+    handlers.ts            — engine event → animation dispatcher; subscribed at boot
 
     components/
-      hand.js
-      board.js
-      pile.js
-      chip-strip.js
-      summoner-bar.js
-      controls.js
-      overworld.js
-      start-menu.js
-      game-over.js
+      Hand.tsx
+      Board.tsx
+      Location.tsx
+      Slot.tsx
+      Card.tsx             — the persistent-identity card component. Framer Motion `layout` here.
+      Pile.tsx
+      ChipStrip.tsx
+      Chip.tsx             — persistent identity per chip; Framer `layout` for transit through present
+      SummonerBar.tsx
+      Controls.tsx
+      Overworld.tsx
+      StartMenu.tsx
+      GameOver.tsx
 
-  styles.css               — all CSS; FLIP-compatible animation classes
+    animations/
+      events.ts            — engine-event → animation handler (adds CSS classes for shake/pulse/damage)
+      variants.ts          — Framer Motion variants (crash, shake, damage flash, death fade)
+
+  data/                    — card defs, world defs, location-text content. Pure data, no logic.
+    cards/                 — CARD_DEFS split by color
+      red.ts
+      green.ts
+      blue.ts
+      tokens.ts
+    worlds.ts              — map definition (nodes, edges, contents per node)
+    locations.ts           — concrete location-text content referenced by key
+
+  styles.css               — global CSS; non-transform animation classes only
 ```
 
 ### Notes on the layout
 
-- **Engine ↔ UI direction:** `engine/*` never imports from `ui/*`. `ui/*` may import from `engine/*` for reads (state, profiles) and event subscription. The boundary is enforced by import direction.
-- **No `core.js` barrel:** unlike the prototype, there's no single barrel re-exporting everything. Each module is imported directly where needed. Cyclic imports are avoided by keeping the dependency direction strict.
-- **`engine/scheduler.js` is new.** It owns `isPlaying`, the beat-chain, and the speed multiplier. Every engine function that produces beats schedules them through here. This is the single source of truth for "is the engine busy."
-- **`triggers.js` and `actions.js` are the two effect dispatch points.** A new card with a novel behavior adds a tag and a handler in one of these.
+- **Engine ↔ UI direction:** `engine/*` never imports from `ui/*` or `store/*`. The store imports from `engine/*` to expose actions/selectors. UI imports from `store/*` (and `engine/*` for types and pure helpers). The boundary is enforced by import direction and by TS.
+- **`engine/scheduler.ts` is the single owner of "is the engine busy."** Every engine function that produces beats schedules them through here. Click handlers check the flag and bail if set.
+- **`ui/components/Card.tsx` owns the persistent-DOM-per-card contract.** Mount it with `<Card key={card.instId} layout />` and Framer Motion handles the slide animation when its parent changes. No manual FLIP, no `getBoundingClientRect`, no className wars.
+- **`triggers.ts` and `actions.ts` are the two effect dispatch points.** A new card with a novel behavior adds a string tag and a handler in one of these.
 - **`data/cards/` is split by color** to keep files small as content grows.
+
+### What the prototype taught us about the boundary
+
+The prototype had `getCardOuterEl(card)` which stripped `className` and `style` on every render — silently destroying any animation state added by the event handler. That bug was an emergent property of two writers (event handler, renderer) touching the same persistent DOM node with no contract. The new architecture removes both writers:
+- The renderer (React) only sets props on `<Card />`. It never touches `style.transform` or `className` directly.
+- The event handler triggers Framer Motion variants via state changes (e.g., set `cardState.isAttacking = true`, the component renders with the attack variant, Framer plays it, the engine moves on).
+
+This is what AL #1, #4, and #5 prescribe, made concrete by the framework choice.
 
 ---
 
@@ -678,51 +713,108 @@ src/
 
 Build order for v1, in phases that each end at a runnable, testable state.
 
-### Phase 0 — Throw it all out
+### What gets archived, what gets ported, what gets rewritten
 
-Delete `src/`, `tests/`, `index.html`. Keep `package.json`, `vitest.config.js`, `node_modules/`, the docs, the backup branch. Verify clean state.
+Before any new code: the existing prototype is moved aside, not deleted.
 
-### Phase 1 — The shell
+**Archive** (`git mv` to `archive/v0-prototype/`): the entire current `src/`, `tests/`, and `index.html`. Recoverable on disk, out of the active build's way. The three `index.html.*.bak` files stay where they are.
 
-Re-create `index.html` as a thin DOM shell. Re-create `src/main.js` that boots and renders a placeholder. Re-create `src/styles.css` with foundation styles. Goal: load the page, see "v1" or similar placeholder. No engine yet.
+**Port forward** (TS-ified, side effects routed through the new boundary, but logic preserved): these 14 engine modules and all 52 tests are sound enough to keep as a starting point. They're pure or trivially purifiable:
+
+- `state.js` — state shape, createCard, freshState
+- `events.js` — emit() + subscribe() pattern
+- `scheduler.js` — setTimeout-chained beats, isPlaying flag
+- `config.js` — LOCATION_COUNT, LOC_NAMES
+- `profile.js` — slot grids + spatial helpers
+- `stats.js` — effectiveStat layered reads
+- `legality.js` — canPay, legal targets
+- `marks.js` — applyMark, sendToPile, reroute/convert/damage
+- `ai.js` — heuristic scoring + placement
+- `triggers.js` — flip-up + deathwish dispatcher
+- `quests.js`, `tokens.js` — token + quest spawning
+- `location-texts.js` — LOCATION_TEXTS registry + dispatchers
+- `log.js` — logEntry side effect (becomes a store action)
+
+**Rewrite from scratch** in the new architecture: these 4 modules have `render()` calls and `runBeat`/`setTimeout` baked into game logic. The pure parts (e.g., `computeCombatPreview`, `applyCombatDamage`, end-of-phase queue computation, `buildRunDeck`) get lifted into the new files as we go; the orchestration around them is the bug pattern AL #1/#4/#7 calls out and gets rewritten cleanly.
+
+- `phases.js` — pure phase logic into stateless helpers; orchestration moves to an explicit beat-chain
+- `combat.js` — keep the math (preview + damage application); rewrite the beat orchestration
+- `timeline.js` — keep the chip/event data shape; rewrite the queue processor as pure events
+- `run.js` — keep encounter setup + persistence; rewrite the render-driving orchestration
+
+**Reference only** (the rules of each card are correct; the shapes will become TS types): `src/data/cards.js`, `src/data/worlds.js`, `src/data/location-texts.js`. Ported in Phase 8.
+
+### Phase 0 — Archive and re-scaffold
+
+1. `git mv src/ archive/v0-prototype/src/`
+2. `git mv tests/ archive/v0-prototype/tests/`
+3. `git mv index.html archive/v0-prototype/index.html`
+4. `npm install` the new stack: `react`, `react-dom`, `framer-motion`, `zustand`, plus dev deps `typescript`, `@types/react`, `@types/react-dom`, `@vitejs/plugin-react`, `vite`. Vitest stays.
+5. Add `tsconfig.json`, `vite.config.ts` (with React plugin).
+6. Re-create `index.html` as the Vite entry point (loads `src/main.tsx`).
+7. Goal: `npm run dev` boots Vite, browser loads the page, shows a "v1 — empty" placeholder. `npm test` runs zero tests cleanly.
+
+### Phase 1 — Engine port (no UI yet)
+
+Port the 14 pure modules + types + tests into `src/engine/`. TS-ify aggressively: discriminated unions for Card subtypes, Event kinds, Phase. Strip `logEntry` side effects from the modules; route through a store action exposed from `store/`. All 52 tests must pass.
+
+Goal: `npm test` shows 52/52 green. The engine works headlessly. Nothing is rendered.
 
 ### Phase 2 — The architecture skeleton
 
-Build `engine/state.js`, `engine/events.js`, `engine/scheduler.js`, `engine/config.js`. Build `ui/render.js` with a render-state function, `ui/registries.js`, `ui/animations.js` with the subscribe handler shell. Wire them: engine can emit, UI receives, scheduler can chain a fake beat. Goal: load page, console shows beat chain working, no game logic yet.
+Wire up the engine→store→UI boundary:
+- `store/index.ts` — Zustand store wrapping engine state, exposing actions (`commit`, `advancePhase`, etc.) that call into engine functions and persist returned state.
+- `ui/App.tsx` — minimal React app that subscribes to the store and renders a state snapshot (JSON dump or similar). Just enough to confirm the boundary works.
+- `ui/animations/events.ts` — subscribes to engine events, dispatches by `event.kind`. For now it just `console.log`s. No animations.
+
+Test: trigger a fake beat from the dev console (`scheduler.scheduleBeat(() => { ... })`). Confirm: event emitted → console log fires → React rerenders. All without hangs.
+
+Goal: the three layers (engine / store / UI) talk to each other in the right direction. No game content yet.
 
 ### Phase 3 — One vertical slice: commit and flip
 
-Add minimal `cards.js` (one creature def), `legality.js` (can-place + commit), `triggers.js` (flip event, no triggers yet), `encounter.js` (main phase + reveal phase only). UI gains a hand display, a single slot, the chip strip. Goal: player clicks a card, it goes to the slot face-down, advance phase reveals it, chip moves future→past.
+Add the minimum to play one beat of the game:
+- One creature def in `data/cards/red.ts`
+- One slot, one location, one phase pair (main → reveal)
+- `ui/components/Card.tsx` with Framer `layout` prop
+- `ui/components/Hand.tsx`, `Slot.tsx`, `ChipStrip.tsx`
+- Click-to-select, click-to-place, advance button
 
-This is the moment where the architecture is validated. If this slice works without hangs and feels right, the rest is content + behavior layered on a proven foundation.
+Goal: click a card, see it slide from hand to slot (Framer `layout`), commit, flip animation plays at reveal, chip slides from future to past.
 
-### Phase 4 — Add combat
+**This is the validation moment.** If this slice works smoothly without any of the prototype's bugs (cards teleporting, animations clobbering each other, identity loss), the architecture is proven. If anything is off, stop and fix the architectural cause before going further.
 
-`combat.js`, the death-and-slide-to-graveyard beat chain, the damage animation. Add a second slot (still default 2x2 profile). Two creatures, one attacks the other, watch the visual flow. Goal: combat reads cleanly end-to-end.
+### Phase 4 — Combat
 
-### Phase 5 — Add deathwish, triggers, multi-effect cards
+`combat.ts` with the pure attack resolution lifted from the prototype. The death-and-slide-to-graveyard beat chain. The crash animation as a Framer variant on the attacker; damage flash as a CSS class on the defender. Two creatures, one attacks the other, watch the flow.
 
-Flip-up triggers, deathwish, the full string-tag dispatcher. Token spawning. The cascade pattern (death → deathwish → summon → slide). Goal: a card with a deathwish dies, plays its triggers in order, no hangs.
+Goal: combat reads cleanly end-to-end. The crash, damage flash, and death fade all compose with the slide-to-grave (per AL #5 — non-transform CSS classes for everything except the FLIP slide, which Framer owns).
+
+### Phase 5 — Triggers, deathwish, multi-effect cards
+
+Flip-up triggers, deathwish, the full string-tag dispatcher. Token spawning. The cascade pattern (death → deathwish → summon → slide). A card with a deathwish dies, plays its triggers in order, no hangs.
 
 ### Phase 6 — Multi-location encounters
 
-Lift to LOCATION_COUNT > 1. Locations row layout. Verify combat order across locations, reveal order across locations, the chip strip showing both. Goal: a 2-location encounter plays the way the prototype did.
+Lift to LOCATION_COUNT > 1. Locations row layout. Combat order across locations, reveal order across locations, the chip strip showing both.
 
 ### Phase 7 — The full encounter and run
 
-Add `run.js`, the overworld, encounter setup/teardown, between-encounter persistence (deck shuffles back, durability carries), neutral encounter content, hostile encounter with AI, boss encounter at C-adjacent nodes. Goal: complete a run.
+`run.ts`, the overworld, encounter setup/teardown, between-encounter persistence (deck shuffles back, durability carries), neutral encounter content, hostile encounter with AI, boss encounter at C-adjacent nodes.
 
-### Phase 8 — Content
+Goal: complete a run.
 
-Port the Red, Green, Blue starter pools and the location texts. Verify each card's behavior. This is the longest phase by line count but mostly data + handler tags.
+### Phase 8 — Content port
+
+Port the Red, Green, Blue starter pools and the location-text content from `archive/v0-prototype/src/data/`. Each card def becomes a TS literal with a discriminated-union type. Verify each card's behavior. Longest phase by line count but mostly data + handler tags.
 
 ### Phase 9 — Polish
 
-XP/leveling. Tuning the speed multiplier. CSS polish. Any remaining UI affordances (legal-target highlights, drag, pile click-to-view, etc.).
+XP/leveling. Tuning the speed multiplier. CSS polish. Any remaining UI affordances (legal-target highlights, drag, pile click-to-view).
 
 ### Stopping rule
 
-If at any point in phase 3+ we hit a hang or a structural problem, stop. Don't patch. Read this doc, find the architectural lapse, fix it. Then continue. The whole point of this rebuild is that the architecture should make hangs structurally impossible.
+If at any point in phase 3+ we hit a hang, a teleporting card, an animation clobber, or any of the prototype's failure patterns: **stop**. Don't patch. Read this doc, find the architectural lapse, fix it. The whole point of this rebuild is that the architecture should make those failure patterns structurally impossible.
 
 ---
 
