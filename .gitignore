@@ -9,6 +9,9 @@ build/
 .parcel-cache/
 .vite/
 
+# TypeScript
+*.tsbuildinfo
+
 # Editor / OS
 .vscode/
 .idea/

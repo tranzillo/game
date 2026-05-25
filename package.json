@@ -4,15 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "devDependencies": {
-    "@rollup/wasm-node": "^4.60.4",
-    "happy-dom": "^15.0.0",
-    "vitest": "^2.1.0"
-  },
   "optionalDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.60.4"
+  },
+  "dependencies": {
+    "framer-motion": "^12.40.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   }
 }
