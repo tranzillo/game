@@ -157,17 +157,8 @@ body { display: flex; flex-direction: column; min-height: 100vh; }
 .timeline-chip.player { border-left: 3px solid var(--player); }
 .timeline-chip.ai { border-left: 3px solid var(--ai); }
 .timeline-chip.face-down .chip-name { color: var(--muted); font-style: italic; }
-.timeline-chip.resolved { opacity: 0.7; }
-/* Chip currently passing through the present node — rendered in #timeline-present-chips for
-   one render beat. Sized slightly larger and glowing so the player sees "this is happening now." */
-.timeline-chip.in-present {
-  opacity: 1;
-  background: var(--panel);
-  border-color: var(--accent);
-  box-shadow: 0 0 12px 2px rgba(240, 192, 64, 0.5);
-  min-width: 110px;
-  font-size: 11px;
-}
+/* Per REBUILD_PLAN sec 12: chips look the same in all three zones. No zone-specific styling
+   here — the chip's DOM container (future / present / past) is the indicator of zone. */
 .timeline-chip .chip-name { font-weight: 600; color: var(--text); }
 .timeline-chip .chip-meta { color: var(--muted); font-size: 9px; }
 .timeline-chip .chip-marks { display: flex; gap: 2px; margin-top: 1px; }

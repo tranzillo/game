@@ -256,12 +256,15 @@ export function renderTimeline() {
       turn: c.turn,
       resolvedTurn: c.resolvedTurn
     };
-    const el = makeTimelineChipEl(item, /* resolved */ true);
+    // Per REBUILD_PLAN sec 12: chips look the same in all three zones. The container is the
+    // only indicator of zone — no zone-specific styling on the chip itself.
+    const el = makeTimelineChipEl(item, /* resolved */ false);
     pastEl.appendChild(el);
   }
 
-  // Transiting chips: render into the present (NOW) container. They've just resolved this beat
-  // and the player should see them in the present briefly before they fall to past on next render.
+  // Transiting chips: render into the present (NOW) container for one beat. Same chip element
+  // (via _chipRegistry) — FLIP slides it from future-strip → present, then on the next render
+  // from present → past column.
   if (presentChipsEl) {
     for (const c of tl) {
       if (!transiting.has(c.id)) continue;
@@ -278,8 +281,7 @@ export function renderTimeline() {
         turn: c.turn,
         resolvedTurn: c.resolvedTurn
       };
-      const el = makeTimelineChipEl(item, /* resolved */ true);
-      el.classList.add("in-present");
+      const el = makeTimelineChipEl(item, /* resolved */ false);
       presentChipsEl.appendChild(el);
     }
   }
@@ -296,21 +298,25 @@ export function renderTimeline() {
 // state.timeline entry or a pseudo-chip for pending commits).
 //
 // For real chips (item.chip with a stable id), we reuse the persistent DOM element across
-// renders via _chipRegistry — that's what lets FLIP animate the chip sliding between zones.
-// Pseudo-chips (pending commits) get a fresh element each render.
-export function makeTimelineChipEl(item, resolved) {
+// renders via _chipRegistry — that's what lets FLIP animate the chip sliding seamlessly
+// between zones. Pseudo-chips (pending commits) get a fresh element each render.
+//
+// Per REBUILD_PLAN sec 12: a chip looks the same in all 3 timeline zones (future / present /
+// past). The container is the only indicator of zone — no `.resolved` or `.in-present`
+// modifier classes applied here.
+export function makeTimelineChipEl(item, _unusedResolved) {
   const chipId = item.chip ? item.chip.id : null;
   let el = chipId != null ? _chipRegistry.get(chipId) : null;
   if (el) {
     el.innerHTML = "";
     el.className = "";
+    // Clear inline styles that any prior FLIP or zone-specific styling may have left.
   } else {
     el = document.createElement("div");
     if (chipId != null) _chipRegistry.set(chipId, el);
   }
   el.className = `timeline-chip ${item.side || "neutral"}`;
   if (!item.faceUp) el.classList.add("face-down");
-  if (resolved) el.classList.add("resolved");
   const name = document.createElement("div");
   name.className = "chip-name";
   name.textContent = item.faceUp ? (item.name || (item.card && item.card.name) || "?") : "?";
