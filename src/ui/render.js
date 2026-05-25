@@ -325,7 +325,7 @@ export function makeTimelineChipEl(item, _unusedResolved) {
   meta.className = "chip-meta";
   const kindStr = item.kind ? item.kind.charAt(0).toUpperCase() + item.kind.slice(1, 4) : "";
   const locStr = item.loc != null ? (LOC_NAMES[item.loc] || "?").slice(0, 6) : "";
-  const turnStr = resolved && item.resolvedTurn ? ` · t${item.resolvedTurn}` : "";
+  const turnStr = item.resolvedTurn ? ` · t${item.resolvedTurn}` : "";
   meta.textContent = `T${item.tempo} · ${kindStr}${turnStr}`;
   el.appendChild(meta);
   // Marks: visible on face-up AND face-down chips (marks are physical alterations that leak info).
