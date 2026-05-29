@@ -711,114 +711,677 @@ This is what AL #1, #4, and #5 prescribe, made concrete by the framework choice.
 
 ## 24. Implementation plan
 
-Build order for v1, in phases that each end at a runnable, testable state.
+The original §24 ("port forward 14 modules + tests, then add UI") was attempted, failed for the reasons captured in §25–§32 (the prototype carried forward many design simplifications that conflict with the locked design), and reverted. Failed work preserved on branch `archive/2026-05-25-failed-port`. Current `main` is at the Phase 0 scaffold (Vite + React + TS + Framer Motion + Zustand + Vitest installed, `src/main.tsx` placeholder, no engine, no tests, no UI components).
 
-### What gets archived, what gets ported, what gets rewritten
+This revised §24 describes the build from here forward. **Design surfaces §25–§32 are the contract.** No prototype carryover; each piece is built against the locked design.
 
-Before any new code: the existing prototype is moved aside, not deleted.
+### Approach
 
-**Archive** (`git mv` to `archive/v0-prototype/`): the entire current `src/`, `tests/`, and `index.html`. Recoverable on disk, out of the active build's way. The three `index.html.*.bak` files stay where they are.
+Feature-driven, not module-driven. Each "phase" below corresponds to a design surface (or small group of related surfaces) and builds the engine code + tests for that surface to a working state before moving on. UI work happens after the engine layer for the relevant feature exists, never before.
 
-**Port forward** (TS-ified, side effects routed through the new boundary, but logic preserved): these 14 engine modules and all 52 tests are sound enough to keep as a starting point. They're pure or trivially purifiable:
+Each phase ends at a runnable, testable state:
+- `npm test` passes (with new tests written against the design).
+- `npm run typecheck` clean.
+- `npm run build` clean.
+- Where the phase has UI scope: dev server boots cleanly and the new affordance works in the browser.
 
-- `state.js` — state shape, createCard, freshState
-- `events.js` — emit() + subscribe() pattern
-- `scheduler.js` — setTimeout-chained beats, isPlaying flag
-- `config.js` — LOCATION_COUNT, LOC_NAMES
-- `profile.js` — slot grids + spatial helpers
-- `stats.js` — effectiveStat layered reads
-- `legality.js` — canPay, legal targets
-- `marks.js` — applyMark, sendToPile, reroute/convert/damage
-- `ai.js` — heuristic scoring + placement
-- `triggers.js` — flip-up + deathwish dispatcher
-- `quests.js`, `tokens.js` — token + quest spawning
-- `location-texts.js` — LOCATION_TEXTS registry + dispatchers
-- `log.js` — logEntry side effect (becomes a store action)
+Tests are written against the **design contract** (the relevant §25–§32 sections), not against any prototype behavior. The 52 prototype tests in `archive/v0-prototype/tests/` are reference material only — they may inform new test names or coverage areas, but their assertions are not copied forward without re-verification against the design.
 
-**Rewrite from scratch** in the new architecture: these 4 modules have `render()` calls and `runBeat`/`setTimeout` baked into game logic. The pure parts (e.g., `computeCombatPreview`, `applyCombatDamage`, end-of-phase queue computation, `buildRunDeck`) get lifted into the new files as we go; the orchestration around them is the bug pattern AL #1/#4/#7 calls out and gets rewritten cleanly.
+### Phase sequence
 
-- `phases.js` — pure phase logic into stateless helpers; orchestration moves to an explicit beat-chain
-- `combat.js` — keep the math (preview + damage application); rewrite the beat orchestration
-- `timeline.js` — keep the chip/event data shape; rewrite the queue processor as pure events
-- `run.js` — keep encounter setup + persistence; rewrite the render-driving orchestration
+Each phase is engine-first, then store-actions, then UI when appropriate.
 
-**Reference only** (the rules of each card are correct; the shapes will become TS types): `src/data/cards.js`, `src/data/worlds.js`, `src/data/location-texts.js`. Ported in Phase 8.
+**Phase A — Foundation: slot profiles + state shape.** Builds the type system for cards, locations, profiles, and basic state. Engine primitives for spatial queries against profiles. Tests cover profile authoring, position iteration, spatial query results against default and variant profiles, multi-slot placement. No UI.
 
-### Phase 0 — Archive and re-scaffold
+**Phase B — Stats layer.** All five stats first-class on card defs and instances. `effectiveStat` with layered reads (printed + conditional + scoped + equipment). Scoped buffs with turn/encounter/permanent. Per-location stat totals using combat-eligibility for Force. Comparative cost evaluation at cast. Tests cover layer composition, scope reverts, the Inert filter, comparative cost paths. No UI.
 
-1. `git mv src/ archive/v0-prototype/src/`
-2. `git mv tests/ archive/v0-prototype/tests/`
-3. `git mv index.html archive/v0-prototype/index.html`
-4. `npm install` the new stack: `react`, `react-dom`, `framer-motion`, `zustand`, plus dev deps `typescript`, `@types/react`, `@types/react-dom`, `@vitejs/plugin-react`, `vite`. Vitest stays.
-5. Add `tsconfig.json`, `vite.config.ts` (with React plugin).
-6. Re-create `index.html` as the Vite entry point (loads `src/main.tsx`).
-7. Goal: `npm run dev` boots Vite, browser loads the page, shows a "v1 — empty" placeholder. `npm test` runs zero tests cleanly.
+**Phase C — Marks.** `markCount` on cards, `applyMark` with double-mark exile to trash. Tests cover the count progression, exile path, persistence into `runDeckEntry.mods`. No UI yet.
 
-### Phase 1 — Engine port (no UI yet)
+**Phase D — Pile model + ownership-by-position.** All pile types (per-side, per-location, global trash). Routing rules on leave-play based on summoner presence. Acquisition as positional move (no `owner` field). Encounter-end pile resolution. Tests cover routing into the right pile under each summoner-presence scenario and the end-of-encounter shuffle. No UI yet.
 
-Port the 14 pure modules + types + tests into `src/engine/`. TS-ify aggressively: discriminated unions for Card subtypes, Event kinds, Phase. Strip `logEntry` side effects from the modules; route through a store action exposed from `store/`. All 52 tests must pass.
+**Phase E — Phase model + flip queue + chip primitives.** Phase queue data structure with default 5-phase ordering. Play window → flip queue → substantive action shape per phase. Universal flip-up writes to The Past. Chip + Past data shapes per §32. Tests cover the flip ordering hierarchy, multi-side flip resolution, suppressed actions staying in future. No UI yet.
 
-Goal: `npm test` shows 52/52 green. The engine works headlessly. Nothing is rendered.
+**Phase F — Boundary scaffold.** Engine→store→UI boundary wired with the now-richer engine. Zustand store with notify tick, store actions for the operations we have so far. React `App` renders state diagnostically. Engine event subscriber stub.
 
-### Phase 2 — The architecture skeleton
+**Phase G — First vertical slice.** Smallest playable loop: one default-profile location, one creature card, one phase (main → flip). Player clicks card → pending → advance → flip-up trigger → card on board → next turn. Per AL #5/#6: Card with Framer `layout`, persistent React key by instId, slide animations work, no teleport, no className clobber. **This is the architecture validation moment.** If anything fails here, stop and find the architectural cause before continuing.
 
-Wire up the engine→store→UI boundary:
-- `store/index.ts` — Zustand store wrapping engine state, exposing actions (`commit`, `advancePhase`, etc.) that call into engine functions and persist returned state.
-- `ui/App.tsx` — minimal React app that subscribes to the store and renders a state snapshot (JSON dump or similar). Just enough to confirm the boundary works.
-- `ui/animations/events.ts` — subscribes to engine events, dispatches by `event.kind`. For now it just `console.log`s. No animations.
+**Phase H — Combat.** Combat phase per §30: pattern dispatcher, Tempo ordering, damage application + fall-through, Spite thorns, ranged + ammo, equipment-set-Force, the two-beat death sequence. Tests cover attack pattern resolution, fall-through specifics, death sequencing, thorns triggering only on melee.
 
-Test: trigger a fake beat from the dev console (`scheduler.scheduleBeat(() => { ... })`). Confirm: event emitted → console log fires → React rerenders. All without hangs.
+**Phase I — Triggers, deathwish, persistent actions, multi-effect cards.** Card-level + location-text-level trigger registries. Phase boundary dispatch. Deathwish in the death sequence. Persistent action lifecycle. Token spawning as standard committed-face-down. Cascade resolution.
 
-Goal: the three layers (engine / store / UI) talk to each other in the right direction. No game content yet.
+**Phase J — Multi-location encounters.** Lift to N > 1 locations. Locations row layout. Cross-location combat order, cross-location flip ordering.
 
-### Phase 3 — One vertical slice: commit and flip
+**Phase K — Win conditions + encounter end.** End-of-turn checks for clear/lose/retreat. Per-damage check for boss durability. End-of-encounter pile reshuffling. Overworld navigation between encounters. Boss encounter shape.
 
-Add the minimum to play one beat of the game:
-- One creature def in `data/cards/red.ts`
-- One slot, one location, one phase pair (main → reveal)
-- `ui/components/Card.tsx` with Framer `layout` prop
-- `ui/components/Hand.tsx`, `Slot.tsx`, `ChipStrip.tsx`
-- Click-to-select, click-to-place, advance button
+**Phase L — Run shape.** Overworld map, node graph, pawn movement, summoner presence by adjacency, war/peace location-text modes, location pile persistence across encounters.
 
-Goal: click a card, see it slide from hand to slot (Framer `layout`), commit, flip animation plays at reveal, chip slides from future to past.
+**Phase M — Content.** Card defs ported from `archive/v0-prototype/src/data/cards.js` as reference, each re-implemented to match the locked design. Location-text content ported the same way.
 
-**This is the validation moment.** If this slice works smoothly without any of the prototype's bugs (cards teleporting, animations clobbering each other, identity loss), the architecture is proven. If anything is off, stop and fix the architectural cause before going further.
+**Phase N — Polish.** XP / leveling. Speed multiplier tuning. CSS polish. Any remaining UI affordances.
 
-### Phase 4 — Combat
+### Order rationale
 
-`combat.ts` with the pure attack resolution lifted from the prototype. The death-and-slide-to-graveyard beat chain. The crash animation as a Framer variant on the attacker; damage flash as a CSS class on the defender. Two creatures, one attacks the other, watch the flow.
-
-Goal: combat reads cleanly end-to-end. The crash, damage flash, and death fade all compose with the slide-to-grave (per AL #5 — non-transform CSS classes for everything except the FLIP slide, which Framer owns).
-
-### Phase 5 — Triggers, deathwish, multi-effect cards
-
-Flip-up triggers, deathwish, the full string-tag dispatcher. Token spawning. The cascade pattern (death → deathwish → summon → slide). A card with a deathwish dies, plays its triggers in order, no hangs.
-
-### Phase 6 — Multi-location encounters
-
-Lift to LOCATION_COUNT > 1. Locations row layout. Combat order across locations, reveal order across locations, the chip strip showing both.
-
-### Phase 7 — The full encounter and run
-
-`run.ts`, the overworld, encounter setup/teardown, between-encounter persistence (deck shuffles back, durability carries), neutral encounter content, hostile encounter with AI, boss encounter at C-adjacent nodes.
-
-Goal: complete a run.
-
-### Phase 8 — Content port
-
-Port the Red, Green, Blue starter pools and the location-text content from `archive/v0-prototype/src/data/`. Each card def becomes a TS literal with a discriminated-union type. Verify each card's behavior. Longest phase by line count but mostly data + handler tags.
-
-### Phase 9 — Polish
-
-XP/leveling. Tuning the speed multiplier. CSS polish. Any remaining UI affordances (legal-target highlights, drag, pile click-to-view).
+The phases are ordered so each builds on the previous without circular dependencies. Profiles before everything because every spatial query depends on them. Stats before piles because piles need cost-context for some routing decisions. Marks before piles because trash routing needs the exile path. Pile model before phases because phase-end flip queue needs to know where face-up cards go on resolution. Phase model + chip primitives before any UI because the timeline is part of the engine state. Boundary scaffold before the first slice. The slice (Phase G) is the architecture validation moment per AL #6/#9.
 
 ### Stopping rule
 
-If at any point in phase 3+ we hit a hang, a teleporting card, an animation clobber, or any of the prototype's failure patterns: **stop**. Don't patch. Read this doc, find the architectural lapse, fix it. The whole point of this rebuild is that the architecture should make those failure patterns structurally impossible.
+If at any point in any phase we hit a hang, a teleporting card, an animation clobber, a contract violation between engine and UI, or any of the prototype's failure patterns: **stop**. Don't patch. Read the relevant §25–§32 section, find the architectural lapse, fix it. The whole point of this rebuild is that the architecture should make those failure patterns structurally impossible.
+
+If the design itself is unclear in a moment, **stop and have a design conversation**, do not extrapolate. Capture the answer back into §25–§32 with the user's literal words.
+
+---
+
+# Locked design surfaces (§25–§33)
+
+After the failed v1 port (archived in `archive/2026-05-25-failed-port`), the design surfaces below were worked through and locked in conversation as the contract for the engine rewrite. Same capture discipline as §1–§24: user's literal answers locked; AI extrapolation flagged or excluded.
+
+These supersede any earlier prototype assumptions where they conflict. Anything in §1–§24 not explicitly contradicted here still stands.
+
+---
+
+## 25. Slot profiles
+
+### What a profile is
+
+A location in an encounter has a **profile**. The profile defines the *shape of the play space* at that location. The profile is structural — it's part of what makes a location *that* location, not just a featureless arena. Terrain destruction effects can wipe a location's stat line and rules text, but **never the profile itself**.
+
+A profile has three independent grids — one per **kind**: creatures, structures, actions. Kinds stay separate. Cards never blur the kind boundary.
+
+Each grid is a rectangular arrangement bounded by `rows ∈ {1, 2, 3}` and `cols ∈ {1, 2, 3}`. Cells outside the grid don't exist. Cells inside the grid but marked **locked** are present-but-unusable (visually shown as inaccessible).
+
+Both sides of a location share the same profile.
+
+### Positions
+
+A position is `{r, c}` — row and column indices into the profile's grid. Row 0 is the **front row** (closest to the centerline between the two sides). The highest-indexed row is the back row.
+
+When `rows === 1`, every slot is both front and back.
+
+Position keys are opaque to consumers. The default profile uses `"r0c0"`-style strings internally, but **every iteration over positions goes through the profile** (`creaturePositions(state, loc)`, `frontRowPositions(state, loc)`, etc.). No hardcoded position names anywhere in engine or UI.
+
+### Spatial queries
+
+Because grids are bounded rectangles, all spatial queries are coordinate arithmetic. No edge lists, no graph traversal.
+
+Engine primitives (named in conversation; final names settled during code sketch):
+- "Front row" / "back row" position lists
+- "Adjacent same-side" (Manhattan-1)
+- "Same row neighbor"
+- "Behind" (same column, next row)
+- "Column" (all positions in same column)
+- "Across" (enemy column, scanning front-to-back)
+
+Card text expressed in these terms composes with any profile. "Cleave hits adjacent same-row" works on a 1×2 grid (one neighbor) and a 3×3 grid (up to two neighbors) without code change. The engine resolves the spatial query at trigger time against the location's profile.
+
+### Multi-slot cards
+
+A card may occupy more than one position. A card carries `slots: PositionKey[]` — its footprint in play. Single-slot cards have one entry; multi-slot cards have 2+.
+
+Multi-slot footprints are declared as offsets from an anchor in the card def. Placement uses a `footprintFitsAt(profile, anchor)` query that returns the actual positions or null if any footprint position is locked / outside / occupied.
+
+Representation: every position in a multi-slot card's footprint maps to the same `CardInstance` reference (shared reference, not duplication). Iterations that need unique cards dedupe by `instId`.
+
+V1 content caps at 2-slot footprints; engine doesn't enforce the cap.
+
+A multi-slot card committed face-down occupies all of its footprint slots simultaneously and gets one chip (not N). It flips up in all slots at once. Same on leave-play — all slots vacated together.
+
+Combat targeting of multi-slot creatures follows DESIGN.md's existing rules: row-spanners get hit by both opposing columns; column-spanners by one. Damage is per-attacker, not per-slot-occupied.
+
+### Profile data location
+
+Profiles are paired with the **location-text key**. A location-text definition declares the profile (or omits it to use default). Locations without text use the **default profile**: 2×2 creatures + 1×1 structures + 1×1 actions, no locked cells.
+
+### Ammo as per-side per-location state
+
+Ranged combat consumes ammo from a per-side stockpile at the location. The opponent cannot use your stockpile.
+
+Ammo **persists across encounters** as part of the location's run-state. A side's stockpile at a node is part of the node's persistent state, alongside structures and location piles.
+
+### Equipment pending references the host, not a position
+
+When equipment is committed pending, it carries a reference to its intended host's `instId`. If the host moves between play windows, the equipment follows. If the host dies before equipment flips up, the equipment fizzles to junkyard.
+
+### What this rejects from the prototype
+
+- The hardcoded `["fl","fr","bl","br"]` position model (and the `CreaturePos` union type).
+- The `LocationSlots.structure: CardInstance | null` scalar field (and same for `action`) — these must be grids per the kind, matching the profile.
+- Equipment pending keyed by position rather than by host instId.
+- Per-encounter ammo (must persist run-wide).
+
+---
+
+## 26. Stats and effective-stat reads
+
+### Five first-class stats
+
+`Force`, `Tempo`, `Insight`, `Resolve`, `Spite`. Every card type (creature, structure, action, equipment) can print any of these. A `CardDef` has all five as optional fields (default 0). A creature with `resolve: 1` is fine. An action with `spite: 0` is fine (no Spite printed).
+
+Durability is a separately printed value, not a stat. Only creatures (and possibly some structures by future content) have it.
+
+### Effective-stat read
+
+Reading a stat off a card-in-play is always on-demand, never cached. The function is `effectiveStat(card, side, loc, stat) → number`. Pure: same inputs, same output, no side effects.
+
+Layered computation:
+1. Printed base stat from the def.
+2. Conditional buffs computed from current board state (Pit-Fighter alone, Challenger, Apprentice, Mana Rock — flag-on-def + reader logic, not data-driven).
+3. Scoped buffs recorded on the card.
+4. Equipment grants from attached equipment.
+5. Inert filter: cards with `inert: true` cannot gain Force/Tempo/Insight/Resolve/Spite from any source. Base stats stay; bonuses filtered out. Durability is not on the no-grow list — Inert cards can be healed.
+
+Sleep zeros Force on the read (a sleeping creature has no Force contribution).
+
+### Buff scopes
+
+Per REBUILD_PLAN §6, scope is always explicit:
+- `turn` — until end of current turn. Reverts at cleanup.
+- `encounter` — until the card leaves play. **Default unprinted scope** for in-encounter buffs ("while in play" effects).
+- `permanent` — persists across encounters via `runDeckEntry.mods`. Doesn't auto-revert.
+
+Anything not explicitly `permanent` reverts on leave-play.
+
+### Per-location stat totals
+
+"Force at a location" is the sum of effective Force over creatures that pass the **combat-eligibility predicate**: face-up, not sleeping, not just-woke, positive effective Force, attack flags clean, and either front-row melee or back-row ranged with available ammo. The Force-total IS the combat damage available at the location. Sleeping ogres or back-row melee creatures contribute 0 to Force-at-the-location even though they're "on the side."
+
+For Tempo, Insight, and Spite at a location: sum the effective stat over all face-up creatures + structures at the location, regardless of row.
+
+Resolve is not a per-location stat.
+
+### Global stat totals
+
+Insight global (sum across all of a side's locations) adds to the side's draw count for the turn.
+
+Resolve global (sum across all of a side's locations) sets the leftmost-N hand-size kept at cleanup.
+
+### Spite as thorns damage
+
+Spite is **retaliation damage triggered on melee combat damage only**.
+
+- Per-card Spite: when a creature's Durability is lowered by *melee combat damage*, the attacker takes thorns damage equal to the defender's effective Spite.
+- Per-location Spite total: when melee combat damage falls through to the summoner (no defender blocking), the attacker takes thorns damage equal to the location's Spite total.
+
+Spite does **not** trigger on ranged damage, action damage, or any other source. Melee combat only.
+
+### Comparative costs
+
+Cost requirements can be comparative against the opponent's stat presence at the same location:
+- "More Force here than your opponent."
+- "Less Resolve here than your opponent."
+- "Equal Insight."
+- Compounds: "more Force AND less Resolve than your opponent."
+
+### Single cost-check at cast
+
+Cost is checked **once, at cast** (when the player commits the card to a slot). If the check passes, the card is committed; no second check at resolve.
+
+Comparative costs evaluate against currently-visible opponent state at cast. Face-down opponent cards count as zero for the comparison.
+
+The prototype's "double cost-check at resolve" model is rejected — too tricky to convey to players.
+
+### No terrain stats
+
+No separate "terrain stats" data field exists. A location's printed effect IS its location text. If a location grants stat presence ("+1 Force here"), the location text declares a hook that modifies reads.
+
+### What this rejects from the prototype
+
+- `CardInstance` only modeled three stats. All five are first-class.
+- "Force is front-row only" as a positional rule. The real rule is combat-eligibility.
+- Spite as armor / damage reduction. It's thorns.
+- "Terrain stats" as a separate mechanic. Location text is the only place stat-granting at locations is expressed.
+- Cost-check at resolve. One check, at cast.
+- Buff scopes only modeling "this turn." All three scopes (turn / encounter / permanent) are real.
+
+---
+
+## 27. Marks
+
+### What a mark is
+
+A mark is a **visual alteration to a specific card instance** — torn, stamped, "cheated." It has no mechanical effect on its own. It exists so designers can print effects that target marked cards.
+
+The original framing of "marks are color-tagged and each has its own behavior baked in" is rejected. Marks are color-agnostic, effect-agnostic, and provenance-agnostic.
+
+Foundational properties:
+- **Per-instance, permanent.** Lives on that one card. Persists through pile cycling and across encounters via `runDeckEntry.mods`.
+- **Visible everywhere.** Shows in all zones — in play, in hand, face-down, in any pile, on either side. Marks leak through fog of war by design.
+- **No intrinsic behavior.** The mark itself does nothing. Cards that target marked cards do the work.
+- **No kind, no marker tracking.** Just a count.
+
+### Representation
+
+A card has `markCount: number`. That's it. No `kind` field. No `side` (marker) field.
+
+`applyMark(card)`:
+- If `markCount === 0`, increment to 1.
+- If `markCount === 1`, exile the card (torn in half) — see below.
+
+### Two marks tear the card
+
+When a second mark would be applied to an already-marked card, the card is **exiled immediately** (torn in half). This is the conflict mechanic.
+
+- Card goes to trash. Gone from the run entirely.
+- No triggers fire. The card is torn, not killed. No leave-play, no deathwish.
+- `runDeckEntry` is removed permanently if present.
+
+### Effects that reference marks
+
+Card text reads `card.markCount > 0` to filter targets. Effects that route a card to "the marker's piles" — there is no marker tracked. Effects that need to know "whose side does this go to" use the resolving card's owner (i.e., the side playing the effect).
+
+### What this rejects from the prototype
+
+- Marks with kinds (`reroute` / `convert` / `damage` as distinct mark types).
+- "Reroute mark" as a thing — applying a mark mechanically caused the reroute. That's gone. Reroute is an effect, marks are just a tag.
+- Marker side tracked on the mark.
+- "A marked card stays yours by mark even if it changes sides" — fabricated, removed.
+
+---
+
+## 28. Phases and phase hooks
+
+### Five phases in default order
+
+1. Upkeep
+2. Draw
+3. Main
+4. Combat
+5. Cleanup
+
+Each phase has the same structural shape:
+1. **Play window opens.** Both summoners play. Player has UI control; AI's commits happen synchronously during the player's advance.
+2. **Player advances** (manually, or auto-advances after a short pacing delay if no legal plays remain).
+3. **Flip resolution.** Everything committed during this phase's play window flips up in Tempo order. Flip-up triggers fire; actions resolve; permanents enter play. Token spawning, mark-applying, all the per-card effects happen here.
+4. **The phase's substantive action runs.** Upkeep ticks. Draw happens. Combat resolves. Cleanup discards. Main has no further substantive action — for main, playing IS the substantive thing.
+
+Flip happens AFTER play window closes but BEFORE the phase's substantive action. So actions committed in combat flip and resolve their effects before combat begins resolving attacks; actions committed in draw flip before card draw; actions committed in cleanup flip before discard.
+
+### Commit-window rules by card type
+
+- **Creatures, structures, equipment** (permanents): main phase only.
+- **Actions**: any phase.
+
+### Priority and Tempo ordering
+
+Priority alternates each turn. On Tempo ties in the flip queue or combat order, the side with priority resolves first.
+
+Within a flip queue:
+- Tempo descending (higher first; negative Tempo is legal).
+- Tie: side priority.
+- Tie: location order.
+- Tie: position rank within the location's grid.
+
+### Phase queue
+
+The engine maintains a per-turn phase queue. Defaults to the standard 5-phase order. Cards/locations may print effects that mutate the queue (insert / skip / reorder); v1 content doesn't do this. Engine supports the data shape as an ordered list.
+
+### Phase boundaries (trigger vocabulary)
+
+Each phase has `start of X` and `end of X` boundaries. The full vocabulary for v1: `onUpkeepStart`, `onUpkeepEnd`, `onDrawStart`, `onDrawEnd`, `onMainStart`, `onMainEnd`, `onCombatStart`, `onCombatEnd`, `onCleanupStart`, `onCleanupEnd`. Card and location-text effects register hooks at these boundaries.
+
+### What this rejects from the prototype
+
+- A separate "Reveal" phase.
+- Combat-declaration vs combat-resolution as sub-phases.
+- "End of upkeep" as a special universal flip-up moment. Flips happen at the boundary of every phase that had commits.
+- "Player must play a card in cleanup if they can" forced-play rule. Not real.
+
+---
+
+## 29. Cards entering, flipping, resolving (+ piles, routing, ownership)
+
+### Cards are positional, not owned
+
+There is **no `owner` field on a card instance**. There is no `acquired` flag. Side membership is read from container — where the card is. A card in a slot on the player's side is "the player's card." A card in a pile on the player's side is in the player's pile collection.
+
+This is the heart of the game's design philosophy. "Your creatures" means "creatures in containers on your side." Acquisition is the act of moving a card from one side's containment to the other's.
+
+### Neutrals are not a side
+
+There is no third side called "neutral." A summoner is either present on a side or not — that's an encounter-level fact. Pre-placed biome content occupies AI-side slots spatially but doesn't make the AI "present"; what determines AI presence is overworld topology (see §30 combat, summoner presence).
+
+### Lifecycle states
+
+A card transitions through these states during an encounter:
+
+1. **In hand** — face-up to owner. Selectable. Playable to a legal slot.
+2. **Pending** — committed to a slot in the current phase's play window. Ghostly. The player can cancel and return to hand. AI commits never appear as pending — AI commits happen synchronously during the player's advance.
+3. **Committed face-down** — when the play window closes, pending cards become committed face-down. Inert (per unified face-down rule): no stat presence, no combat, no triggers, not targetable. A chip enters the future timeline.
+4. **Flipping up** — during flip queue, each face-down card flips face-up in Tempo order. Flip-up triggers fire; actions resolve immediately on flip; permanents enter play.
+5. **In play** (permanents) — face-up in slot. Contributes stats. Combat-eligible (creatures). Holds equipment (creatures/structures).
+6. **Resolved** (actions) — flipped up, effect fired, exited to destination pile.
+7. **Leaving play** — combat or effect destroys; deathwish fires; card slides to destination pile.
+8. **In a pile** — deck, hand, discard, graveyard, junkyard, location pile, or trash.
+
+### Equipment
+
+Equipment commits in main only. At commit, the player designates a host (a face-up friendly creature or structure with available equipment slot). Equipment is pending against the host's `instId` (not against a slot position) so the host can move between commit and flip without orphaning the equipment.
+
+If the host is gone at equipment flip-up (died, exiled), the equipment **fizzles to junkyard**. Equipment in play attaches to its host until the host leaves play; on host leave-play, the equipment detaches and goes to junkyard (or wherever location text routes it).
+
+### Multi-slot cards
+
+A multi-slot card occupies multiple positions simultaneously. Same card reference appears at each position. Pending shows the card occupying all its footprint slots; cancel removes from all. Flips up in all slots at once; leaves all slots at once.
+
+### Token spawning
+
+A token card spawned by an effect is created and placed face-down into a target slot. It gets a future chip. From there it follows standard rules. No special token lifecycle.
+
+### Persistent actions
+
+Persistent actions (Quest, Prayer, etc.) sit in their action slot across turns. Their initial flip resolves like any flip — chip drops to past. The action then stays face-up in the slot, watching for its persistence condition. When the condition resolves and the action exits, no new chip is emitted (past entry already recorded the flip).
+
+### Piles by scope
+
+- **Per-side piles** (only exist when the side has a summoner at the location): deck, hand, discard, graveyard, junkyard.
+- **Per-location piles** (always exist, run-spanning): graveyard, junkyard. Used when the dying side has no summoner present at the location.
+- **Trash**: one global pile, run-spanning. Not rendered. Cards in trash are gone from the game entirely.
+
+### Summoner presence is per-location
+
+A summoner is "present" at a location iff their summoner-position is adjacent to that location in the overworld graph.
+
+- **Player**: their summoner-position is the node they've traveled from. The locations in the current encounter are the unvisited nodes adjacent to that summoner-position. The player is therefore present at every location in the encounter.
+- **AI**: present at a location iff the AI's reach (their summoner-position + spread) is adjacent to that location. Per-location, not per-encounter.
+
+This gives the war/peace framing at the location text level — a location's text can shift based on whether the AI is present there. The text describes "war" (AI present) and "peace" (AI absent) modes.
+
+### Routing on leave-play
+
+When a card leaves play:
+- If a summoner is present on the card's side at the location, route to that side's appropriate pile (graveyard for creatures, junkyard for equipment + structures, discard for resolved actions, exile/trash for trashed).
+- If no summoner is present, route to the location's pile (graveyard or junkyard).
+- Actions on a side with no summoner have no discard to go to — they go to trash.
+- Mark-triggered effects (Reroute as a verb, etc.) can override routing per their text. (Marks themselves don't carry routing; the effects targeting marked cards do.)
+- Trashed cards (premium one-shots with "exiled when this resolves", double-mark exile, etc.) go to global trash.
+
+### Acquisition is in-encounter and positional
+
+A card moves from one side's containment to another's by the act of being acquired. There is no end-of-encounter reconciliation pass. A Recruited creature is already on the player's side from the moment of the Recruit. If it dies on the player's side, it goes to the player's graveyard. At encounter end the player's graveyard reshuffles into the player's deck — the Recruited creature is now in the player's deck because it was in the player's containment.
+
+### Location piles record the location's history
+
+Location piles aren't "where bodies go when nobody can claim them." They're a **continuous record of what's happened at the location across the run.**
+
+- Pre-authored content can populate location piles at run init (the AI conceptually fought neutrals here before the player arrived).
+- During an encounter, summoner-less-side deaths and summoner-less-side action exits add to the location piles.
+- Effects that target location piles (acquire-from-pile, damage-pile, etc.) can interact with them in current and future encounters.
+- Location piles never reshuffle into anyone's deck. They sit at the location.
+- Visiting a previously-cleared location doesn't trigger a new encounter (no backtracking), but supply-line effects can reach previous nodes; AI movement can interact with previous nodes; future encounter content can reference them.
+
+For v1: the engine models location piles as first-class containers persisting across encounters at the location. V1 content uses them only via pre-authored content + summoner-less death routing. Acquire-from-pile and similar effects are future-content space the engine supports.
+
+### Encounter-end pile resolution
+
+For each side with a summoner:
+- Shuffle deck + hand + discard + graveyard + junkyard + in-play creatures + in-play equipment into the side's deck.
+- Structures in play stay on the map.
+- Trash is excluded.
+
+For each side without a summoner:
+- Nothing. They have no deck to shuffle. Content stays where it is for next encounter (location piles, location slots).
+
+Location piles stay at the location. Trash stays in trash (run-spanning, never returns). Structures stay on the map.
+
+The player's hand reforms each encounter — at encounter setup, the deck shuffles fresh, a starting hand is drawn.
+
+### AI deck is run-scoped
+
+Same model as the player's. The AI has a persistent deck that cycles across encounters. Marks, deck-thinning, acquisitions persist on the AI's run-deck.
+
+### What this rejects from the prototype
+
+- `Owner` field on cards. Ownership is positional.
+- `acquired: true` flag. Acquisition is positional.
+- "Convert / Recruit marks the card as `owner: "player"`" — no, the card simply moves to a player container.
+- Junkyard as the destination "for equipment leaving play permanently" — junkyard is just a pile within the encounter; at encounter end it shuffles back like everything else.
+- End-of-encounter acquisition reconciliation pass.
+- The AI's deck being encounter-scoped.
+- A "Reveal" phase. Flips happen at every phase boundary that had commits.
+- Forced-play rule at cleanup.
+
+---
+
+## 30. Combat
+
+### Attack patterns are per-card
+
+Combat targeting is determined by **attack patterns printed on the card** (or granted by equipment). The default pattern is "deal damage to one space directly in front." Cards may print custom patterns (cleave, pierce, ranged, etc.).
+
+The engine has a pattern dispatcher (string-tagged). Adding a new pattern is a code change.
+
+### Combat eligibility
+
+A creature is eligible to attack iff:
+- Face-up.
+- Not sleeping.
+- Did not just wake this phase.
+- Has positive effective Force.
+- Doesn't have skip-attack-this-turn set.
+- Position-pattern compatible: melee in front row; ranged in back row with available ammo.
+
+This predicate matches "creature contributes to Force-at-location" — they're the same set per §26.
+
+### Tempo ordering (four-level)
+
+1. Tempo descending. Higher first. Negative legal.
+2. Within a Tempo tier: location order (left-to-right across rendered locations).
+3. Within a location, within a tier: position rank (front-to-back, left-to-right).
+4. Side priority on remaining ties: side with higher local Tempo total; further tie broken by alternating priority per overworld turn.
+
+Action slot order tiebreaks Tempo ties for actions.
+
+### Damage application
+
+Damage targets only Durability. Creatures + summoners have Durability; structures do not. Structures are destroyed by structure-removal effects, not by damage.
+
+**Fall-through:** damage looks for a valid creature target at the location; if none, falls through to the opposing summoner. Universal rule — combat damage, action damage, deathwish damage all follow it.
+
+Specifics:
+- Single-target damage with no creatures present → opposing summoner.
+- Multi-target ("deal X to each") with no creatures present → opposing summoner once (not per phantom target).
+- Scope-extended damage resolves per-location.
+- Friendly-fire (cleave on empty board) → does nothing on the empty same-side targets. Only enemy-targeted damage falls through to the enemy summoner.
+- Non-damage effects (buffs, debuffs, destroys, returns-to-hand) do not fall through. No target → fizzle.
+
+### Spite (thorns)
+
+Per §26: Spite triggers on melee combat damage only. Per-card on defender; per-location total on melee summoner fall-through. Spite is itself damage and can lethally damage the attacker.
+
+### Ranged combat + ammo
+
+Ranged attackers fire from the back row using ammo from their side's per-location stockpile. Ammo persists across encounters as part of `world.nodeState`.
+
+- Ranged bypasses front-row blocking. Shoots over.
+- Ranged bypasses thorns. Not engaged in melee.
+- Each shot consumes ammo per the pattern's cost (default 1).
+- No ammo → no ranged attack that phase. Other contributions continue.
+- Fastest-Tempo on the side fires first; can dry the pool.
+
+### Equipment-set-Force for ranged equipment
+
+Ranged equipment with `setsForce: N` overrides the wielder's effective Force when computing ranged damage. A Bow with Force 1 turns a 0-Force creature into a 1-damage ranged unit (buff) and a 4-Force giant into a 1-damage ranged unit (nerf — trades melee for ranged option).
+
+Non-ranged equipment adds patterns without replacing stats (e.g., Crude Axe grants cleave; the creature's own Force is unchanged).
+
+### Movement during phases
+
+Movement is allowed in **main and combat** phases. One move per creature per turn.
+
+### Combat-trick actions
+
+Actions committed during the combat phase's play window flip and resolve before combat resolution begins. The player commits a Spark in combat → it fires before attacks.
+
+### Death sequence (two beats)
+
+Per REBUILD_PLAN §17:
+1. Damage hit lands. Creature's Durability drops to 0. `pendingLeavePile` is set. Creature stays in slot at 0 Durability — visible to the player.
+2. Next beat: deathwish fires. Card slides to destination pile.
+
+This split is what lets the player see the creature die in its slot before being swept away.
+
+### Death cascade
+
+Deaths from a single attacker's swing drain one-at-a-time after the swing completes. Each death is its own beat (damage hit → deathwish → slide).
+
+### What this rejects from the prototype
+
+- Hardcoded column / adjacency logic (must go through profile).
+- "Force is front-row only" as the location-Force rule (it's combat-eligibility).
+- Ranged equipment as an additive grant (it sets Force).
+- Friendly-fire fall-through to friendly summoner.
+
+---
+
+## 31. Win conditions and encounter end
+
+### Per-location clear status
+
+Each location in an encounter independently tracks its **player-cleared** status. Clearing applies only at locations where the AI summoner is not present (neutral locations and hostile non-boss locations). Boss locations are not cleared — they're won by reducing the boss's Durability to 0.
+
+A location is **cleared by the player** when there are no creatures on the opposing side's spatial slots at that location. Origin is irrelevant to this check — it's a positional check across all creatures on that side, regardless of whether they're AI-origin or biome.
+
+The check fires at end of cleanup, once per turn. The clear-flag is set then.
+
+**Consequences when a location clears (player-cleared at end of cleanup):**
+
+1. **Shuffle-back at end of turn.** The player's commits at the cleared location shuffle back into the player's deck: creatures, equipment, persistent actions. Player structures stay at the location (per the supply-line rule from §7 / §29). The player's slots at the location empty.
+2. **No further player commits at this location.** The player has won here; the cleared-flag closes the location to further player commits for the rest of the encounter.
+
+There is no "AI-cleared" status. The AI does not have a per-location clearing concept. The AI's path to defeating the player is summoner damage — reducing player Durability to 0 — which is a single global condition, not per-location.
+
+### Encounter outcomes
+
+1. **Player cleared** — every encounter location is either player-cleared OR is a boss location whose boss has been killed. In pure non-boss encounters: every location's clear-flag is set. In mixed encounters with a boss + other locations: typically the boss-killed short-circuit fires first; if it didn't, all non-boss locations cleared while the boss is still alive doesn't end the encounter — the boss is still the win.
+2. **Player lost** — player summoner's Durability reduced to 0.
+3. **Boss killed** — boss encounter only. Boss summoner's Durability reduced to 0. Run win. Encounter ends immediately regardless of other locations' clear status.
+4. **AI retreated** — hostile encounters only. AI has no living presence at any encounter location and brought in no reinforcements this turn. AI faction withdraws.
+
+### When checks fire
+
+- **Boss killed**: checked after every damage event. Fires immediately, short-circuits the active beat chain, runs the run-win flow.
+- **All other outcomes**: checked once per turn at end of cleanup. The cleared-flag updates happen here too, alongside the shuffle-back for newly-cleared locations. If the win condition was met during the turn, the encounter still finishes the turn before transitioning.
+
+### No voluntary leave
+
+V1 does not have a "leave encounter" affordance. The player must clear or die.
+
+### AI summoner durability is boss-only
+
+In hostile encounters, the AI plays cards each main but has no summoner Durability. Combat fall-through to a side with no summoner-with-Durability fizzles — nothing to damage. The win path at non-boss hostile locations is clearing the opposing creatures (or AI retreat).
+
+### One boss per run (v1)
+
+V1 has one boss summoner at the exit node. Multi-boss runs are a later concern.
+
+### Run-level vs encounter-level outcomes
+
+- Run-over outcomes (player win / player lose) end the run immediately.
+- Mid-run encounter outcomes (cleared / retreated) return the player to the overworld to choose the next node.
+
+### Summoner durability persists across encounters
+
+The player's summoner Durability is run-state. Carries from encounter to encounter. Damage taken is permanent unless cards explicitly heal.
+
+### What this rejects from the prototype
+
+- Win condition checks scattered throughout state mutations.
+- AI summoner Durability mechanics in hostile (non-boss) encounters.
+- A voluntary leave-encounter mechanism in v1.
+- "Encounter ends only when all opposing creatures are gone across all locations at once" — encounter end is now per-location-cleared with end-of-turn shuffle-back, so the player isn't stuck with resources locked at a cleared location while still fighting elsewhere.
+
+---
+
+## 32. The Past, the Future, and the Present
+
+### Three temporal states
+
+A card during an encounter has a temporal status:
+- **Future** — committed face-down. The card sits in its slot but is inert. A chip in the future bar represents it.
+- **Present** — the moment of flip-up. Chip transits through the present node. Card flips face-up; flip-up trigger fires; if it's an action, its effect resolves.
+- **Past** — after flipping. Chip falls into the past column. Card is now face-up on the board (or, for an action, has resolved and exited).
+
+### Chips (visual) vs the Past (data)
+
+These are two distinct things:
+- **Chips** are visual. Every face-down committed card gets one. The chip transits future → present → past as the card flips up. Chips carry a reference to the live `CardInstance` (no snapshot — reads from current state).
+- **The Past** is data. An append-only log of every flip-up event. Encounter-scoped. Clears at encounter start. Targetable by card effects.
+
+### What writes to the Past
+
+**Any time any card flips up, it writes to the Past.** Universal across all card types — creatures, structures, actions, equipment.
+
+The prototype's "actions write to the past on resolve" framing is rejected. The Past is keyed to flip-up, not to action resolution.
+
+Quest reward firing does NOT write to the Past.
+
+### Past entry
+
+Each Past entry records: `defKey`, `side`, `loc`, `turn`, `cardType`. Order is implicit (append-only list). Tempo is not stored — ordering of resolution affected ordering of entries in the list, but tempo isn't part of the record.
+
+### Targeting the Past
+
+Past entries are first-class targetable resources. Per Pillar 10:
+- Random selection from legal entries.
+- Positional (oldest / newest / N back).
+- Filtered (e.g., "an action", "an action from your side").
+
+Never on-resolve player choice.
+
+Card archetypes targeting the Past:
+- **Copy** (cheap): add a token copy of a Past action to your discard.
+- **Recall** (premium): trigger a Past action directly, ignoring requirements. Reserved Blue keyword.
+- **Erase** (planned Black): remove a Past entry. Not in v1.
+
+### Suppressed actions
+
+A face-down action whose location text declares it suppressed (`shouldSuppressAction(card, loc) → true`) keeps its chip in the future bar across passes. The chip stays unmoved until the predicate returns false at some end-of-phase pass — at that point, the chip transits to present and resolves.
+
+### Chip and card lifecycle are coupled
+
+A chip persists for its card's encounter lifetime. If a face-down card is removed before flipping (double-mark exile of a face-down card, etc.), its chip is removed from future too.
+
+### Persistent action chips
+
+On first flip, chip drops to past as normal. The persistent action sits face-up in the slot until exit. No new chip on exit.
+
+### Token chips
+
+Token cards spawned face-down get a future chip and write to the Past on flip-up like any card.
+
+### Past is shared between sides
+
+Both sides' flip-ups write to the same Past. Both sides can target it. This is what makes "Blue copies opposing actions" work — the Past is one log, not per-side.
+
+### Future bar visibility (fog rules)
+
+- Own-side chips render face-up (identity visible to owner).
+- Opposing chips render face-down (`?`); Tempo and slot location leak through.
+- Marks on chips leak through fog by design.
+
+### What this rejects from the prototype
+
+- "Actions write to past on resolve" framing. All flip-ups write.
+- Quest reward firing writing to past. Doesn't.
+- Tempo stored in Past entries. It's ordering, not data.
+
+---
+
+## 33. Open questions remaining after surfaces locked
+
+These were raised in surface discussions but not directly answered, or are deliberately left open:
+
+- **Color visual on marks.** Marks have no kind in the engine, but the design may still differentiate visually (a "Green-applied" mark may render differently from a "White-applied" mark, even though they behave identically). UI concern, not engine concern.
+- **Multi-slot card UI representation.** The card spans multiple positions, rendered as one card straddling them. The exact visual treatment is design / UI.
+- **AI pre-spread simulation.** V1 uses pre-authored node templates (no simulation). V2+ may add real spread simulation. The engine's `world.nodeState` shape supports either.
+- **The "neutral" def-flag.** Whether biome-native cards carry a `neutral: true` flag on their def for visual / authorship purposes — settled informally as a card-def property if needed. Not load-bearing for engine logic since side membership is positional.
+- **Action queue / slot-shifting.** The DESIGN.md "actions are not placed into specific slots by the player" passage is outdated; per the locked phases surface, action slots work like any other slot (you put actions into them). Whether DESIGN.md needs updating for this is a doc concern, not an engine one.
 
 ---
 
 ## Final note
 
 This plan supersedes everything previous about how the code is structured. The old docs (DESIGN.md, DECISIONS.md, CARD_DESIGN.md, ARCHITECTURE.md, ARCHITECTURE_LESSONS.md) remain in the repo as reference material — they contain a mix of confirmed decisions and AI elaboration. Where this plan conflicts with them, this plan wins.
+
+§25–§33 are the most recent layer. They were locked in conversation as direct corrections to prototype-era assumptions that had been silently carried forward. They are the contract for the engine rewrite per the revised §24.
+
 

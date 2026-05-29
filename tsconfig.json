@@ -14,13 +14,13 @@
     "noUncheckedIndexedAccess": true,
 
     "skipLibCheck": true,
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
 
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts"],
+  "include": ["src", "tests", "vite.config.ts"],
   "exclude": ["archive", "node_modules", "dist"]
 }
