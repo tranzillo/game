@@ -11,6 +11,8 @@
 
 import { effectiveStat } from "./stats.ts";
 import { combatEligible } from "./combat-eligibility.ts";
+import { getCardDef } from "./cards.ts";
+import { locationTextStatPresence } from "./location-text.ts";
 import { positionsOf } from "./profile.ts";
 import type { GameState, Side, StatKind } from "./types.ts";
 
@@ -47,6 +49,31 @@ export function locationStatTotal(
     }
     total += effectiveStat(state, card, side, loc, stat);
   }
+
+  // Text-hook contributions per DECISIONS 2026-06-12 (stats are creature-only; locations and
+  // structures contribute presence via printed text). These join the total for ALL stats —
+  // presence pays costs, feeds action flip-tempo, per-location Spite thorns, "your Force here"
+  // effects. Combat swing damage is unaffected (per-attacker effectiveStat; text never swings).
+
+  // 1. Location text: "add 1 Tempo here."
+  total += locationTextStatPresence(state, side, loc, stat);
+
+  // 2. Structures with presence text ("+1 Force here") — face-up, own side, dedup multi-slot.
+  const structSeen = new Set<number>();
+  for (const pos of positionsOf(profile, "structure")) {
+    const instId = ns.sideSlots[side].structures[pos];
+    if (instId == null) continue;
+    if (structSeen.has(instId)) continue;
+    structSeen.add(instId);
+    const card = state.cards[instId];
+    if (!card || !card.revealed) continue;
+    const def = getCardDef(card.defKey);
+    if (!def.presenceGrants) continue;
+    for (const grant of def.presenceGrants) {
+      if (grant.stat === stat) total += grant.amount;
+    }
+  }
+
   return total;
 }
 

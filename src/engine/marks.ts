@@ -8,6 +8,7 @@
 
 import { findCardLocation } from "./presence.ts";
 import { detachEquipment } from "./equipment.ts";
+import { emit } from "./events.ts";
 import type { CardInstance, CardLocation, GameState } from "./types.ts";
 
 // ---------- Mark application ----------
@@ -26,10 +27,12 @@ export function applyMark(state: GameState, card: CardInstance): MarkResult {
   if (card.markCount === 0) {
     card.markCount = 1;
     mirrorMarkToRunDeck(state, card);
+    emit(state, "mark", { instId: card.instId, result: "marked", markCount: 1 });
     return "marked";
   }
   // Already marked — second mark exiles
   exileFromMarks(state, card);
+  emit(state, "mark", { instId: card.instId, result: "exiled", markCount: 2 });
   return "exiled";
 }
 

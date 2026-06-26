@@ -1,8 +1,8 @@
 # Prototype
 
-This document defines the prototyping increments — what is in each version, what is intentionally cut, and why. The design space (`DESIGN.md`) is much larger than what any prototype implements. This file is the contract that prevents scope creep.
+> **Status: HISTORICAL / SUPERSEDED.** This document defined the *original* vanilla-JS prototyping ladder (v0 → v9). The v0 prototype was built and validated (now archived under `archive/v0-prototype/`), then the project moved to a clean TypeScript/React rebuild whose increment plan lives in **`REBUILD_PLAN.md` §24 (phases A–N)**. This file is kept for historical context — the increment *philosophy* below still reflects how the team works, but the specific v0→v9 scope contracts are no longer live. For current build scope, read `REBUILD_PLAN.md`.
 
-> **Status:** v0 scope agreed 2026-04-29. Build session not yet started.
+This document defines the prototyping increments — what is in each version, what is intentionally cut, and why. The design space (`DESIGN.md`) is much larger than what any prototype implements. This file was the contract that prevented scope creep during the original prototype era.
 
 ## Why prototype increments at all
 

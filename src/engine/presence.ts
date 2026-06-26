@@ -7,7 +7,6 @@
 // for presence but not for clearing (per §31).
 
 import { positionsOf } from "./profile.ts";
-import { locationView } from "./state.ts";
 import type {
   CardInstance,
   CardLocation,
@@ -25,9 +24,12 @@ import type {
  * for AI-side deaths (§D).
  */
 export function isAiPresentAt(state: GameState, loc: string): boolean {
-  const view = locationView(state, loc);
-  const sides = view.node.sideSlots.ai;
-  const profile = view.node.profile;
+  // Reads node state directly (not locationView) — presence is a world-level fact that must be
+  // queryable between encounters too (e.g., war/peace text on the overworld map, §34).
+  const ns = state.world.nodeState[loc];
+  if (!ns) return false;
+  const sides = ns.sideSlots.ai;
+  const profile = ns.profile;
   const kinds: SlotKind[] = ["creature", "structure", "action"];
   for (const kind of kinds) {
     const positions = positionsOf(profile, kind);

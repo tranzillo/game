@@ -20,6 +20,7 @@ import { getActiveSetOverride } from "./equipment.ts";
 import { sumAuraContributions } from "./auras.ts";
 import { sumBuffsForStat } from "./buffs.ts";
 import { positionsOf } from "./profile.ts";
+import { countOccupiedCreatureSlots, occupiedCreatureSlots } from "./targeting.ts";
 import type {
   CardInstance,
   CardRegistry,
@@ -148,42 +149,26 @@ function conditionalContribution(
 
 const SIDES: Side[] = ["player", "ai"];
 
+// These two are SLOT-OCCUPANCY counts, not targetability checks. A face-down committed card
+// occupies its slot — it takes up space — so it COUNTS here even though it hasn't flipped. This
+// is the relevant condition for "only creature on your side" and "per opposing creature" effects
+// (the body is present in the world; whether it has flipped is irrelevant to occupancy). Contrast
+// with targeting (pattern-targets / damage / buff application), where face-down is NOT a valid
+// target because it hasn't entered play. Occupancy ≠ targetability. Both use the shared occupancy
+// helpers in targeting.ts.
 function isAloneOnSide(
   state: GameState,
   card: CardInstance,
   side: Side,
   loc: string,
 ): boolean {
-  const ns = state.world.nodeState[loc];
-  if (!ns) return true; // no node? treat as alone (safe default)
-  const profile = ns.profile;
-  const creaturePositions = positionsOf(profile, "creature");
-  const seen = new Set<number>();
-  for (const pos of creaturePositions) {
-    const instId = ns.sideSlots[side].creatures[pos];
-    if (instId == null) continue;
-    if (instId === card.instId) continue;
-    if (seen.has(instId)) continue;
-    seen.add(instId);
-    return false; // some other creature here
-  }
-  return true;
+  // Alone iff no OTHER creature occupies a slot on this side here (face-down occupants count).
+  return occupiedCreatureSlots(state, side, loc).every((id) => id === card.instId);
 }
 
 function countOpposingCreatures(state: GameState, side: Side, loc: string): number {
-  const ns = state.world.nodeState[loc];
-  if (!ns) return 0;
   const otherSide = side === "player" ? "ai" : "player";
-  const profile = ns.profile;
-  const creaturePositions = positionsOf(profile, "creature");
-  const seen = new Set<number>();
-  for (const pos of creaturePositions) {
-    const instId = ns.sideSlots[otherSide].creatures[pos];
-    if (instId == null) continue;
-    if (seen.has(instId)) continue;
-    seen.add(instId);
-  }
-  return seen.size;
+  return countOccupiedCreatureSlots(state, otherSide, loc);
 }
 
 function countOpposingChallengers(state: GameState, side: Side, loc: string): number {
@@ -207,10 +192,8 @@ function countOpposingChallengers(state: GameState, side: Side, loc: string): nu
   return count;
 }
 
-// Other side helper used by other modules.
-export function other(side: Side): Side {
-  return side === "player" ? "ai" : "player";
-}
+// `other(side)` moved to ./sides.ts (opponentOf). Re-exported here for back-compat callers.
+export { other } from "./sides.ts";
 
 // Re-exports for the consolidated stats API.
 export { SIDES };

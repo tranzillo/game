@@ -71,22 +71,26 @@ Three concrete consequences:
 
 The player and the boss are summoners with Durability. They have no stats themselves. All combat numbers, all card-cost requirements, and all economic modifiers come from the cards and locations *in play*.
 
-### Stats live on permanents and on terrain
+### Stats live on creatures; other sources contribute via printed text
 
-Stat presence at a location has two sources:
+**Stats are creature-only fields.** A creature's printed (and buffed) stats are the resource — they sum into the per-side stat totals at its location. Nothing else *has* stats:
 
-- **Terrain** — printed on the location itself; a permanent local floor unaffected by combat.
-- **Permanents** — creatures and structures the side has in play at that location; volatile, removable.
+- **Locations** have no stats. A location's text can add presence ("add 1 Tempo here") — a printed effect that modifies the total reads, acting as a permanent local floor unaffected by combat.
+- **Structures** likewise contribute via their printed text ("+1 Force here"), not via stat fields. Removable by structure-removal effects, not by combat damage.
+- **Equipment** modifies its *host creature's* stats via grants; it contributes nothing on its own.
+- **Actions** have no stats; they *read* the pool — an action's flip tempo is its side's location Tempo total.
 
-Both sources sum into the per-side stat totals at that location. Combat can only reduce the volatile portion; terrain stays. Per the scope rule (Pillar 8), terrain stats apply *only* at that location.
+The flow is one-way: creature stats (volatile, removable via combat) plus text contributions (floors) build the location totals; permanents never inherit from the pool. Combat can only reduce the volatile portion; text floors stay. Per the scope rule (Pillar 8), location-text presence applies *only* at that location.
 
-### The stat list (working set — names are D&D-style placeholders pending theme work)
+*(Corrected 2026-06-12 — earlier passes framed this as "stats live on permanents and on terrain," with structures holding stat fields. See DECISIONS.)*
 
-The five stat names are **Force, Tempo, Insight, Resolve, Spite** — abstract-evocative names that carry the color flavor directly into the stat label. (Earlier doc passes used D&D placeholders STR / DEX / INT / FAITH / VIT; those have been retired in favor of the current names.)
+### The stat list
+
+The five stat names are **Force, Tempo, Insight, Resolve, Spite** — locked in; abstract-evocative names that carry the color flavor directly into the stat label. (Earlier doc passes used D&D placeholders STR / DEX / INT / FAITH / VIT; those have been retired in favor of the current names.)
 
 - **Force** — combat damage dealt. The most common stat; appears across all flavors. Often called "red" colloquially.
-- **Tempo** — initiative / order of reveal and attack within a phase. Higher Tempo acts first; negative Tempo is a legal printing. The full ordering hierarchy is in *Tempo ordering and combat sequence*. Second most common stat; often called "green" colloquially.
-- **Spite** — armor / damage reduction on incoming attacks. *Does not* set creature Durability — Durability is a separately printed value. Often called "black" colloquially.
+- **Tempo** — order of reveal and attack within a phase. Higher Tempo acts first; negative Tempo is a legal printing. The full ordering hierarchy is in *Tempo ordering and combat sequence*. Second most common stat; often called "green" colloquially.
+- **Spite** — thorns: retaliation damage on melee combat damage taken (see *Spite as thorns* / DECISIONS — the earlier "armor / damage reduction" framing is superseded). *Does not* set creature Durability — Durability is a separately printed value. Often called "black" colloquially.
 - **Insight** — modifies cards drawn per turn (globally, summed across all the side's locations). Often called "blue" colloquially.
 - **Resolve** — modifies hand size kept after cleanup-phase discard (globally, summed across all the side's locations). Often called "white" colloquially.
 - **Perception** — implied by the fog-of-war design; expected to gate effects that peek at face-down cards in the play queue. Currently held as a likely sixth stat, but possibly absorbed into Insight depending on color design.
@@ -664,6 +668,36 @@ None of them work as well in isolation. As a package, they make the hand zone *s
 
 **Held as Pass 2 design space.** Implementation requires hand UI work (drag-to-reorder, modifier display, Resolve-retention highlight), and the per-instance modifier system needs careful engineering. But the design space is real and substantial — capturing it now so the rules and UX can be built coherently when the time comes.
 
+## One World, Two Zooms
+
+The overworld and the encounter are **one game state viewed at two zoom levels** — not two screens, not two modes. A node on the overworld map and a location in an encounter are the *same object*, holding the same state for the entire run. The UI moves a zoom lever over one continuous space: zoomed out, the player sees the node network (their route, their persistent footprint, the location text of every node); zoomed in, they see the encounter (the pulled-in locations rendered as card grids). There should never feel like two different game states — it's a zoom lever change.
+
+Zooming doesn't need to be literal camera motion. The connection should be clear by the nature of the map tree: consistent location identity and ordering between the two views.
+
+### Map structure: a tiered grid
+
+The map lays locations out in a **grid of even rows. Each row is a tier of the run.** Nodes are connected and branching, but the player only moves forward along one of the branching paths — routes are linear, always move forward, but branch and twist to give players options. (Visual reference points: Slay the Spire's act map for the tiered route structure; Path of Exile's passive tree for the feeling that your path through the graph *is* your build.)
+
+Because encounter locations are always next-row nodes, the encounter view renders them in their natural map order — the tiered grid is what makes the layout consistent between zoom levels.
+
+### Overworld fog of war
+
+- **Location text is visible for the whole map, from the start of the run.** Planning a run means reading location text and following things you feel you can engage with to the end of the floor or zone.
+- **Fog hides the cards present at a location, not the location text.** The player can't see what's sitting at locations they haven't played at.
+- **Fog lifts when an encounter starts**, at exactly the encounter's locations. The player plays the encounter at all the adjacent locations, then moves to one of the locations revealed this way, then the next encounter starts — and the next ring of fog lifts.
+- **While fogged, a location shows its peace-time text.** When fog lifts and AI presence is revealed, the location text changes to its war mode. The player saw a neutral, peaceful node from afar, traveled adjacent to it, and the reveal flips it to danger — after the move is already committed. (One-way travel + no leaving an encounter means this reveal is a trap you can't back out of.)
+- Once lifted, fog does not return (v1 has no off-screen simulation that would change what was seen).
+
+### Moving is leveling up
+
+The post-encounter move is this game's version of the player **leveling up**. Some cards persist at locations beyond the encounter (structures, location/neutral graveyards and junkyards), so choosing which node to move onto is choosing which resources your build keeps access to. The run's progression beat is not a reward screen — it's the move itself.
+
+### Control
+
+The player **controls** locations they have previously traveled to. "Control" standalone is too generic, but it works in specific card-text context: "another junkyard you control" is clear — not your junk pile, one you "picked up" along the route. Card text can use "any" / "another ... you control" to distinguish from the player's own side piles. "Supply line" remains fine as internal vocabulary. The exact player-language templating is a later pass.
+
+Illustrative sketch (wording template open): *"Swap a card in your graveyard with a card in any graveyard you control."* The player kills a big creature at a neutral location mid-encounter; with no opposing summoner present on that side, the body enters the **location's** graveyard. The encounter ends; the player chooses to move onto that location *because the body is there*. Encounters later, they play the swap card and acquire it into their deck for the rest of the run. Node choice = acquisition = identity expression — one example, for one color, of how this system lets players express identity through routing.
+
 ## The Run Loop
 
 A run consists of repeated **overworld turns**, each of which is one full beat of the simulation:
@@ -844,21 +878,32 @@ Ranged combat is the second non-melee damage subsystem (alongside Blue spell dam
 
 ### Tempo ordering and combat sequence (high-level)
 
-Within a phase, the order in which creatures act (revealing, attacking, triggering) and actions resolve is determined by a deterministic four-level hierarchy. **No randomness** at this layer — random selection only enters at effect-resolution targeting (Pillar 10), not at combat ordering.
+Within a phase, the order in which creatures act (revealing, attacking, triggering) and actions resolve is determined by a deterministic hierarchy. **No randomness** at this layer — random selection only enters at effect-resolution targeting (Pillar 10), not at combat ordering.
+
+**Tempo is the action-order stat**, operating at two scopes:
+
+- **Printed on a permanent**, Tempo determines when that card flips/acts relative to other face-down cards in play.
+- **As a location total**, Tempo gives **actions** their flip order — actions don't print stats, so an action's tempo is its side's total Tempo at the location (cached at commit).
+
+**Initiative** passes between the player and the other side on alternating turns. It exists to break Tempo ties in a fair way — nothing more. It only matters when two things have the same Tempo; if there are no Tempo ties, it doesn't matter. (With most cards printing 0 Tempo, ties are the common case, so initiative does a lot of quiet work in practice.) The initiative side acts first in every phase: flips, attacks, draws, discards.
+
+The hierarchy (revised 2026-06-12; supersedes the earlier four-level ordering that placed side priority last and gated it on local Tempo total):
 
 1. **Tempo descending.** Higher Tempo always acts first. Negative Tempo is a legal printing (e.g., Black curses with "creatures here have Tempo -1") — it pushes a creature behind Tempo-0 baseline.
-2. **Within a Tempo tier: per location, in battlefield order** (left-to-right across rendered locations). One location's qualifying creatures resolve fully before the next location's begin.
-3. **Within a location, within a Tempo tier: by position.** Front-to-back, left-to-right within each side's grid.
-4. **Side priority** — when both sides have qualifying creatures within the same location and Tempo tier, the side with the **higher local Tempo total** (summed across permanents and terrain at that location) resolves first. If local Tempo totals are tied, **priority alternates per overworld turn**: whichever side did not have priority last turn gets it this turn.
+2. **Within a Tempo tier: initiative side first.** All of the initiative side's cards at this tier resolve before any of the other side's.
+3. **Within a side's batch: per location, in battlefield order** (left-to-right across rendered locations).
+4. **Within a location: by position.** Front-to-back, left-to-right within the side's grid.
 
 For action slots specifically, slot order tiebreaks Tempo ties (slot 1 reveals before slot 2 within the same Tempo tier). The shift-up behavior of the action queue (see *Action slots are a queue*) means slot 1 is always packed first.
 
+Initiative also orders **side-level phase activities that have no tempo**: the initiative side draws first in the draw phase, discards first at cleanup, and so on.
+
 Implications:
 
-- **Most encounters with low Tempo investment are still fully deterministic.** With both sides at all-Tempo-0, side priority is decided by local Tempo total (likely both 0) → alternating-by-turn → spatial order. Players can plan precisely.
-- **Green doubly rewards investment.** Tempo printed on a creature wins individual initiative; Tempo accumulated locally swings side priority within a tier.
+- **Most encounters with low Tempo investment are still fully deterministic.** With both sides at all-Tempo-0, everything ties → initiative side resolves fully first → spatial order within each side. Players can plan precisely.
+- **Green doubly rewards investment.** Tempo printed on a creature wins individual flip/attack order; Tempo accumulated locally makes your *actions* flip faster at that location.
 - **The variable-adjacency battlefield UI is mechanically anchored.** "Left-to-right" needs a chosen order of rendered locations. The order is no longer just visual — it determines combat sequence.
-- **Sometimes going first is a disadvantage.** Combat sequence is asymmetric per turn, so the player can't always rely on early or late strikes — alternating priority makes the same plan play differently across turns.
+- **Sometimes going first is a disadvantage.** Initiative alternates per turn, so the player can't always rely on early or late strikes — the same plan plays differently across turns.
 
 ### Damage fall-through (universal rule)
 
@@ -1951,18 +1996,53 @@ Counterspell is a Blue Spell-subtype action — *not* a persistent action. It re
 The encounter has a **shared temporal substrate** — a single timeline that represents every card resolution flowing through the present moment. Cards live in three states with respect to this timeline:
 
 - **Future**: committed but not yet flipped up. A card committed face-down has a *chip* in the future bar. The chip's Tempo determines its position relative to other future chips.
-- **Present**: the moment of resolution. When the end-of-phase reveal pass reaches a chip, the chip passes briefly through the *present node* — the card flips face-up, its flip-up trigger fires, its action resolves. This is the moment the player sees "this card is doing its thing right now."
-- **Past**: resolved. After passing through the present, the chip falls into the past column. Resolved action chips are also recorded in the **Past log** (the data structure cards target).
+- **Present**: the moment of resolution. When the end-of-phase reveal pass reaches a chip, the chip enters the *present node* — the card flips face-up, its flip-up trigger fires, its action resolves, and any downstream triggers cascade. This is the moment the player sees "this card is doing its thing right now."
+- **Past**: resolved. After passing through the present, the chip falls into the past column. Every flip-up writes a corresponding **Past entry** (the data structure cards target).
 
 The visual representation is an L-shape: the future bar runs horizontally to the right of the present node (high-Tempo chips closest to the present); the past column hangs vertically below the present.
 
+### All three zones are first-class targetable surfaces
+
+The Past, Present, and Future are three first-class targetable zones, not "one data log plus a visual stream." Each is queryable, each is a substrate cards can read from, write to, or react to. They differ in *how* they're queried (the Past is an accumulated log; the Future is a live queue; the Present is a transient event), but they share the property of being **substrate cards can mechanically engage with**.
+
+This unifies a lot of otherwise-disparate mechanics under one model:
+- "When a creature flips up here, gain +1 Force" is a **Present subscriber** filtered by location and card type.
+- Blue's Lurk (re-stealth, then re-trigger at end of phase with target now present) is a **Present subscriber** with a re-arming behavior.
+- Blue's Copy/Recall and Black's planned Erase are **Past readers/mutators**.
+- Blue's Suppress and Counterspell are **Future mutators** — they act on chips still in the queue.
+- Blue's peek/scry on the future bar is a **Future reader**.
+
+When designing a card with a temporal trigger, the question is **which zone does it watch, and what does it do when it sees a match.**
+
+### The Present as a trigger surface
+
+Cards in play subscribe to **Present events** at a scope. When a chip transits the Present, the engine emits a structured event that other cards' subscribers can match on:
+
+- **Scope**: this-location, this-side, opposing-side, anywhere.
+- **Filter**: card type (creature / structure / action / equipment), defKey, kind of flip-up, tempo band.
+- **Reaction**: a handler that mutates state, queues resolution beats, spawns tokens, etc.
+
+A card's own `onFlipUp` is one species of Present subscriber — the card subscribes to "the event where *I* enter the Present." The more powerful species is *other* cards already in play subscribing to "an event where *something else* enters the Present at my location."
+
+Some cards subscribe to the Present as a **counter** — they accumulate state per Present event they witness ("each time a creature flips up here, gain +1 Force" stored on the subscribing card). The engine provides the subscription hook; the count itself lives on the subscribing card.
+
+### The chip IS the resolution
+
+The chip and the card resolving are not two parallel animations — they are the same event in two places. The chip enters the Present *as* the card flips face-up *as* the flip-up trigger fires *as* the Past entry writes. They share one engine moment.
+
+The chip stays in the Present for the *entire* resolution chain. If a card's flip-up triggers a downstream effect that triggers another effect that spawns a token, the chip remains in the Present through all of it. It drops to the Past only when the full resolution cascade has fully drained.
+
+Both the chip's "in Present" visual (gold pulse in the present zone) and the resolving card's visual (glow and scale on the board) are driven by a single state field — they open together and close together by construction. The player's eye learns: chip in Present + card glowing = this is what's resolving, right now.
+
+Only one chip is in the Present at a time. Subscriber reactions fired by a Present event don't generate their own Present chip — they resolve "underneath" the originating chip's span. A token spawned face-down by a triggered effect gets a Future chip, not a Present one — its own moment comes later.
+
 ### The Past as a targetable resource
 
-The **Past** is a shared, encounter-scoped, append-only log of action resolutions. Both sides write on every action that resolves (including quest reward firings). Both sides can read it. The Past clears at encounter start.
+The **Past** is a shared, encounter-scoped, append-only log of every flip-up. Both sides write to it on every flip-up (universal across card types — creatures, structures, actions, equipment). Both sides can read it. The Past clears at encounter start.
 
-Each Past entry is a minimal snapshot — enough to identify the action that resolved (its def key, the side that played it, the location, the turn). It is not the card itself; it is the *record that the action happened*.
+Each Past entry is a minimal snapshot — enough to identify the card that flipped up (its def key, the side that played it, the location, the turn, the card type). It is not the card itself; it is the *record that the flip-up happened*.
 
-The Past is a **first-class targetable resource**, not just a visualization. Cards target Past entries — randomly, positionally (oldest/newest/N back), or by some filter. Per Pillar 10 (no on-resolve targeting), Past-targeting cards either pick randomly from legal entries or pick by a positional rule, not by player choice at resolve time.
+Past entries are queryable randomly, positionally (oldest / newest / N back), or by filter. Per Pillar 10 (no on-resolve targeting), Past-targeting cards either pick randomly from legal entries or pick by a positional rule, not by player choice at resolve time.
 
 The Past makes Blue's identity concrete: a color that pays off the history of the encounter. The Past is also the substrate for a planned Black mechanic — selectively *erasing* past entries to deny Blue's recall/copy plays.
 
@@ -1974,13 +2054,19 @@ The Past makes Blue's identity concrete: a color that pays off the history of th
 
 The shared nature of the Past is load-bearing: Blue can copy *opposing* actions, not just its own. That's a major design space — Blue learns from the enemy.
 
-### Why the future bar matters
+### The Future as a targetable resource
 
-The future bar is not just a UI affordance — it telegraphs Tempo. When both sides have committed, the future bar shows the resolution order (own-side chips face-up, opposing-side face-down with `?`). This lets the player reason about Tempo races, action-counter ordering, and whether their cast is fast enough to land before a hostile interrupt.
+The future bar is not just a UI affordance — it telegraphs Tempo, and it is **the queue cards can target before resolution**. When both sides have committed, the future bar shows the resolution order (own-side chips face-up, opposing-side face-down with `?`). This lets the player reason about Tempo races, action-counter ordering, and whether their cast is fast enough to land before a hostile interrupt.
 
 A face-down opposing chip still reveals **Tempo and slot location** through the chip's position in the bar — the player knows *when* an opposing card will resolve and *where*, just not *what*. Marks on chips leak through fog by design.
 
-The future bar is also where **suppressed actions** sit indefinitely. An action whose location text declares `shouldSuppressAction(card, loc) → true` keeps its chip in the future bar across passes; the chip moves to the present only when the suppression condition resolves to false at an end-of-phase pass. Champion's Rest's "actions suppressed unless exactly one creature is here" is the canonical example.
+Cards target the Future to:
+- **Peek** at chips (Blue's scry-on-the-future-bar).
+- **Suppress** specific chips so they stay in the future across passes (a card-specific extension of the location-text `shouldSuppressAction` mechanism).
+- **Counter** chips matching a filter at a location (Blue's Counterspell).
+- **Reorder** chips (Tempo manipulation — change a chip's effective tempo before sort).
+
+The future bar is also where **suppressed actions** sit indefinitely via location text. An action whose location text declares `shouldSuppressAction(card, loc) → true` keeps its chip in the future bar across passes; the chip moves to the present only when the suppression condition resolves to false at an end-of-phase pass. Champion's Rest's "actions suppressed unless exactly one creature is here" is the canonical example.
 
 ## Color home phases and the phase-doubling mechanic
 

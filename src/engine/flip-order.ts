@@ -1,19 +1,21 @@
-// Flip-queue ordering — the four-level hierarchy.
+// Flip-queue ordering — Tempo with initiative tie-break.
 //
-// Contract: ENGINE_SKETCH.md Phase E, REBUILD_PLAN §28.
+// Contract: REBUILD_PLAN §28/§30 (revised 2026-06-12), DECISIONS 2026-06-12 initiative entry.
 //
 // Sort key (lower = sooner):
 //   1. Tempo descending (higher tempo first). Cached on the chip at commit; not re-evaluated.
-//   2. Location order: state.currentEncounter.locationNodeIds.indexOf(chip.loc) ascending.
-//   3. Position rank within the location's grid (front-to-back, left-to-right).
-//   4. Side priority on remaining ties:
-//      - The side with the higher local Tempo total at the chip's location goes first.
-//      - If local Tempo totals are tied, the firstSide of the turn goes first.
+//      Permanents cache printed/effective Tempo; actions cache their side's location Tempo total.
+//   2. Within a Tempo tier: INITIATIVE side first. Initiative (enc.firstSide) alternates each
+//      turn; all of the initiative side's chips at this tier resolve before any of the other
+//      side's. Initiative is purely a fair tie-breaker — it never overrides a real Tempo
+//      difference.
+//   3. Within a side's batch: location order (state.currentEncounter.locationNodeIds.indexOf
+//      ascending).
+//   4. Within a location: position rank (front-to-back, left-to-right per profile order).
 //
-// This is the same hierarchy that drives combat order (Phase H will reuse it).
+// This is the same hierarchy that drives combat order (combat-order.ts).
 
 import { positionsOf } from "./profile.ts";
-import { locationStatTotal } from "./location-totals.ts";
 import type { GameState, Side, TimelineChip } from "./types.ts";
 
 /**
@@ -26,11 +28,11 @@ export function sortChipQueueInPlace(
 ): TimelineChip[] {
   if (!state.currentEncounter) return queue;
   const enc = state.currentEncounter;
-  const firstSide = enc.firstSide;
+  const initiative = enc.firstSide;
   const locationIndex = makeLocationIndex(enc.locationNodeIds);
   const positionRank = makePositionRankCache(state);
 
-  queue.sort((a, b) => compareChips(state, firstSide, locationIndex, positionRank, a, b));
+  queue.sort((a, b) => compareChips(initiative, locationIndex, positionRank, a, b));
   return queue;
 }
 
@@ -38,8 +40,7 @@ export function sortChipQueueInPlace(
  * Pure comparator. Negative if a sorts before b.
  */
 function compareChips(
-  state: GameState,
-  firstSide: Side,
+  initiative: Side,
   locIndex: (loc: string) => number,
   posRank: (loc: string, posKey: string | null) => number,
   a: TimelineChip,
@@ -49,41 +50,16 @@ function compareChips(
   if (a.cachedTempo !== b.cachedTempo) {
     return b.cachedTempo - a.cachedTempo;
   }
-  // 2. Location order
+  // 2. Initiative side first
+  if (a.side !== b.side) {
+    return a.side === initiative ? -1 : 1;
+  }
+  // 3. Location order
   const aLoc = locIndex(a.loc);
   const bLoc = locIndex(b.loc);
   if (aLoc !== bLoc) return aLoc - bLoc;
-  // 3. Position rank
-  const aRank = posRank(a.loc, a.posKey);
-  const bRank = posRank(b.loc, b.posKey);
-  if (aRank !== bRank) return aRank - bRank;
-  // 4. Side priority — local Tempo at chip.loc, else firstSide
-  const sidePri = sidePriorityRank(state, firstSide, a.loc);
-  // Both chips are at the same loc here (location tier matched). Same firstSide rules apply.
-  return sidePri(a.side) - sidePri(b.side);
-}
-
-// ---------- Side priority helper ----------
-
-/**
- * Returns a function side → priority rank (lower = goes first) for the given location and turn.
- */
-function sidePriorityRank(
-  state: GameState,
-  firstSide: Side,
-  loc: string,
-): (side: Side) => number {
-  const playerTempo = locationStatTotal(state, "player", loc, "tempo");
-  const aiTempo = locationStatTotal(state, "ai", loc, "tempo");
-  if (playerTempo !== aiTempo) {
-    // Higher local Tempo total goes first
-    return (side: Side) => {
-      if (side === "player") return playerTempo > aiTempo ? 0 : 1;
-      return aiTempo > playerTempo ? 0 : 1;
-    };
-  }
-  // Tied — firstSide goes first
-  return (side: Side) => (side === firstSide ? 0 : 1);
+  // 4. Position rank
+  return posRank(a.loc, a.posKey) - posRank(b.loc, b.posKey);
 }
 
 // ---------- Location index ----------

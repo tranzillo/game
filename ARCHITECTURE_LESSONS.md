@@ -94,6 +94,28 @@ The scene queue should have started as a written design — what data structure,
 
 **The discipline:** for any system bigger than a few hundred lines that crosses module boundaries, write the architecture in conversation or in a doc first. Names of types, direction of data flow, ownership of state. Then implement. This is the equivalent of the design-conversation pattern from game design, applied to code.
 
+## 10. Duplication is where rule-violations hide — one rule, one primitive
+
+A game rule that must hold at many call sites (e.g. "face-down cards aren't valid targets") cannot be enforced by convention — by inlining the same `if (!card.revealed) continue` at each site. Every new call site is a chance to forget it, and the forgotten ones are silent: the code still runs, it just violates the rule.
+
+**Worked example (2026-06-26):** "face-down can't be targeted" was inlined in some target-gathering loops and missing from ~7 others (Spark, Bombardment, combat, Bully push, trap deathwish, …). A playtest trace showed Spark hitting a face-down card. Fixing it meant routing *every* candidate-gather through one primitive (`enemyCreatureTargets` et al. in `targeting.ts`) where the face-up filter lives once. That sweep uncovered **two latent correctness bugs** — Goblin Bully pushing a face-down enemy, Explosive Trap damaging face-down adjacents — that existed *precisely because* the logic was hand-rolled instead of routed through the primitive. The duplication wasn't just ugly; it was where the rule violations lived.
+
+**The discipline:** when a rule applies across many sites, build the predicate/gatherer once and make every site call it. The payoff isn't only DRY — it's that the rule becomes *enforceable* (you can't have a site that silently skips it) and *findable* (changing the rule is one edit). A handful of hand-rolled loops doing "the same thing" is a standing invitation for them to drift apart.
+
+## 11. "Is this a primitive, or a disguised single-use function?"
+
+A helper named like infrastructure but hardcoding one card's specifics is not a primitive — it's that card's effect with a misleading name. `dropTrapInSlot(state, side, loc, positions)` looked generic but hardcoded `"g_trap"` and was usable by exactly one card. The genuinely reusable operation was already there (`spawnTokenAt`, which takes any defKey); the only thing the wrapper added was fizzle-on-occupied, which belonged *on the primitive* so every token-spawning card gets it.
+
+**The test for any content helper:** strip the card-specific constants (defKeys, stat names, magic numbers). If nothing reusable remains, it's not a primitive — inline it and name the constant at the call site. If something reusable *does* remain (placement math, a gather, a side-flip), that piece becomes/uses the primitive, and the card-specific value stays at the call site where it's legible.
+
+Corollary — **the right split:** generic operation in the primitive (`spawnTokenAt`, `frontRowInColumn`→`column()[0]`, `opponentOf`), card-specific knowledge (which token, which slot) as a one-liner in the handler. A periodic audit with this lens (read content against the engine's exported primitive surface; flag inline re-implementations and hardcoded-into-generic helpers) is cheap and high-yield.
+
+## 12. Emit outcomes from the one chokepoint every path flows through
+
+To make effect *outcomes* observable (for a trace, the animation layer, or debugging), emit the event from the shared primitive all sources route through — not from each call site. `applyDamage` emits one `damage` event, so combat / action / deathwish / thorns are all captured uniformly with zero per-handler wiring; same for `applyBuff`→`buff`, `acquireCardTo`→`acquire`, etc. Emitting per-handler is the same duplication trap as #10/#11 — a new handler silently goes unlogged. The chokepoint is also where you get the *result* for free (what was hit, how much, whether it died), since that's where the work happens. `emit` no-ops cleanly without a subscriber, so this is safe in headless tests.
+
+This composes with the read-only divergence-trace tooling (`src/ui/devtrace.ts`): a pure subscriber that formats the event stream into a transcript with per-phase board snapshots. Building observability *first* and using it to find bugs (rather than guessing from symptoms) was the highest-leverage move of the session — every face-down/targeting/ordering bug was found by reading a trace, not by inspection.
+
 ---
 
 ## Working notes for collaboration

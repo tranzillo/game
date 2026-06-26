@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game — v1</title>
+    <style>
+      /* Reset so 100vh / 100% height math matches the real viewport (no default body margin,
+         border-box everywhere). The app owns all spacing explicitly. */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body,
+      #root {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        overflow: hidden; /* the app manages its own scroll regions (e.g. the Past well) */
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

@@ -5,11 +5,18 @@ import { Card } from "./Card.tsx";
 import {
   actionPlaceSelectedCard,
   actionCancelPending,
+  canPlaceAt,
   getSelectedCardId,
   getState,
 } from "../../store/actions.ts";
 import { useGameState } from "../../store/index.ts";
 import type { CardInstance, PositionKey, Side, SlotKind } from "../../engine/types.ts";
+
+// A multi-slot card renders once per footprint slot; only the anchor slot (slots[0]) carries
+// the shared layoutId so Framer has exactly one identity per card instance.
+function isAnchorRender(card: CardInstance, posKey: PositionKey): boolean {
+  return card.slots.length === 0 || card.slots[0] === posKey;
+}
 
 interface SlotProps {
   loc: string;
@@ -27,13 +34,11 @@ export function Slot({ loc, side, kind, posKey, committedCard, pendingCard }: Sl
   const state = getState();
   const selectedCard = selectedId != null ? state.cards[selectedId] : null;
 
-  // Legal target highlight: a card is selected, slot is empty, slot kind matches selected
-  // card's type, and slot is on the player side (Phase G slice).
+  // Legal target highlight: EXACTLY the slots where the selected card can actually be placed —
+  // same predicate the place action enforces (kind match, commit window, cost, cleared-loc,
+  // emptiness). No selected card → no highlights.
   const isLegalTarget =
-    selectedCard != null &&
-    !committedCard &&
-    !pendingCard &&
-    side === "player";
+    selectedCard != null && canPlaceAt(state, selectedCard, { loc, side, kind, pos: posKey });
 
   function onClick() {
     if (pendingCard) {
@@ -64,9 +69,15 @@ export function Slot({ loc, side, kind, posKey, committedCard, pendingCard }: Sl
           card={committedCard}
           inSlot
           faceMode={committedCard.origin === "playerDeck" ? "owner" : "fog"}
+          layoutCarrier={isAnchorRender(committedCard, posKey)}
         />
       ) : pendingCard ? (
-        <Card card={pendingCard} inSlot faceMode="owner" />
+        <Card
+          card={pendingCard}
+          inSlot
+          faceMode="owner"
+          layoutCarrier={isAnchorRender(pendingCard, posKey)}
+        />
       ) : (
         <span style={{ color: "#444", fontSize: 11 }}>{posKey}</span>
       )}

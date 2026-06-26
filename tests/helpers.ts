@@ -6,6 +6,14 @@ import {
   _resetInstIdCounter,
   createCardInstance,
 } from "../src/engine/cards.ts";
+import {
+  _resetFlipUpHandlers,
+  _resetLeavePlayHandlers,
+  _resetPhaseBoundaryHandlers,
+  _resetPresentHandlers,
+} from "../src/engine/triggers.ts";
+import { _resetAuraHandlers } from "../src/engine/auras.ts";
+import { _resetLocationTexts } from "../src/engine/location-text.ts";
 import { freshGameState, freshNodeState, freshEncounterState } from "../src/engine/state.ts";
 import { defaultProfile } from "../src/engine/profile.ts";
 import type {
@@ -23,6 +31,12 @@ import type {
 export function resetEngine(): void {
   _resetCardDefs();
   _resetInstIdCounter();
+  _resetFlipUpHandlers();
+  _resetLeavePlayHandlers();
+  _resetPresentHandlers();
+  _resetPhaseBoundaryHandlers();
+  _resetAuraHandlers();
+  _resetLocationTexts();
 }
 
 /**
@@ -40,6 +54,7 @@ export function registerCreatureDef(
     costs: opts.costs ?? [],
     force: opts.force ?? 1,
     durability: opts.durability ?? 2,
+    attackPatterns: opts.attackPatterns ?? [{ kind: "default" }],
     ...opts,
   };
   registerCardDef(def);

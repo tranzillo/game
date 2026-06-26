@@ -88,7 +88,7 @@ describe("effectiveStat — Inert", () => {
     const state = makeSingleLocationState();
     const id = spawn(state, "inert");
     const card = getCard(state.cards, id);
-    applyBuff(card, { stat: "force", amount: 3, scope: "encounter" });
+    applyBuff(state, card, { stat: "force", amount: 3, scope: "encounter" });
     expect(effectiveStat(state, card, "player", "L0", "force")).toBe(0);
   });
 });
@@ -121,7 +121,7 @@ describe("effectiveStat — buffs", () => {
     registerCreatureDef("c", { force: 1 });
     const state = makeSingleLocationState();
     const card = getCard(state.cards, spawn(state, "c"));
-    applyBuff(card, { stat: "force", amount: 2, scope: "turn" });
+    applyBuff(state, card, { stat: "force", amount: 2, scope: "turn" });
     expect(effectiveStat(state, card, "player", "L0", "force")).toBe(3);
   });
 
@@ -129,7 +129,7 @@ describe("effectiveStat — buffs", () => {
     registerCreatureDef("c", { force: 1 });
     const state = makeSingleLocationState();
     const card = getCard(state.cards, spawn(state, "c"));
-    applyBuff(card, { stat: "force", amount: 2, scope: "encounter" });
+    applyBuff(state, card, { stat: "force", amount: 2, scope: "encounter" });
     expect(effectiveStat(state, card, "player", "L0", "force")).toBe(3);
   });
 
@@ -137,7 +137,7 @@ describe("effectiveStat — buffs", () => {
     registerCreatureDef("c", { force: 1 });
     const state = makeSingleLocationState();
     const card = getCard(state.cards, spawn(state, "c"));
-    applyBuff(card, { stat: "force", amount: 1, scope: "permanent" });
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "permanent" });
     expect(effectiveStat(state, card, "player", "L0", "force")).toBe(2);
   });
 
@@ -145,8 +145,8 @@ describe("effectiveStat — buffs", () => {
     registerCreatureDef("c", { force: 1 });
     const state = makeSingleLocationState();
     const card = getCard(state.cards, spawn(state, "c"));
-    applyBuff(card, { stat: "force", amount: 2, scope: "turn" });
-    applyBuff(card, { stat: "force", amount: 1, scope: "encounter" });
+    applyBuff(state, card, { stat: "force", amount: 2, scope: "turn" });
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "encounter" });
     expect(effectiveStat(state, card, "player", "L0", "force")).toBe(4);
   });
 });
@@ -171,6 +171,20 @@ describe("effectiveStat — conditional buffs", () => {
     expect(effectiveStat(state, pf, "player", "L0", "force")).toBe(1);
   });
 
+  it("Pit-Fighter is NOT alone when another creature occupies a slot, even FACE-DOWN", () => {
+    // Slot occupancy, not targetability: a face-down committed card occupies its slot, so it
+    // breaks "alone" (the body takes up space whether or not it has flipped).
+    registerCreatureDef("pf", { force: 1, pitFighterWhileAlone: true });
+    registerCreatureDef("buddy", { force: 1 });
+    const state = makeSingleLocationState();
+    const pf = getCard(state.cards, spawn(state, "pf"));
+    const buddy = getCard(state.cards, spawn(state, "buddy"));
+    placeAt(state, "player", "L0", "creature", ["r0c0"], pf, false);
+    placeAt(state, "player", "L0", "creature", ["r0c1"], buddy, false);
+    buddy.revealed = false; // committed face-down — still occupies a slot
+    expect(effectiveStat(state, pf, "player", "L0", "force")).toBe(1); // not alone, no +2
+  });
+
   it("Challenger gains +1 Force per opposing creature", () => {
     registerCreatureDef("ch", { force: 1, provocationChallenger: true });
     registerCreatureDef("e", { force: 1 });
@@ -182,6 +196,23 @@ describe("effectiveStat — conditional buffs", () => {
     placeAt(state, "ai", "L0", "creature", ["r0c0"], e1, false);
     placeAt(state, "ai", "L0", "creature", ["r0c1"], e2, false);
     // Base 1 + 2 (two opposing) = 3
+    expect(effectiveStat(state, ch, "player", "L0", "force")).toBe(3);
+  });
+
+  it("Challenger COUNTS a face-down opposing creature (slot occupancy)", () => {
+    // "+1 Force per opposing creature here" is an occupancy count — a face-down committed enemy
+    // occupies a slot, so it counts even though it hasn't flipped.
+    registerCreatureDef("ch", { force: 1, provocationChallenger: true });
+    registerCreatureDef("e", { force: 1 });
+    const state = makeSingleLocationState();
+    const ch = getCard(state.cards, spawn(state, "ch"));
+    const e1 = getCard(state.cards, spawn(state, "e"));
+    const e2 = getCard(state.cards, spawn(state, "e"));
+    placeAt(state, "player", "L0", "creature", ["r0c0"], ch, false);
+    placeAt(state, "ai", "L0", "creature", ["r0c0"], e1, false);
+    placeAt(state, "ai", "L0", "creature", ["r0c1"], e2, false);
+    e2.revealed = false; // face-down opponent still occupies a slot → still counts
+    // Base 1 + 2 (two occupied opposing slots) = 3
     expect(effectiveStat(state, ch, "player", "L0", "force")).toBe(3);
   });
 
@@ -213,7 +244,7 @@ describe("effectiveStat — equipment grants", () => {
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(3);
   });
 
@@ -231,7 +262,7 @@ describe("effectiveStat — equipment grants", () => {
     const host = getCard(state.cards, spawn(state, "c"));
     const bow = getCard(state.cards, spawn(state, "bow"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, bow, host);
+    attachEquipment(state, bow, host);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(1);
   });
 
@@ -249,8 +280,8 @@ describe("effectiveStat — equipment grants", () => {
     const host = getCard(state.cards, spawn(state, "c"));
     const bow = getCard(state.cards, spawn(state, "bow"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    applyBuff(host, { stat: "force", amount: 5, scope: "turn" });
-    attachEquipment(state.cards, bow, host);
+    applyBuff(state, host, { stat: "force", amount: 5, scope: "turn" });
+    attachEquipment(state, bow, host);
     // base 1 + buff 5 = 6, but set overrides to 2
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(2);
   });

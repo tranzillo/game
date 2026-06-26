@@ -6,6 +6,8 @@ import { emitFutureChip } from "../engine/timeline.ts";
 import { getCardDef } from "../engine/cards.ts";
 import { positionsOf } from "../engine/profile.ts";
 import { locationView } from "../engine/state.ts";
+import { revertTurnScopedBuffs } from "../engine/buffs.ts";
+import { resetMovedThisTurn } from "../engine/movement.ts";
 import type {
   GameState,
   PendingSlotMap,
@@ -97,19 +99,42 @@ export function popNextChipFromStartQueue(state: GameState): TimelineChip | null
 }
 
 /**
- * Wrap to the next turn for the Phase G slice. Phase A-locked design says turns alternate
- * priority; for the slice we simply increment turn, alternate firstSide, reset to phase=main /
- * subPhase=start, and clear out pending state.
+ * Wrap to the next turn. Increments turn, alternates firstSide (initiative), resets to
+ * phase=main / subPhase=start, and runs the per-turn cleanup: every "this turn" mechanism
+ * resets here.
  *
- * Phase K+ will replace this with the full end-of-cleanup → next-turn flow.
+ * Per-turn cleanup (2026-06-12 audit fix — these existed but were never wired):
+ *  - turn-scoped buffs revert (all "+X this turn" effects expire)
+ *  - meleeAttackersThisTurn clears (trap deathwish tracking is per-turn)
+ *  - skipAttackThisTurn / flippedThisTurn clear
+ *  - wokeInPhase clears (else "just woke this phase" false-positives across turns)
+ *  - per-location movedThisTurn clears (one move per creature per turn)
+ *  - actionsThisTurn resets on both sides
  */
 export function startNewTurn(state: GameState): void {
   if (!state.currentEncounter) return;
   const enc = state.currentEncounter;
   enc.turn += 1;
   enc.firstSide = enc.firstSide === "player" ? "ai" : "player";
-  enc.phase = "main";
+  // Turns start at the draw phase (upkeep is skipped until upkeep substantive content exists —
+  // slice shortcut, documented). Draw fills the hand to 5 + Insight per the prototype.
+  enc.phase = "draw";
   enc.subPhase = "start";
+
+  revertTurnScopedBuffs(state.cards);
+  for (const key of Object.keys(state.cards)) {
+    const card = state.cards[Number(key)];
+    if (!card) continue;
+    card.meleeAttackersThisTurn = [];
+    card.skipAttackThisTurn = false;
+    card.flippedThisTurn = false;
+    card.wokeInPhase = null;
+  }
+  for (const loc of enc.locationNodeIds) {
+    resetMovedThisTurn(state, loc);
+  }
+  enc.playerSide.actionsThisTurn = 0;
+  if (enc.aiSide) enc.aiSide.actionsThisTurn = 0;
 }
 
 // ---------- Slot map kind helpers ----------

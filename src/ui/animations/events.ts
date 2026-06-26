@@ -9,12 +9,19 @@
 // The handler MUST NOT block. Add a CSS class, kick off a transition, then return.
 
 import { subscribe } from "../../engine/events.ts";
+import { getEngineState } from "../../store/engine-state.ts";
+import { traceEvent } from "../devtrace.ts";
 import type { EngineEvent } from "../../engine/types.ts";
 
 function handleEngineEvent(ev: EngineEvent): void {
   // Phase F stub — Phase H+ adds real per-kind animation dispatch.
   // eslint-disable-next-line no-console
   console.log(`[engine event] ${ev.kind}`, ev);
+
+  // DevTrace is a read-only consumer composed onto the single subscriber (per REBUILD_PLAN §21 —
+  // there is one engine handler; the tracer rides along inside it rather than claiming its own
+  // subscription). It reads live state read-only and never throws back into the engine.
+  traceEvent(ev, getEngineState());
 }
 
 /**

@@ -34,8 +34,8 @@ describe("leavePlay — full sequence", () => {
     registerCreatureDef("c");
     const state = makeSingleLocationState();
     const card = getCard(state.cards, spawn(state, "c"));
-    applyBuff(card, { stat: "force", amount: 1, scope: "encounter" });
-    applyBuff(card, { stat: "force", amount: 1, scope: "permanent" });
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "encounter" });
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "permanent" });
     placeAt(state, "player", "L0", "creature", ["r0c0"], card, false);
     leavePlay(state, card, "player", "L0", "creatureDied");
     expect(card.buffs.length).toBe(1);
@@ -56,7 +56,7 @@ describe("leavePlay — full sequence", () => {
     const host = getCard(state.cards, spawn(state, "h"));
     const eq = getCard(state.cards, spawn(state, "eq"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(host.buffs.length).toBe(1);
     leavePlay(state, host, "player", "L0", "creatureDied");
     // Host went to graveyard
@@ -176,8 +176,8 @@ describe("endEncounterPiles", () => {
     const card = getCard(state.cards, spawn(state, "c"));
     card.runDeckEntryRef = 0;
     card.markCount = 1;
-    applyBuff(card, { stat: "force", amount: 1, scope: "permanent" });
-    applyBuff(card, { stat: "force", amount: 1, scope: "encounter" }); // shouldn't persist
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "permanent" });
+    applyBuff(state, card, { stat: "force", amount: 1, scope: "encounter" }); // shouldn't persist
     placeAt(state, "player", "L0", "creature", ["r0c0"], card, false);
     endEncounterPiles(state);
     expect(state.runDeck[0]!.mods.markCount).toBe(1);
@@ -198,7 +198,7 @@ describe("endEncounterPiles", () => {
     const host = getCard(state.cards, spawn(state, "h"));
     const eq = getCard(state.cards, spawn(state, "eq"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     endEncounterPiles(state);
     expect(state.currentEncounter!.playerSide.deck).toContain(host.instId);
     expect(state.currentEncounter!.playerSide.deck).toContain(eq.instId);

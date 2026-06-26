@@ -103,7 +103,7 @@ function materializePlacement(
     for (const eqKey of placement.equipWith) {
       const eqInstId = createCardInstance(state, eqKey, placement.origin);
       const eqCard = state.cards[eqInstId]!;
-      attachEquipment(state.cards, eqCard, card);
+      attachEquipment(state, eqCard, card);
     }
   }
 }

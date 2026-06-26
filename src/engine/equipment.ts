@@ -21,6 +21,7 @@ import type {
   CardInstance,
   CardRegistry,
   EquipmentGrant,
+  GameState,
   InstId,
   StatKind,
 } from "./types.ts";
@@ -49,7 +50,7 @@ declare module "./types.ts" {
 // ---------- Attach ----------
 
 export function attachEquipment(
-  _cards: CardRegistry,
+  state: GameState,
   equipment: CardInstance,
   host: CardInstance,
 ): void {
@@ -64,7 +65,7 @@ export function attachEquipment(
   // Apply grantsStats: add-kind become equipped-scope buffs; set-kind go into grantedSetOverrides.
   if (def.grantsStats) {
     for (const grant of def.grantsStats) {
-      applyEquipmentGrant(host, equipment.instId, grant);
+      applyEquipmentGrant(state, host, equipment.instId, grant);
     }
   }
 
@@ -77,12 +78,13 @@ export function attachEquipment(
 }
 
 function applyEquipmentGrant(
+  state: GameState,
   host: CardInstance,
   equipmentInstId: InstId,
   grant: EquipmentGrant,
 ): void {
   if (grant.kind === "add") {
-    applyBuff(host, {
+    applyBuff(state, host, {
       stat: grant.stat,
       amount: grant.amount,
       scope: "equipped",

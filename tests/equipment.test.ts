@@ -31,7 +31,7 @@ describe("attachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(host.equipment).toContain(eq.instId);
     expect(eq.attachedTo).toBe(host.instId);
   });
@@ -48,8 +48,8 @@ describe("attachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
-    attachEquipment(state.cards, eq, host);
-    expect(() => attachEquipment(state.cards, eq, host)).toThrow();
+    attachEquipment(state, eq, host);
+    expect(() => attachEquipment(state, eq, host)).toThrow();
   });
 
   it("add-grants apply as equipped-scope buffs", () => {
@@ -65,7 +65,7 @@ describe("attachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(host.buffs.length).toBe(1);
     expect(host.buffs[0]).toMatchObject({
       stat: "force",
@@ -88,7 +88,7 @@ describe("attachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const bow = getCard(state.cards, spawn(state, "bow"));
-    attachEquipment(state.cards, bow, host);
+    attachEquipment(state, bow, host);
     expect(getActiveSetOverride(host, "force")).toEqual({
       stat: "force",
       amount: 1,
@@ -109,7 +109,7 @@ describe("attachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const axe = getCard(state.cards, spawn(state, "axe"));
-    attachEquipment(state.cards, axe, host);
+    attachEquipment(state, axe, host);
     const patterns = effectiveAttackPatterns(host);
     expect(patterns).toContainEqual({ kind: "cleave", value: 1 });
   });
@@ -128,7 +128,7 @@ describe("detachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     detachEquipment(state.cards, eq);
     expect(host.equipment).not.toContain(eq.instId);
     expect(eq.attachedTo).toBeUndefined();
@@ -148,7 +148,7 @@ describe("detachEquipment", () => {
     const host = getCard(state.cards, spawn(state, "c"));
     const eq = getCard(state.cards, spawn(state, "eq"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(3);
     detachEquipment(state.cards, eq);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(1);
@@ -169,7 +169,7 @@ describe("detachEquipment", () => {
     const host = getCard(state.cards, spawn(state, "c"));
     const bow = getCard(state.cards, spawn(state, "bow"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, bow, host);
+    attachEquipment(state, bow, host);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(1);
     detachEquipment(state.cards, bow);
     expect(effectiveStat(state, host, "player", "L0", "force")).toBe(5);
@@ -189,7 +189,7 @@ describe("detachEquipment", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "c"));
     const axe = getCard(state.cards, spawn(state, "axe"));
-    attachEquipment(state.cards, axe, host);
+    attachEquipment(state, axe, host);
     detachEquipment(state.cards, axe);
     expect(effectiveAttackPatterns(host)).not.toContainEqual({ kind: "cleave", value: 1 });
   });

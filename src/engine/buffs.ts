@@ -13,7 +13,8 @@
 // `effectiveStat` also filters Inert at read time (defense in depth).
 
 import { getCardDef } from "./cards.ts";
-import type { Buff, CardInstance, CardRegistry, InstId } from "./types.ts";
+import { emit } from "./events.ts";
+import type { Buff, CardInstance, CardRegistry, GameState, InstId } from "./types.ts";
 
 // ---------- Apply ----------
 
@@ -25,8 +26,12 @@ import type { Buff, CardInstance, CardRegistry, InstId } from "./types.ts";
  * - For "permanent" scope, the caller is responsible for mirroring into runDeckEntry.mods
  *   (handled at the engine entry points that grant permanent buffs, not at this primitive level).
  * - Inert filter: drops F/T/I/R/S buffs on Inert cards silently.
+ *
+ * Emits a "buff" outcome event (for the trace / UI) whenever a buff is actually stored — every
+ * source (card effects, Enraged-on-damage, equipment grants) flows through here, so this is the
+ * single chokepoint for "a stat changed". Dropped Inert buffs emit nothing (nothing happened).
  */
-export function applyBuff(card: CardInstance, buff: Buff): void {
+export function applyBuff(state: GameState, card: CardInstance, buff: Buff): void {
   if (buff.scope === "equipped" && buff.sourceInstId == null) {
     throw new Error("equipped-scope buff requires sourceInstId");
   }
@@ -36,6 +41,13 @@ export function applyBuff(card: CardInstance, buff: Buff): void {
     return;
   }
   card.buffs.push({ ...buff });
+  emit(state, "buff", {
+    instId: card.instId,
+    stat: buff.stat,
+    amount: buff.amount,
+    scope: buff.scope,
+    sourceInstId: buff.sourceInstId ?? null,
+  });
 }
 
 function isAffectedByInert(stat: Buff["stat"]): boolean {

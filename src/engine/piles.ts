@@ -18,7 +18,8 @@ import { detachEquipment } from "./equipment.ts";
 import { findCardLocation } from "./presence.ts";
 import { addCardToTrash, removeCardFromContainer } from "./marks.ts";
 import { routeOnLeavePlay, sendToPile, type LeavePlayReason, type PileTarget } from "./routing.ts";
-import type { CardInstance, GameState, Side } from "./types.ts";
+import { fireLeavePlayTrigger } from "./triggers.ts";
+import type { CardInstance, GameState, InstId, Side } from "./types.ts";
 
 // Re-export for callers that don't want to dig into routing.ts
 export { routeOnLeavePlay, sendToPile, type LeavePlayReason, type PileTarget };
@@ -61,11 +62,16 @@ export function leavePlay(
     }
   }
 
-  // 3. Revert encounter-scoped buffs on the leaving card.
-  revertEncounterScopedBuffs(card);
+  // 3. Fire onLeavePlay handler (e.g., deathwish) BEFORE the card moves to its pile so the
+  //    handler sees the card still at its original side+location per REBUILD §17 / Phase I
+  //    DECISIONS 2026-05-29. Skip for "equipmentDetached" recursion below — equipment auto-
+  //    detached as a side effect of host death shouldn't fire equipment leave-play triggers.
+  if (reason !== "equipmentDetached") {
+    fireLeavePlayTrigger(state, card, fromSide, fromLoc, reason);
+  }
 
-  // 4. TODO Phase I: fire onLeavePlay handler (def.onLeavePlay) via the trigger dispatcher.
-  //    The dispatcher will read card.def.onLeavePlay (e.g., a deathwish tag) and run the handler.
+  // 4. Revert encounter-scoped buffs on the leaving card.
+  revertEncounterScopedBuffs(card);
 
   // 5. Find the card's container and remove it.
   const location = findCardLocation(state, card.instId);
@@ -89,6 +95,17 @@ export function leavePlay(
  *
  * Caller is responsible for triggering this when needed (i.e., the draw routine in Phase E).
  */
+/**
+ * Shuffle a side's deck in place. Per §29, the deck shuffles fresh at encounter setup.
+ */
+export function shuffleDeck(state: GameState, side: Side): void {
+  if (!state.currentEncounter) return;
+  const sideState =
+    side === "player" ? state.currentEncounter.playerSide : state.currentEncounter.aiSide;
+  if (!sideState) return;
+  shuffleInPlace(sideState.deck);
+}
+
 export function reshuffleDiscardIntoDeck(state: GameState, side: Side): void {
   if (!state.currentEncounter) return;
   const sideState =
@@ -127,60 +144,98 @@ function shuffleInPlace<T>(arr: T[]): void {
  */
 export function endEncounterPiles(state: GameState): void {
   if (!state.currentEncounter) return;
-
   for (const side of ["player", "ai"] as const) {
-    const sideState =
-      side === "player" ? state.currentEncounter.playerSide : state.currentEncounter.aiSide;
-    if (!sideState) continue;
-
-    // Gather all instIds that should go back to deck for this side.
-    const reclaim: number[] = [];
-
-    // Hand, discard, graveyard, junkyard → reclaim
-    for (const id of sideState.hand) reclaim.push(id);
-    for (const id of sideState.discard) reclaim.push(id);
-    for (const id of sideState.graveyard) reclaim.push(id);
-    for (const id of sideState.junkyard) reclaim.push(id);
-
-    sideState.hand.length = 0;
-    sideState.discard.length = 0;
-    sideState.graveyard.length = 0;
-    sideState.junkyard.length = 0;
-
-    // In-play creatures + equipment on this side at all encounter locations → reclaim.
-    // Structures stay where they are (per §29).
-    for (const loc of state.currentEncounter.locationNodeIds) {
-      const ns = state.world.nodeState[loc];
-      if (!ns) continue;
-      const sideSlots = ns.sideSlots[side];
-      // Creatures
-      const creatureIds = new Set<number>();
-      for (const key of Object.keys(sideSlots.creatures)) {
-        const id = sideSlots.creatures[key];
-        if (id != null) creatureIds.add(id);
-      }
-      for (const id of creatureIds) {
-        reclaim.push(id);
-        // Also reclaim any equipment attached to this creature.
-        const card = state.cards[id];
-        if (!card) continue;
-        for (const equipId of card.equipment) reclaim.push(equipId);
-      }
-      // Vacate the slots
-      for (const key of Object.keys(sideSlots.creatures)) {
-        sideSlots.creatures[key] = null;
-      }
-    }
-
-    // Write-back persistent state on each reclaimed card to its runDeckEntry.mods.
-    for (const id of reclaim) {
-      writeBackPersistentState(state, id);
-    }
-
-    // Move to deck, shuffle.
-    for (const id of reclaim) sideState.deck.push(id);
-    shuffleInPlace(sideState.deck);
+    const ids = collectEncounterEndReclaim(state, side);
+    for (const id of ids) reclaimOneCardToDeck(state, side, id);
+    finishReclaim(state, side);
   }
+}
+
+/**
+ * Pure query: the instIds that should reclaim into `side`'s deck at encounter end, in a stable
+ * cascade order (piles first, then in-play creatures + their equipment). Structures stay on the
+ * map (per §29) and are NOT included. Does not mutate state — the orchestrator uses this to drive
+ * a paced visual cascade (reclaimOneCardToDeck per beat); the synchronous endEncounterPiles uses
+ * it too.
+ */
+export function collectEncounterEndReclaim(state: GameState, side: Side): InstId[] {
+  if (!state.currentEncounter) return [];
+  const sideState =
+    side === "player" ? state.currentEncounter.playerSide : state.currentEncounter.aiSide;
+  if (!sideState) return [];
+
+  const reclaim: InstId[] = [];
+  for (const id of sideState.hand) reclaim.push(id);
+  for (const id of sideState.discard) reclaim.push(id);
+  for (const id of sideState.graveyard) reclaim.push(id);
+  for (const id of sideState.junkyard) reclaim.push(id);
+
+  for (const loc of state.currentEncounter.locationNodeIds) {
+    const ns = state.world.nodeState[loc];
+    if (!ns) continue;
+    const sideSlots = ns.sideSlots[side];
+    const creatureIds = new Set<InstId>();
+    for (const key of Object.keys(sideSlots.creatures)) {
+      const id = sideSlots.creatures[key];
+      if (id != null) creatureIds.add(id);
+    }
+    for (const id of creatureIds) {
+      reclaim.push(id);
+      const card = state.cards[id];
+      if (!card) continue;
+      for (const equipId of card.equipment) reclaim.push(equipId);
+    }
+  }
+  return reclaim;
+}
+
+/**
+ * Move ONE card into `side`'s deck from wherever it currently is (a side pile or an in-play
+ * slot), clearing its in-play bookkeeping. The single primitive behind both the synchronous
+ * reshuffle and the paced visual cascade. Does NOT shuffle (caller finishes with finishReclaim).
+ */
+export function reclaimOneCardToDeck(state: GameState, side: Side, id: InstId): void {
+  if (!state.currentEncounter) return;
+  const sideState =
+    side === "player" ? state.currentEncounter.playerSide : state.currentEncounter.aiSide;
+  if (!sideState) return;
+  const card = state.cards[id];
+  if (!card) return;
+
+  // Remove from any side pile it sits in.
+  for (const pile of [sideState.hand, sideState.discard, sideState.graveyard, sideState.junkyard]) {
+    const idx = pile.indexOf(id);
+    if (idx !== -1) pile.splice(idx, 1);
+  }
+  // Vacate any in-play slot it occupies, across all encounter locations.
+  for (const loc of state.currentEncounter.locationNodeIds) {
+    const ns = state.world.nodeState[loc];
+    if (!ns) continue;
+    const slots = ns.sideSlots[side];
+    for (const map of [slots.creatures, slots.structures, slots.actions]) {
+      for (const key of Object.keys(map)) {
+        if (map[key] === id) map[key] = null;
+      }
+    }
+  }
+  // Clear in-play state and push into deck.
+  card.slots = [];
+  card.equipment = [];
+  if (card.attachedTo != null) delete card.attachedTo;
+  writeBackPersistentState(state, id);
+  if (!sideState.deck.includes(id)) sideState.deck.push(id);
+}
+
+/**
+ * Finish a reclaim cascade for a side: shuffle the deck. Separate so a paced cascade can move
+ * cards one-per-beat, then shuffle once at the end.
+ */
+export function finishReclaim(state: GameState, side: Side): void {
+  if (!state.currentEncounter) return;
+  const sideState =
+    side === "player" ? state.currentEncounter.playerSide : state.currentEncounter.aiSide;
+  if (!sideState) return;
+  shuffleInPlace(sideState.deck);
 }
 
 /**

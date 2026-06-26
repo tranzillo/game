@@ -136,9 +136,11 @@ describe("flip ordering — Side priority (priority 4)", () => {
     expect(queue[1]!.side).toBe("player");
   });
 
-  it("side with higher local tempo wins over firstSide", () => {
-    // Put a slow chip from each side (tempo 0), but player side has high-tempo creatures
-    // contributing to location tempo total. Player goes first regardless of firstSide.
+  it("initiative wins Tempo ties regardless of local tempo totals (2026-06-12 revision)", () => {
+    // Two tempo-0 chips from opposite sides. The player side has a high-tempo creature
+    // contributing to its LOCAL tempo total — under the superseded rule that would have given
+    // the player side priority. Under the revised rule, local tempo totals play no role in
+    // side ordering: initiative (firstSide=ai) wins the tie.
     registerCreatureDef("zero", { tempo: 0 });
     registerCreatureDef("hi", { tempo: 5 });
     const state = makeSingleLocationState();
@@ -150,12 +152,32 @@ describe("flip ordering — Side priority (priority 4)", () => {
     placeAt(state, "player", "L0", "creature", ["r0c1"], p, false);
     placeAt(state, "ai", "L0", "creature", ["r0c1"], a, false);
     const queue = [
-      emitFutureChip(state, a, "ai", "L0", "creature", "r0c1", null),
       emitFutureChip(state, p, "player", "L0", "creature", "r0c1", null),
+      emitFutureChip(state, a, "ai", "L0", "creature", "r0c1", null),
     ];
     sortChipQueueInPlace(state, queue);
-    // Player has higher local tempo (5 vs 0) so player chip wins despite firstSide=ai
+    expect(queue[0]!.side).toBe("ai");
+    expect(queue[1]!.side).toBe("player");
+  });
+
+  it("initiative side resolves ALL its chips in a tier before the other side's (side before location)", () => {
+    // Same tempo, two locations. Initiative side's chip at the LATER location still resolves
+    // before the other side's chip at the EARLIER location — side outranks location order.
+    registerCreatureDef("c", { tempo: 1 });
+    const state = makeMultiLocationState(["L0", "L1"]);
+    state.currentEncounter!.firstSide = "player";
+    const pAtL1 = getCard(state.cards, spawn(state, "c"));
+    const aAtL0 = getCard(state.cards, spawn(state, "c", "aiDeck"));
+    placeAt(state, "player", "L1", "creature", ["r0c0"], pAtL1, false);
+    placeAt(state, "ai", "L0", "creature", ["r0c0"], aAtL0, false);
+    const queue = [
+      emitFutureChip(state, aAtL0, "ai", "L0", "creature", "r0c0", null),
+      emitFutureChip(state, pAtL1, "player", "L1", "creature", "r0c0", null),
+    ];
+    sortChipQueueInPlace(state, queue);
     expect(queue[0]!.side).toBe("player");
+    expect(queue[0]!.loc).toBe("L1");
+    expect(queue[1]!.side).toBe("ai");
   });
 });
 

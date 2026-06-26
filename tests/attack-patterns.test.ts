@@ -37,7 +37,7 @@ describe("effectiveAttackPatterns", () => {
     const state = makeSingleLocationState();
     const host = getCard(state.cards, spawn(state, "m"));
     const axe = getCard(state.cards, spawn(state, "axe"));
-    attachEquipment(state.cards, axe, host);
+    attachEquipment(state, axe, host);
     const patterns = effectiveAttackPatterns(host);
     expect(patterns).toContainEqual({ kind: "default" });
     expect(patterns).toContainEqual({ kind: "cleave", value: 1 });

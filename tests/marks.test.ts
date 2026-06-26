@@ -113,7 +113,7 @@ describe("applyMark — second mark (exile path)", () => {
     const host = getCard(state.cards, spawn(state, "h"));
     const eq = getCard(state.cards, spawn(state, "eq"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], host, false);
-    attachEquipment(state.cards, eq, host);
+    attachEquipment(state, eq, host);
     expect(host.equipment).toContain(eq.instId);
     // First mark on eq
     applyMark(state, eq);

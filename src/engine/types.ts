@@ -67,6 +67,36 @@ export interface AttackPattern {
   kind: string; // "default" | "cleave" | "pierce" | "ranged" | ... (string-tag dispatch)
   value?: number; // pattern-specific: cleave 1 → secondaries take 1; pierce 1 → behind takes 1
   ammoCost?: number; // ranged only; default 1
+  // setDamage: when present, this pattern deals exactly this much damage per target regardless
+  // of the wielder's Force. Used by ranged equipment per §30: "A Bow with Force 1 turns a 0-Force
+  // creature into a 1-damage ranged unit and a 4-Force giant into a 1-damage ranged unit." Only
+  // applies to the printed pattern carrying setDamage — other patterns on the same wielder
+  // (e.g., the wielder's own melee) still use their normal damage.
+  setDamage?: number;
+}
+
+// ---------- Present-event subscriptions ----------
+//
+// Per REBUILD §32 / DECISIONS 2026-05-29: a card in play subscribes to "present-enter" events
+// at a scope and (optional) filter. When a chip transits the Present, the dispatcher matches
+// every face-up card's subscriptions against the event and fires handlers.
+
+export interface PresentSubscription {
+  // Where the event has to happen for this subscription to fire.
+  //  - "this-location": event loc === subscriber loc
+  //  - "this-side": event side === subscriber side (location-agnostic)
+  //  - "opposing-side": event side !== subscriber side (location-agnostic)
+  //  - "anywhere": no location/side filter
+  scope: "this-location" | "this-side" | "opposing-side" | "anywhere";
+  // Optional filter on the event card.
+  filter?: {
+    cardType?: "creature" | "structure" | "action" | "equipment";
+    // Exclude the subscriber from triggering on its own flip-up. Default false — useful when a
+    // card's onPresent would otherwise self-trigger on its own flip.
+    excludeSelf?: boolean;
+  };
+  // Handler tag — same registry idea as onFlipUp / onLeavePlay.
+  handler: string;
 }
 
 // ---------- Equipment grants ----------
@@ -132,14 +162,34 @@ export interface CardDef {
   onLeavePlay?: string;
   hooks?: Partial<Record<PhaseBoundary, string>>;
   aura?: { handlerTag: string };
+  // Present-event subscriptions per REBUILD §32. When a chip enters the Present, the dispatcher
+  // checks each in-play card's onPresent subscription against the event and fires matching
+  // handlers inside the originating chip's span. Multiple subscriptions allowed; a card can
+  // react to multiple kinds of present events.
+  onPresent?: PresentSubscription[];
+  // Legacy generic event subscription scaffold (Phase A). Reserved for onFutureEnter / onPast /
+  // etc. once those land. Phase I uses onPresent specifically.
   eventSubscriptions?: Array<{
     eventKind: string;
     handler: string;
     filter?: string;
   }>;
 
+  // STRUCTURE presence text per DECISIONS 2026-06-12 (stats are creature-only): a structure's
+  // "+1 Force here" is a printed text-effect contributing flat presence to its OWN side's
+  // location stat totals while face-up in play. NOT a stat field, NOT an aura.
+  presenceGrants?: Array<{ stat: StatKind; amount: number }>;
+
   // Where the card exits to on resolve (actions only). Default discard.
   exitTo?: "discard" | "graveyard" | "trash";
+
+  // Persistent action flag. When true, the action does NOT exit its slot after its onFlipUp
+  // resolves. Instead it stays face-up in the action slot across turns, watching for its
+  // persistence condition (printed elsewhere — Pray-N channel, Quest completion, Curse
+  // migration, etc.). When the condition resolves, content code calls exitPersistentAction
+  // to retire it. Per REBUILD §29: no new chip is emitted on exit (the Past entry from the
+  // original flip already records the flip-up event).
+  persistent?: boolean;
 
   // Built-in attack patterns on the card itself
   attackPatterns?: AttackPattern[];
@@ -243,6 +293,9 @@ export interface SideState {
 
 export interface WorldNode {
   id: string;
+  // Map grid coordinates per §34: y = tier (row of the run), x = column within the tier.
+  // The map is a tiered grid; encounter locations are always next-tier nodes, rendered in
+  // column (x) order at both zoom levels.
   x: number;
   y: number;
   biome?: string;
@@ -252,6 +305,10 @@ export interface WorldNode {
   initialContent?: NodeInitialContent;
   status?: "unvisited" | "encountered";
   initialized?: boolean; // set true after materializeInitialNodeContent runs
+  // Overworld fog per §34: fog hides the CARDS at a location, never its text. Fog lifts at
+  // encounter start, at exactly the encounter's locations; once lifted it doesn't return.
+  // undefined/false = fogged (cards hidden); true = revealed.
+  revealed?: boolean;
 }
 
 export interface NodeInitialContent {
@@ -279,9 +336,24 @@ export interface WorldState {
 // ---------- Encounter state ----------
 
 export type EncounterKind = "hostile" | "neutral" | "boss" | "mixed";
-export type EncounterOutcome = "playerCleared" | "playerLost" | "bossKilled" | "aiRetreated";
+// `aiRetreated` was removed (DECISIONS 2026-06-13): summoner retreat is a state change / event
+// (the summoner withdraws its presence + forces), NOT an encounter ending. Encounters end only
+// via their locations (all non-summoner-defeat locations cleared / player lost) or a summoner
+// defeat. `summonerDefeated` fires when an enemy summoner's run-scoped Durability hits 0 while
+// cornered (retreat impossible — currently always, until the cornered-at-map-end gate is built).
+export type EncounterOutcome =
+  | "playerCleared"
+  | "playerLost"
+  | "bossKilled"
+  | "summonerDefeated";
 
 // Forward-declared shapes for fields Phase E+ will populate. Phase A keeps them empty/null-able.
+// The single persistent timeline object (DECISIONS 2026-06-13). ONE chip element travels the
+// whole L — Future → Present → Past — like a board card moving hand → slot → graveyard. It is
+// run-scoped (lives in GameState.timeline, never cleared between encounters): a resolved chip
+// stays forever as the same object and IS the Past record. It carries the timestamp axes
+// (encounter, turn, phase) it needs for the Past headers / scope / cross-view link, stamped at
+// emission.
 export interface TimelineChip {
   chipId: number;
   cardInstId: InstId;
@@ -290,15 +362,18 @@ export interface TimelineChip {
   kind: "creature" | "structure" | "action" | "equipment";
   posKey: PositionKey | null;
   hostInstId?: InstId;
-  state: "future" | "resolved";
+  state: "future" | "present" | "resolved";
   cachedTempo: number;
-}
-
-export interface PastEntry {
-  defKey: string;
-  side: Side;
-  loc: string;
+  // Resolution order. Chips are appended to state.timeline in COMMIT order, but the Past must
+  // read in FLIP (resolution) order — chips flip in sorted Tempo/initiative order, not commit
+  // order. resolveSeq is a monotonic stamp assigned when the chip resolves (markChipResolved);
+  // the Past query sorts resolved chips by it. Undefined until the chip resolves.
+  resolveSeq?: number;
+  // Timestamp axes, stamped at emitFutureChip. cardType lets the Past be queried like the old
+  // PastEntry filter without re-deriving from the card def.
+  encounter: number;
   turn: number;
+  phase: Phase;
   cardType: "creature" | "structure" | "action" | "equipment";
 }
 
@@ -320,6 +395,9 @@ export interface ActiveSubscription {
 export interface EncounterState {
   locationNodeIds: string[];
   encounterKind: EncounterKind;
+  // This encounter's number on the run (= GameState.encounterCount at setup). Stamped onto
+  // Past entries as the `encounter` timestamp axis.
+  encounterNo: number;
   turn: number;
   phase: Phase;
   subPhase: SubPhase;
@@ -329,18 +407,38 @@ export interface EncounterState {
   playerSide: SideState;
   aiSide: SideState | null;
 
-  timeline: TimelineChip[];
-  past: PastEntry[];
-
+  // The timeline itself is run-scoped (GameState.timeline). The flip queues stay here — they're
+  // transient resolution machinery holding chip references for THIS encounter's draining.
   flipQueues: {
     startOfPhase: TimelineChip[];
     midPhase: TimelineChip[];
     endOfPhase: TimelineChip[];
   };
-  nextChipId: number;
+
+  // The chip currently in the Present span (null when nothing is resolving). Both Card and
+  // ChipStrip read this to render their synchronized "resolving" visual: the chip glows in
+  // Present, and the card whose instId matches the present chip glows on the board. Set when
+  // the orchestrator opens the present span; cleared when the span closes.
+  resolvingChipId: number | null;
+
+  // The attacker InstId currently swinging in combat resolution (null when not swinging).
+  // Combat is a sibling resolution model to the Present span: each swing has its own glow
+  // moment on the attacker. Set when the orchestrator opens a swing; cleared between swings.
+  swingingAttackerInstId: number | null;
+  // The target InstId currently taking the hit (null when not hitting). Read by Card.tsx to
+  // flash damage. Set during the damage beat; cleared between swings.
+  swingHitTargetInstId: number | null;
 
   playerLocationCleared: Record<string, boolean>;
   outcome: EncounterOutcome | null;
+
+  // Summoner retreat (DECISIONS 2026-06-13). The enemy summoner withdraws to survive rather than
+  // die. `summonerDamageThisEncounter` accumulates unblocked fall-through damage to the summoner
+  // this encounter (drives the instant tier-scaled cap). `summonerRetreated` is set once it
+  // withdraws — its forces are removed and it is no longer present (no more fall-through to it),
+  // but the encounter continues (locations drive the ending, not summoner presence).
+  summonerDamageThisEncounter: number;
+  summonerRetreated: boolean;
 
   locationData: Record<string, EncounterLocationData>;
   outcomes: EngineEvent[];
@@ -365,12 +463,33 @@ export type CardRegistry = Record<InstId, CardInstance>;
 export interface GameState {
   runDeck: RunDeckEntry[];
   runDurability: number;
+  // Enemy summoner Durability — run-scoped (DECISIONS 2026-06-13: one summoner across zone 1,
+  // damageable wherever present, Durability persists across encounters). The per-encounter aiSide
+  // is seeded from this at setup and writes its survivor back at encounter end. Later zones track
+  // Durability per live summoner; zone 1 is this single value.
+  enemyDurability: number;
+  // The enemy summoner's run-scoped deck (instIds). Like the player's, it persists across
+  // encounters and cycles. Seeded once at run start; carried into aiSide at each encounter where
+  // the summoner is present. Zone 1 = one summoner = this one deck.
+  aiRunDeck: InstId[];
   starterSeed: string;
   world: WorldState;
   cards: CardRegistry;
   trash: InstId[];
   currentEncounter: EncounterState | null;
   runOver: "playerWin" | "playerLose" | null;
+  // The timeline is run-scoped (DECISIONS 2026-06-13): ONE persistent chip per face-down card,
+  // never cleared between encounters. A chip travels future → present → resolved and stays
+  // forever — resolved chips ARE the Past. Replaces the old separate PastEntry list.
+  timeline: TimelineChip[];
+  // Monotonic chip id source — unique across the whole run (chips persist run-long).
+  nextChipId: number;
+  // Monotonic resolution-order source. Stamped onto a chip's resolveSeq when it resolves, so the
+  // Past reads in flip order rather than commit order. Run-scoped like nextChipId.
+  nextResolveSeq: number;
+  // Monotonic counter stamped onto each new encounter at setup; the `encounter` timestamp axis.
+  // Starts at 0; first encounter is 1.
+  encounterCount: number;
 }
 
 // ---------- Card-location resolver ----------

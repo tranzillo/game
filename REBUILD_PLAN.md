@@ -854,7 +854,9 @@ When equipment is committed pending, it carries a reference to its intended host
 
 ### Five first-class stats
 
-`Force`, `Tempo`, `Insight`, `Resolve`, `Spite`. Every card type (creature, structure, action, equipment) can print any of these. A `CardDef` has all five as optional fields (default 0). A creature with `resolve: 1` is fine. An action with `spite: 0` is fine (no Spite printed).
+`Force`, `Tempo`, `Insight`, `Resolve`, `Spite`. **Stats are creature-only fields** (corrected 2026-06-12 — the earlier "every card type can print any of these" was drift). A `CardDef` has all five as optional fields (default 0); they are meaningful on creatures only. Structures, equipment, and actions have no stats: equipment modifies its host via grants; structures and locations contribute presence via printed text-effects ("+1 Force here") through the location-text hook surface; actions read the pool (flip tempo = side's location Tempo total).
+
+`effectiveStat` returning 0 for non-creatures is correct by design.
 
 Durability is a separately printed value, not a stat. Only creatures (and possibly some structures by future content) have it.
 
@@ -884,7 +886,7 @@ Anything not explicitly `permanent` reverts on leave-play.
 
 "Force at a location" is the sum of effective Force over creatures that pass the **combat-eligibility predicate**: face-up, not sleeping, not just-woke, positive effective Force, attack flags clean, and either front-row melee or back-row ranged with available ammo. The Force-total IS the combat damage available at the location. Sleeping ogres or back-row melee creatures contribute 0 to Force-at-the-location even though they're "on the side."
 
-For Tempo, Insight, and Spite at a location: sum the effective stat over all face-up creatures + structures at the location, regardless of row.
+For Tempo, Insight, and Spite at a location: sum the effective stat over all face-up creatures at the location, regardless of row. (Corrected 2026-06-12 — "creatures + structures" was drift; structures have no stats. Structure text-effects contribute via the location-text hook surface, additive to the creature sum.)
 
 Resolve is not a per-location stat.
 
@@ -1000,15 +1002,15 @@ Flip happens AFTER play window closes but BEFORE the phase's substantive action.
 - **Creatures, structures, equipment** (permanents): main phase only.
 - **Actions**: any phase.
 
-### Priority and Tempo ordering
+### Initiative and Tempo ordering
 
-Priority alternates each turn. On Tempo ties in the flip queue or combat order, the side with priority resolves first.
+**Initiative** alternates each turn. On Tempo ties in the flip queue or combat order, the initiative side resolves first — all of its cards at that tier before any of the other side's. Initiative also orders side-level phase activities with no tempo: the initiative side draws first, discards first, etc. Initiative is purely a fair tie-breaker; it never overrides a real Tempo difference.
 
-Within a flip queue:
-- Tempo descending (higher first; negative Tempo is legal).
-- Tie: side priority.
-- Tie: location order.
-- Tie: position rank within the location's grid.
+Within a flip queue (same hierarchy as combat order, §30):
+- Tempo descending (higher first; negative Tempo is legal). Permanents use printed/effective Tempo; actions use their side's location Tempo total cached at commit (§32).
+- Tie: initiative side first.
+- Then: location order.
+- Then: position rank within the location's grid.
 
 ### Phase queue
 
@@ -1161,14 +1163,16 @@ A creature is eligible to attack iff:
 
 This predicate matches "creature contributes to Force-at-location" — they're the same set per §26.
 
-### Tempo ordering (four-level)
+### Tempo ordering (revised 2026-06-12 — initiative directly after Tempo)
 
 1. Tempo descending. Higher first. Negative legal.
-2. Within a Tempo tier: location order (left-to-right across rendered locations).
-3. Within a location, within a tier: position rank (front-to-back, left-to-right).
-4. Side priority on remaining ties: side with higher local Tempo total; further tie broken by alternating priority per overworld turn.
+2. Within a Tempo tier: **initiative side first** (initiative alternates each turn). All of the initiative side's cards at this tier resolve before any of the other side's.
+3. Within a side's batch: location order (left-to-right across rendered locations).
+4. Within a location: position rank (front-to-back, left-to-right).
 
 Action slot order tiebreaks Tempo ties for actions.
+
+Initiative is purely a Tempo tie-breaker plus the orderer for side-level activities with no tempo (draw, discard). The earlier "side with higher local Tempo total goes first" sub-rule is removed — local Tempo total's role is being the *actions'* tempo value (per §32 chip tempo caching), not a side-priority mechanism. This matches §28; the previous version of this section had drifted.
 
 ### Damage application
 
@@ -1244,7 +1248,7 @@ The check fires at end of cleanup, once per turn. The clear-flag is set then.
 
 **Consequences when a location clears (player-cleared at end of cleanup):**
 
-1. **Shuffle-back at end of turn.** The player's commits at the cleared location shuffle back into the player's deck: creatures, equipment, persistent actions. Player structures stay at the location (per the supply-line rule from §7 / §29). The player's slots at the location empty.
+1. **Commits move to discard at end of turn.** The player's commits at the cleared location move to the **discard pile** (DECISIONS 2026-06-13, superseding the earlier "shuffle back into the deck"): creatures, equipment, persistent actions. They cycle back into the deck only on a deck-empty reshuffle or at encounter end. Player structures stay at the location (per the supply-line rule from §7 / §29). The player's slots at the location empty.
 2. **No further player commits at this location.** The player has won here; the cleared-flag closes the location to further player commits for the rest of the encounter.
 
 There is no "AI-cleared" status. The AI does not have a per-location clearing concept. The AI's path to defeating the player is summoner damage — reducing player Durability to 0 — which is a single global condition, not per-location.
@@ -1293,18 +1297,22 @@ The player's summoner Durability is run-state. Carries from encounter to encount
 
 ## 32. The Past, the Future, and the Present
 
-### Three temporal states
+### Three first-class targetable zones
+
+The Past, Present, and Future are three first-class targetable zones, not "one data log plus a visual stream." Each is queryable, each is a substrate cards can mechanically engage with. They differ in *how* they're queried but share that property.
 
 A card during an encounter has a temporal status:
-- **Future** — committed face-down. The card sits in its slot but is inert. A chip in the future bar represents it.
-- **Present** — the moment of flip-up. Chip transits through the present node. Card flips face-up; flip-up trigger fires; if it's an action, its effect resolves.
-- **Past** — after flipping. Chip falls into the past column. Card is now face-up on the board (or, for an action, has resolved and exited).
+- **Future** — committed face-down. The card sits in its slot but is inert. A chip in the future bar represents it. Future chips are targetable by Suppress, Counter, peek/scry, and tempo-reorder effects.
+- **Present** — the moment of flip-up. Chip is in the present zone. Card flips face-up; flip-up trigger fires; subscribers fire; downstream triggers cascade. Cards in play subscribe to Present events as a trigger surface.
+- **Past** — after flipping. Chip falls into the past column. Card is now face-up on the board (or, for an action, has resolved and exited). A Past entry is appended to the encounter-scoped log; Past entries are targetable by Copy / Recall / Erase.
 
 ### Chips (visual) vs the Past (data)
 
-These are two distinct things:
+These are two distinct things, intentionally not derived from each other:
 - **Chips** are visual. Every face-down committed card gets one. The chip transits future → present → past as the card flips up. Chips carry a reference to the live `CardInstance` (no snapshot — reads from current state).
 - **The Past** is data. An append-only log of every flip-up event. Encounter-scoped. Clears at encounter start. Targetable by card effects.
+
+The Present and Future zones are queried *over the chip array* (live state); the Past zone is queried *over the entries array* (snapshots, because the cards may have left play by the time a Past-targeting card resolves).
 
 ### What writes to the Past
 
@@ -1332,9 +1340,57 @@ Card archetypes targeting the Past:
 - **Recall** (premium): trigger a Past action directly, ignoring requirements. Reserved Blue keyword.
 - **Erase** (planned Black): remove a Past entry. Not in v1.
 
+### The Present as a trigger surface
+
+Cards in play subscribe to **Present events** at a scope. When a chip transits the Present, the engine emits a structured `present-enter` event the trigger dispatcher routes to all matching subscribers.
+
+A subscription declares:
+- **Scope**: `this-location` | `this-side` | `opposing-side` | `anywhere`.
+- **Filter**: optional restrictions on `cardType`, `defKey`, `kind` (creature / structure / action / equipment), tempo band.
+- **Handler tag**: registered handler that runs when an event matches.
+
+Two species of subscriber:
+1. **Self-trigger** (`onFlipUp`): the card subscribes to "the event where *I* enter the Present." Existing Phase G shape.
+2. **Cross-card subscriber** (`onPresent`): the card subscribes to "an event where *something else* enters the Present at my scope." Phase I lights this up.
+
+Lurk, "+1 Force when a creature flips here," and "draw on opposing action resolve here" all fall out of the same subscription shape — they're not bespoke per-card wiring.
+
+Counters: some cards subscribe to the Present and accumulate state on themselves per matched event (e.g., "each time a creature flips up here, gain +1 Force" stored on the subscribing card's instance state). The engine provides the subscription hook; the count lives on the card.
+
+### The chip IS the resolution (present-span machine)
+
+The chip and the resolving card are the same event in two places. The chip enters Present *as* the card flips face-up *as* flip-up + subscriber triggers fire *as* the Past entry writes. All in one engine frame.
+
+The chip stays in the Present for the *entire* resolution cascade. Downstream triggers, spawned tokens, damage, deaths, deathwishes — all resolve underneath the chip's Present span. The chip drops to Past only when the cascade has fully drained.
+
+**Implementation:** a present-span machine in the store layer:
+- `openPresentSpan(chip, onClose)` opens the span when the orchestrator marks the chip Present.
+- `queueResolutionBeat(durationMs, fn)` is called by any handler (flip-up, subscriber, downstream trigger) for work that should be visually paced inside the resolving card's moment. Beats may queue further beats.
+- The span drains its beat queue sequentially. A `MIN_DWELL_MS` floor is enforced as a tail beat so vanilla flips with no downstream work still let the player see the resolve moment.
+- The span closes only when the queue is empty AND the floor has elapsed.
+
+**Single source of truth for the visual:** `encounter.resolvingChipId` is set when the span opens and cleared when it closes. Both the chip's Present-zone visual (gold pulse) and the resolving card's on-board visual (glow + scale) read from this field. They open and close together by construction — they can't drift.
+
+**Invariants:**
+- One chip in the Present at a time. Subscriber reactions fired by a Present event resolve *underneath* the originating chip's span — they do not generate their own Present chip.
+- A face-down token spawned by a triggered effect gets a Future chip, not a Present one — its own resolution comes later in the queue drain.
+- The trigger dispatcher runs synchronously at the moment of flip-up so handlers can queue beats into the span before the orchestrator opens it. Handlers can mutate state instantly (no beat queued) or queue a paced beat for visualization.
+
+### The Future as a targetable resource
+
+The future bar is the queue of committed-but-unflipped chips. It is a **first-class targetable surface**, not just visualization. Cards target Future chips to:
+- **Peek** at chips (Blue scry-on-the-future-bar; read identity of own-side chips, kind + tempo + location of opposing chips per fog rules).
+- **Suppress** specific chips so they stay in the future across passes (card-specific extension of location-text suppression).
+- **Counter** chips matching a filter at a location (Blue Counterspell).
+- **Reorder** by mutating a chip's effective tempo before the queue sort.
+
+Future-chip access patterns mirror Past access — random, positional (head of queue, tail, by tempo band), or filtered.
+
 ### Suppressed actions
 
 A face-down action whose location text declares it suppressed (`shouldSuppressAction(card, loc) → true`) keeps its chip in the future bar across passes. The chip stays unmoved until the predicate returns false at some end-of-phase pass — at that point, the chip transits to present and resolves.
+
+This is the location-text form of Future-chip mutation. Cards can do the same thing to *specific* Future chips via card-printed Suppress effects.
 
 ### Chip and card lifecycle are coupled
 
@@ -1363,6 +1419,9 @@ Both sides' flip-ups write to the same Past. Both sides can target it. This is w
 - "Actions write to past on resolve" framing. All flip-ups write.
 - Quest reward firing writing to past. Doesn't.
 - Tempo stored in Past entries. It's ordering, not data.
+- Chip-as-purely-visualization decoupled from card resolution. The chip's Present span IS the card's resolution moment — they are one event in two places, bound by `resolvingChipId` as the shared source of truth.
+- Past-only-as-targetable framing. The Future is targetable (Suppress / Counter / peek / reorder); the Present is a trigger surface (subscribers fire on `present-enter` events).
+- Self-only `onFlipUp` triggers as the complete trigger model. Cross-card `onPresent` subscriptions are the more general shape; `onFlipUp` is the self-subscription species.
 
 ---
 
@@ -1378,10 +1437,64 @@ These were raised in surface discussions but not directly answered, or are delib
 
 ---
 
+## 34. One world, two zooms (overworld/encounter continuity)
+
+Locked 2026-06-12 in conversation (see DECISIONS.md entry of the same date). This surface corrects a divergence that crept into the Phase L implementation: the overworld was built as a detached minimap above a separate encounter view, producing a "two game states" feeling the design explicitly rejects.
+
+### One state, two zoom levels
+
+A node on the overworld and a location in an encounter are the **same object** with the same state for the whole run. The UI is a zoom lever over one continuous space. Zoomed out: the node network, the player's route and persistent footprint, every node's location text. Zoomed in: the encounter, the pulled-in locations as card grids. Zooming doesn't need to be literal camera motion — continuity comes from the map tree's structure and consistent location rendering between views.
+
+Engine note: `world.nodeState` already holds per-node persistent state correctly (structures, location piles, ammo persist across encounters). The continuity gap is presentational — there must be ONE location/node rendering concept shared by both zoom levels, not two unrelated components.
+
+### Map structure: tiered grid
+
+Locations lay out in a grid of even rows; **each row is a tier of the run**. Nodes connect and branch; the player moves forward only, along one of the branching paths. Encounter locations are always next-row nodes, rendered in their natural map (column) order at both zoom levels.
+
+This tightens §3's "network of connected nodes": v1 maps are tiered grids, not arbitrary graphs. Map authoring follows the row/tier shape.
+
+### Overworld fog of war
+
+- Location text is visible for the **whole map from run start**. Run planning is reading location text.
+- Fog hides the **cards** present at locations the player hasn't played at — never the text.
+- Fog lifts **at encounter start**, at exactly the encounter's locations. Once lifted, it doesn't return (no off-screen simulation in v1).
+- A fogged location shows its **peace-time text**. When fog lifts and AI presence is revealed, the text changes to **war mode** — after the move is committed (one-way travel + no leaving an encounter = the reveal is a trap you can't back out of, by design).
+
+### Moving is leveling up
+
+The post-encounter move is the run's progression beat. Persistent location state (structures, location graveyards/junkyards) accumulates along the traveled path and stays reachable via control-scoped effects. Choosing a node = choosing which resources your build keeps.
+
+### Control (terminology)
+
+The player **controls** locations they have previously traveled to. "Control" works in specific card-text context ("another junkyard you control" — not your junk pile, one you picked up); standalone it's too generic. "Supply line" stays as internal vocabulary. Player-language templating is a later pass. Sketch (wording open): "Swap a card in your graveyard with a card in any graveyard you control."
+
+### Implementation re-ordering
+
+This surface re-prioritizes the remaining phases. Ahead of further card-content porting (Phase M.3 slice 2+, M.4-M.6):
+
+1. **Unified node renderer** — one component/concept renders a location at both zoom levels; encounter view arranges next-row locations in map column order; map view shows the persistent footprint (structures, pile indicators) at unfogged nodes.
+2. **Tiered-grid map shape** — map authoring + `adjacentLocationsFor` semantics confirmed against rows-as-tiers; slice map re-authored as a tiered grid.
+3. **Overworld fog** — fogged/unfogged node state; card visibility gating; fog-lift at encounter start.
+4. **Location text dispatch** — the location-text registry and war/peace mode resolution (war text shown iff AI presence revealed). Location text is load-bearing for the core loop (run planning), not late-stage content.
+5. **"Control" tracking** — controlled-node set (traveled chain) as a queryable engine surface for card effects.
+
+### What this rejects
+
+- A detached minimap as a separate view (the Phase L implementation).
+- Arbitrary-graph maps for v1 (tiered grid only).
+- "Supply line" as the player-facing term.
+- Fog hiding location text.
+
+### Zoom model (locked 2026-06-13 — see DECISIONS)
+
+The two zoom levels are realized as a view-state machine, not a simultaneous stacked layout. The node you stand on IS the run-metadata floor (durability, controls, hand, piles unified into one node-floor component) — map view shows it as a tree node, encounter view lays it across the bottom band. View follows decision type (tactical → encounter, meta → map). Phase-advance is encounter-local; zoom and advance are coupled and both gate off while resolution animates. The unified node renderer is stacked chip-piles split by type (in-play / grave / junk here), with the active node expanding the in-play pile into the real board. The timeline wraps both views as a persistent top+left L-frame, with timestamped (`{encounter, turn, phase, loc}`) grouped Past headers. Transitions are cuts/crossfades, not a literal camera zoom; the tree grows upward. The Past moves to run scope to support the cross-encounter timestamp axis. Full spec in DECISIONS 2026-06-13.
+
+---
+
 ## Final note
 
 This plan supersedes everything previous about how the code is structured. The old docs (DESIGN.md, DECISIONS.md, CARD_DESIGN.md, ARCHITECTURE.md, ARCHITECTURE_LESSONS.md) remain in the repo as reference material — they contain a mix of confirmed decisions and AI elaboration. Where this plan conflicts with them, this plan wins.
 
-§25–§33 are the most recent layer. They were locked in conversation as direct corrections to prototype-era assumptions that had been silently carried forward. They are the contract for the engine rewrite per the revised §24.
+§25–§34 are the most recent layer. They were locked in conversation as direct corrections to prototype-era assumptions that had been silently carried forward. They are the contract for the engine rewrite per the revised §24. §34 was added 2026-06-12 after the Phase L/M build revealed the overworld/encounter continuity frame had never been captured as a buildable constraint.
 
 

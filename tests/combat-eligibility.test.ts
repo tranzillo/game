@@ -118,7 +118,7 @@ describe("combatEligible", () => {
     const card = getCard(state.cards, spawn(state, "m"));
     placeAt(state, "player", "L0", "creature", ["r0c0"], card, false);
     expect(combatEligible(state, card, "player", "L0")).toBe(false);
-    applyBuff(card, { stat: "force", amount: 2, scope: "turn" });
+    applyBuff(state, card, { stat: "force", amount: 2, scope: "turn" });
     expect(combatEligible(state, card, "player", "L0")).toBe(true);
   });
 });

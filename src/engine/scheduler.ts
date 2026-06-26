@@ -18,6 +18,23 @@ let isPlayingFlag = false;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let speedMult = 1;
 
+// Observers notified whenever the isPlaying flag transitions. The store registers one so the
+// UI re-renders the moment resolution starts/ends — the view machine gates zoom + advance on
+// isPlaying(), and a terminal beat that ends the sequence without its own notify would otherwise
+// leave the UI gated. Engine→store import is forbidden (dependency direction), so the store
+// pushes a callback in instead.
+const idleObservers: Array<() => void> = [];
+
+export function onPlayingChange(fn: () => void): void {
+  idleObservers.push(fn);
+}
+
+function setPlaying(next: boolean): void {
+  if (isPlayingFlag === next) return;
+  isPlayingFlag = next;
+  for (const fn of idleObservers) fn();
+}
+
 /**
  * True iff the engine is mid-beat-chain. UI click handlers should gate on this.
  */
@@ -30,14 +47,14 @@ export function isPlaying(): boolean {
  * gate clicks before the first beat fires.
  */
 export function startSequence(): void {
-  isPlayingFlag = true;
+  setPlaying(true);
 }
 
 /**
  * Mark the engine as idle. Terminal beats call this so click handlers are re-enabled.
  */
 export function endSequence(): void {
-  isPlayingFlag = false;
+  setPlaying(false);
 }
 
 /**
@@ -61,7 +78,7 @@ export function getSpeed(): number {
  * beats at once.
  */
 export function runBeat(durationMs: number, nextBeatFn: () => void): void {
-  isPlayingFlag = true;
+  setPlaying(true);
   if (pendingTimer != null) clearTimeout(pendingTimer);
   const wait = Math.max(0, durationMs * speedMult);
   pendingTimer = setTimeout(() => {
@@ -71,7 +88,7 @@ export function runBeat(durationMs: number, nextBeatFn: () => void): void {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error("Beat error:", e);
-      isPlayingFlag = false;
+      setPlaying(false);
     }
   }, wait);
 }
@@ -84,7 +101,7 @@ export function cancelAll(): void {
     clearTimeout(pendingTimer);
     pendingTimer = null;
   }
-  isPlayingFlag = false;
+  setPlaying(false);
 }
 
 /**

@@ -1,6 +1,6 @@
-// Slice controls — Load Slice / Advance Phase / speed.
+// Slice controls — Start run / Advance Phase / speed.
 
-import { actionLoadSlice } from "../../store/actions.ts";
+import { actionStartRun } from "../../store/actions.ts";
 import { actionAdvancePhase } from "../../store/orchestrator.ts";
 import { isPlaying, setSpeed, getSpeed } from "../../engine/scheduler.ts";
 
@@ -9,36 +9,48 @@ interface ControlsProps {
   phase: string;
   subPhase: string;
   hasEncounter: boolean;
+  playerDurability: number;
+  aiDurability: number | null;
 }
 
-export function Controls({ turn, phase, subPhase, hasEncounter }: ControlsProps) {
+export function Controls({
+  turn,
+  phase,
+  subPhase,
+  hasEncounter,
+  playerDurability,
+  aiDurability,
+}: ControlsProps) {
   const busy = isPlaying();
 
-  function load() {
-    actionLoadSlice({
-      handDefKeys: ["r1", "r3", "scribe"],
-      deckDefKeys: ["r1", "r1", "r3", "scribe", "scribe"],
-    });
-  }
-
   return (
+    // Thin control strip — sits below the piles in the node-floor. Slim bar, not a panel.
     <div
       style={{
         display: "flex",
         gap: 12,
         alignItems: "center",
-        padding: 12,
+        padding: "5px 12px",
         background: "#0e0e14",
-        border: "1px solid #2a2a35",
-        borderRadius: 4,
+        borderTop: "1px solid #2a2a35",
       }}
     >
       <div style={{ color: "#aaa", fontSize: 12 }}>
         Turn {turn} · {phase} ({subPhase})
       </div>
+      {hasEncounter && (
+        <div style={{ color: "#4a8aef", fontSize: 12 }}>
+          You: {playerDurability} D
+        </div>
+      )}
+      {hasEncounter && aiDurability != null && (
+        <div style={{ color: "#f0c040", fontSize: 12 }}>
+          Enemy: {aiDurability} D
+        </div>
+      )}
       {!hasEncounter ? (
-        <button onClick={load} style={btn}>
-          Load slice
+        <button onClick={() => actionStartRun()} style={btn}>
+          Start run
         </button>
       ) : (
         <button
