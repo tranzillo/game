@@ -116,6 +116,16 @@ To make effect *outcomes* observable (for a trace, the animation layer, or debug
 
 This composes with the read-only divergence-trace tooling (`src/ui/devtrace.ts`): a pure subscriber that formats the event stream into a transcript with per-phase board snapshots. Building observability *first* and using it to find bugs (rather than guessing from symptoms) was the highest-leverage move of the session — every face-down/targeting/ordering bug was found by reading a trace, not by inspection.
 
+## 13. Framer `layoutId`: never render the same `layoutId` in two places at once; a reparent needs a destination (both CONFIRMED in-browser, 2026-06-26)
+
+Two distinct, browser-verified causes of cards teleporting instead of sliding:
+
+**(a) A `layoutId` element must exist in exactly ONE place per render.** Creature movement teleported because, during a *pending* move, the moving creature was rendered in TWO slots simultaneously — solid (real `<Card>`, with its `layoutId`) at the source, AND as a ghost `<Card>` of the same instId at the destination. Even with `layoutCarrier={false}` on the ghost, having a second render of the same card meant that when the move resolved, Framer saw the `layoutId` "appear in place" at the destination rather than *slide from the source* → teleport. **Fix:** the destination preview must NOT be a `<Card>` carrying the moving creature's identity. Render it as a plain `<div>` ghost (name + "moving here") — a distinct element Framer never confuses with the real creature, which then slides cleanly source→destination on resolution. (Verified by first removing the ghost entirely — the move animated — then restoring it as a non-`<Card>` div.)
+
+**(b) A reparenting `layoutId` element needs a rendered DESTINATION to slide to.** AI-side cards leaving play teleported because the AI summoner's piles weren't rendered — no destination element. Rendering the AI summoner's piles (when a summoner is present) fixed AI-side leave-play animation.
+
+**Discipline (the meta-lesson): UI animation bugs cannot be caught by the headless test suite — a claimed fix is NOT a fix until observed live in the browser.** This session a `layout`-vs-`layoutId` change was confidently reasoned about (even with a research agent citing Framer docs/issues) and written into the docs as "the fix" — it had ZERO observed effect and was reverted. Diagnose UI animation by *testing a minimal change in the browser* (e.g. "remove the suspect element; does it animate now?"), not by reasoning about Framer internals. Don't record an animation fix in the docs until it's been seen working.
+
 ---
 
 ## Working notes for collaboration

@@ -121,6 +121,7 @@ export function Location({ state, loc, node, name, kind = "neutral", cleared = f
                     posKey={posKey}
                     committedCard={getCardAtSlot(state, node, "player", "creature", posKey)}
                     pendingCard={getPendingCardAtSlot(state, loc, "creature", posKey)}
+                    pendingMoveGhostCard={getPendingMoveGhostAtSlot(state, loc, posKey)}
                   />
                 )),
               )}
@@ -267,4 +268,19 @@ function getPendingCardAtSlot(
   const instId = map[posKey];
   if (instId == null) return null;
   return state.cards[instId] ?? null;
+}
+
+// The creature whose pending-move DESTINATION is this slot (rendered as a ghost there). The real
+// creature stays solid at its source slot until end-of-main resolution.
+function getPendingMoveGhostAtSlot(
+  state: GameState,
+  loc: string,
+  posKey: PositionKey,
+): CardInstance | null {
+  const moves = state.currentEncounter?.locationData[loc]?.pendingMoves;
+  if (!moves) return null;
+  for (const [instId, dest] of moves) {
+    if (dest === posKey) return state.cards[instId] ?? null;
+  }
+  return null;
 }

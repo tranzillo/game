@@ -104,6 +104,13 @@ interface CardProps {
    * slot carries identity, or Framer's shared-layout crossfade fights itself).
    */
   layoutCarrier?: boolean;
+  /**
+   * "ghost" — a PENDING occupation, not yet real: a card placed-but-not-committed, or a creature's
+   * pending-move destination preview. Renders translucent with a dashed border. The player reads
+   * the board as two layers: solid (real, in play) vs ghost (declared this turn, resolves on
+   * advance). The pending→face-down→face-up lifecycle: ghost is the pre-advance stage.
+   */
+  ghost?: boolean;
 }
 
 export function Card({
@@ -114,6 +121,7 @@ export function Card({
   faceMode = "owner",
   mini = false,
   layoutCarrier = true,
+  ghost = false,
 }: CardProps) {
   const def = getCardDef(card.defKey);
   const isFaceDownVisual = faceMode === "back" || (!card.revealed && faceMode === "fog");
@@ -134,6 +142,10 @@ export function Card({
   const isSwinging = enc?.swingingAttackerInstId === card.instId;
   const isHit = enc?.swingHitTargetInstId === card.instId;
   const isDying = card.pendingLeavePile != null;
+  // A move that just fizzled (destination was occupied): a brief amber "blocked" flash on the
+  // creature that stayed put. Non-transform (box-shadow/border) so it composes with Framer's
+  // layout animation per AL #5.
+  const isFizzledMove = enc?.fizzledMoveInstId === card.instId;
 
   const borderColor = selected
     ? "#f0c040"
@@ -143,9 +155,13 @@ export function Card({
         ? "#ef5a5a"
         : isHit
           ? "#ffffff"
-          : !card.revealed
-            ? "#6a5a20"
-            : "#2a2a35";
+          : isFizzledMove
+            ? "#e08a40"
+            : ghost
+              ? "#5a6a8a"
+              : !card.revealed
+                ? "#6a5a20"
+                : "#2a2a35";
 
   const glowShadow = isResolving
     ? "0 0 14px 2px rgba(240,192,64,0.55)"
@@ -153,9 +169,11 @@ export function Card({
       ? "0 0 14px 2px rgba(239,90,90,0.65)"
       : isHit
         ? "0 0 16px 3px rgba(255,255,255,0.75)"
-        : !card.revealed && faceMode === "owner"
-          ? "inset 0 0 0 1px rgba(240,192,64,0.2)"
-          : "none";
+        : isFizzledMove
+          ? "0 0 12px 2px rgba(224,138,64,0.7)"
+          : !card.revealed && faceMode === "owner"
+            ? "inset 0 0 0 1px rgba(240,192,64,0.2)"
+            : "none";
 
   return (
     <motion.div
@@ -163,7 +181,7 @@ export function Card({
       {...(layoutCarrier ? { layoutId: `card-${card.instId}` } : {})}
       animate={{
         scale: isResolving || isSwinging ? 1.06 : 1,
-        opacity: isDying ? 0.45 : 1,
+        opacity: isDying ? 0.45 : ghost ? 0.5 : 1,
       }}
       transition={{ type: "spring", stiffness: 500, damping: 40, mass: 0.8 }}
       onClick={onClick}
@@ -180,7 +198,7 @@ export function Card({
           : isDying
             ? "#251515"
             : "#1a1a22",
-        border: `1px solid ${borderColor}`,
+        border: `1px ${ghost ? "dashed" : "solid"} ${borderColor}`,
         outline: selected ? "2px solid #f0c040" : "none",
         color: "#e8e8e8",
         fontSize: 11,

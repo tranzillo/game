@@ -16,7 +16,31 @@
 // This is the same hierarchy that drives combat order (combat-order.ts).
 
 import { positionsOf } from "./profile.ts";
-import type { GameState, Side, TimelineChip } from "./types.ts";
+import type { GameState, PositionKey, Side, TimelineChip } from "./types.ts";
+
+// The minimal fields the resolution-order comparator needs. Both flip chips and move entries
+// expose this shape so they can be sorted into ONE interleaved Tempo order at end of main.
+export interface ResolutionSortKey {
+  cachedTempo: number;
+  side: Side;
+  loc: string;
+  posKey: PositionKey | null;
+}
+
+/**
+ * Build a comparator over ResolutionSortKey (Tempo desc → initiative side → location → position
+ * rank) bound to the current encounter. Used to sort chip queues AND to interleave move entries
+ * with chips in one resolution order.
+ */
+export function makeResolutionComparator(
+  state: GameState,
+): (a: ResolutionSortKey, b: ResolutionSortKey) => number {
+  const enc = state.currentEncounter;
+  const initiative: Side = enc?.firstSide ?? "player";
+  const locIndex = makeLocationIndex(enc?.locationNodeIds ?? []);
+  const posRank = makePositionRankCache(state);
+  return (a, b) => compareKeys(initiative, locIndex, posRank, a, b);
+}
 
 /**
  * Sort a chip queue in place. Returns the same array reference. Stable per JS Array.sort
@@ -27,24 +51,20 @@ export function sortChipQueueInPlace(
   queue: TimelineChip[],
 ): TimelineChip[] {
   if (!state.currentEncounter) return queue;
-  const enc = state.currentEncounter;
-  const initiative = enc.firstSide;
-  const locationIndex = makeLocationIndex(enc.locationNodeIds);
-  const positionRank = makePositionRankCache(state);
-
-  queue.sort((a, b) => compareChips(initiative, locationIndex, positionRank, a, b));
+  const cmp = makeResolutionComparator(state);
+  queue.sort(cmp);
   return queue;
 }
 
 /**
- * Pure comparator. Negative if a sorts before b.
+ * Pure comparator over the resolution sort key. Negative if a sorts before b.
  */
-function compareChips(
+function compareKeys(
   initiative: Side,
   locIndex: (loc: string) => number,
   posRank: (loc: string, posKey: string | null) => number,
-  a: TimelineChip,
-  b: TimelineChip,
+  a: ResolutionSortKey,
+  b: ResolutionSortKey,
 ): number {
   // 1. Tempo desc
   if (a.cachedTempo !== b.cachedTempo) {

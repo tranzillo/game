@@ -225,7 +225,6 @@ export interface CardInstance {
   durability: number | null; // creatures only; null otherwise
   sleepCounter: number;
   wokeInPhase: Phase | null;
-  flippedThisTurn: boolean;
   skipAttackThisTurn: boolean;
 
   buffs: Buff[]; // stored buffs (turn / encounter / permanent / equipped scopes)
@@ -275,6 +274,23 @@ export interface NodeState {
 export interface EncounterLocationData {
   pending: PendingSlotMap;
   movedThisTurn: Set<InstId>;
+  // Pending creature moves committed this main phase: creature instId → destination posKey.
+  // A pending move is a "pending occupation" of the destination slot (same legality status as a
+  // pending card placement — blocks other commits there) while the creature stays solid at its
+  // source slot. Resolved in Tempo order at end of main; cleared each turn alongside movedThisTurn.
+  pendingMoves: Map<InstId, PositionKey>;
+}
+
+// One entry in the end-of-main move-resolution queue. Exposes the ResolutionSortKey fields
+// (cachedTempo / side / loc / posKey) so moves interleave with flip chips in one Tempo order.
+export interface MoveResolutionEntry {
+  instId: InstId;
+  side: Side;
+  loc: string;
+  fromPos: PositionKey;
+  toPos: PositionKey;
+  cachedTempo: number;
+  posKey: PositionKey;
 }
 
 // ---------- Side state ----------
@@ -415,6 +431,11 @@ export interface EncounterState {
     endOfPhase: TimelineChip[];
   };
 
+  // Transient end-of-main move-resolution queue (sorted by the same Tempo comparator as flips).
+  // Built when advancing out of main; drained INTERLEAVED with flipQueues.startOfPhase so moves
+  // and flips resolve in one Tempo order. Empty outside the main-resolution drain.
+  moveResolutionQueue: MoveResolutionEntry[];
+
   // The chip currently in the Present span (null when nothing is resolving). Both Card and
   // ChipStrip read this to render their synchronized "resolving" visual: the chip glows in
   // Present, and the card whose instId matches the present chip glows on the board. Set when
@@ -428,6 +449,10 @@ export interface EncounterState {
   // The target InstId currently taking the hit (null when not hitting). Read by Card.tsx to
   // flash damage. Set during the damage beat; cleared between swings.
   swingHitTargetInstId: number | null;
+  // A creature whose pending move just FIZZLED (destination occupied at resolution). Set during the
+  // move-resolution beat; cleared on a short follow-up beat. Read by Card.tsx for a recoil/dim — the
+  // creature visibly "tried to move and got blocked" rather than silently staying put.
+  fizzledMoveInstId: number | null;
 
   playerLocationCleared: Record<string, boolean>;
   outcome: EncounterOutcome | null;

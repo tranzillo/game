@@ -106,7 +106,7 @@ export function popNextChipFromStartQueue(state: GameState): TimelineChip | null
  * Per-turn cleanup (2026-06-12 audit fix — these existed but were never wired):
  *  - turn-scoped buffs revert (all "+X this turn" effects expire)
  *  - meleeAttackersThisTurn clears (trap deathwish tracking is per-turn)
- *  - skipAttackThisTurn / flippedThisTurn clear
+ *  - skipAttackThisTurn clears
  *  - wokeInPhase clears (else "just woke this phase" false-positives across turns)
  *  - per-location movedThisTurn clears (one move per creature per turn)
  *  - actionsThisTurn resets on both sides
@@ -127,7 +127,6 @@ export function startNewTurn(state: GameState): void {
     if (!card) continue;
     card.meleeAttackersThisTurn = [];
     card.skipAttackThisTurn = false;
-    card.flippedThisTurn = false;
     card.wokeInPhase = null;
   }
   for (const loc of enc.locationNodeIds) {

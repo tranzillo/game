@@ -18,9 +18,12 @@ import type { CardInstance } from "../../engine/types.ts";
 
 interface HandProps {
   hand: CardInstance[];
+  // The opponent's hand: fanned out exactly like the player's, but every card face-down (you see
+  // the backs of the cards they hold, as if sitting across the table). Not selectable / clickable.
+  faceDown?: boolean;
 }
 
-export function Hand({ hand }: HandProps) {
+export function Hand({ hand, faceDown = false }: HandProps) {
   useGameState();
   const selectedId = getSelectedCardId();
   const state = getState();
@@ -31,6 +34,14 @@ export function Hand({ hand }: HandProps) {
     <div style={{ display: "flex", alignItems: "center", minHeight: 150 }}>
       <motion.div layout style={{ display: "flex", gap: 8 }}>
         {hand.map((card) => {
+          if (faceDown) {
+            // Opponent's card: render the back, no selection/click.
+            return (
+              <div key={card.instId}>
+                <Card card={card} faceMode="back" />
+              </div>
+            );
+          }
           const playable = isCardPlayable(state, card);
           return (
             <div key={card.instId} style={{ opacity: playable ? 1 : 0.45 }}>

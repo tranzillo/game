@@ -67,7 +67,6 @@ export function createCardInstance(state: GameState, defKey: string, origin: Car
     durability: def.type === "creature" && def.durability != null ? def.durability : null,
     sleepCounter: 0,
     wokeInPhase: null,
-    flippedThisTurn: false,
     skipAttackThisTurn: false,
     buffs: [],
     equipment: [],

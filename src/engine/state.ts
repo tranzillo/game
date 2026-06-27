@@ -75,6 +75,7 @@ export function freshEncounterLocationData(profile: LocationProfile): EncounterL
   return {
     pending: emptyPendingSlotMap(profile),
     movedThisTurn: new Set(),
+    pendingMoves: new Map(),
   };
 }
 
@@ -147,9 +148,11 @@ export function freshEncounterState(locationNodeIds: string[]): EncounterState {
       midPhase: [],
       endOfPhase: [],
     },
+    moveResolutionQueue: [],
     resolvingChipId: null,
     swingingAttackerInstId: null,
     swingHitTargetInstId: null,
+    fizzledMoveInstId: null,
     playerLocationCleared: Object.fromEntries(locationNodeIds.map((id) => [id, false])),
     outcome: null,
     summonerDamageThisEncounter: 0,

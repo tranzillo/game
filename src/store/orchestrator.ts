@@ -38,7 +38,8 @@ import {
 import { getCardDef } from "../engine/cards.ts";
 import { leavePlay } from "../engine/piles.ts";
 import { markChipPresent, markChipResolved } from "../engine/timeline.ts";
-import { sortChipQueueInPlace } from "../engine/flip-order.ts";
+import { sortChipQueueInPlace, makeResolutionComparator } from "../engine/flip-order.ts";
+import { buildMoveResolutionQueue, resolvePendingMove } from "../engine/movement.ts";
 import { emit } from "../engine/events.ts";
 import { endSequence, startSequence, isPlaying } from "../engine/scheduler.ts";
 import {
@@ -117,7 +118,13 @@ export function actionAdvancePhase(): void {
   // Step 2: sort the active sub-phase queue (startOfPhase since slice keeps subPhase="start").
   sortChipQueueInPlace(state, state.currentEncounter.flipQueues.startOfPhase);
 
-  // Step 3: drain the chip queue, then run the phase's substantive action.
+  // Step 2b: advancing out of MAIN, build the sorted move-resolution queue. Moves interleave with
+  // flips in one Tempo order during the drain (drainNextChipBeat picks the earlier head). Other
+  // phases have no inherent moves (main-only), so the queue stays empty.
+  state.currentEncounter.moveResolutionQueue =
+    phase === "main" ? buildMoveResolutionQueue(state) : [];
+
+  // Step 3: drain the chip + move queues, then run the phase's substantive action.
   runBeatN(BEAT_MS.commit, () => {
     drainNextChipBeat();
   });
@@ -131,13 +138,48 @@ function drainNextChipBeat(): void {
     endSequence();
     return;
   }
+  const enc = state.currentEncounter;
 
-  const chip = popNextChipFromStartQueue(state);
-  if (!chip) {
-    // Queue drained. Run the phase's substantive action.
+  // Interleave flips and moves by Tempo: peek both heads, resolve whichever sorts first. The flip
+  // queue is pre-sorted (sortChipQueueInPlace); the move queue is pre-sorted (buildMoveResolution-
+  // Queue). Both use the same comparator, so comparing heads gives one correct Tempo order.
+  const nextChip = enc.flipQueues.startOfPhase[0] ?? null;
+  const nextMove = enc.moveResolutionQueue[0] ?? null;
+
+  if (nextChip == null && nextMove == null) {
+    // Both queues drained. Run the phase's substantive action.
     runBeatN(BEAT_MS.substantiveStart, () => {
       runPhaseSubstantive();
     });
+    return;
+  }
+
+  // Decide which head resolves next.
+  const moveFirst =
+    nextMove != null &&
+    (nextChip == null || makeResolutionComparator(state)(nextMove, nextChip) <= 0);
+
+  if (moveFirst && nextMove != null) {
+    enc.moveResolutionQueue.shift();
+    const outcome = resolvePendingMove(state, nextMove);
+    // On fizzle, flash the blocked creature (recoil/dim) for this beat; on success the creature
+    // slides to its destination via Framer's layoutId. Clear the fizzle flag at the start of the
+    // next drain step so it shows for exactly this beat.
+    enc.fizzledMoveInstId = outcome === "fizzled" ? nextMove.instId : null;
+    notifyStateChanged();
+    // A move is a short, self-contained beat (no present span — it doesn't flip a card or write to
+    // the Past). Pace it, then continue the drain.
+    runBeatN(outcome === "fizzled" ? BEAT_MS.postResolve : BEAT_MS.commit, () => {
+      const s = getEngineState();
+      if (s.currentEncounter) s.currentEncounter.fizzledMoveInstId = null;
+      drainNextChipBeat();
+    });
+    return;
+  }
+
+  const chip = popNextChipFromStartQueue(state);
+  if (!chip) {
+    drainNextChipBeat();
     return;
   }
 

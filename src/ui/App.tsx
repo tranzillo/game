@@ -155,6 +155,35 @@ function EncounterView({ state }: { state: GameState }) {
 
   return (
     <>
+      {/* AI summoner band — ONLY when an AI summoner is present (hostile / boss). Its piles sit at
+          the TOP, mirroring the player's bottom band (§2: the boss is "above" the front line). Their
+          presence is itself the hostile-vs-neutral tell, and gives AI-side leave-play a destination
+          to animate to. Neutral encounters (no aiSide) show no AI band; summoner-less deaths route to
+          the per-location piles rendered inside each Location. */}
+      {enc.aiSide && (
+        <div
+          style={{
+            borderBottom: "2px solid #2a2a35",
+            background: "#110b0b",
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 18,
+            padding: "8px 12px",
+          }}
+        >
+          <span style={{ fontSize: 10, color: "#ef5a5a", alignSelf: "center", minWidth: 64 }}>
+            enemy summoner{enc.aiSide.durability != null ? ` · ${enc.aiSide.durability} dur` : ""}
+          </span>
+          <Pile label="Draw" faceDown cards={pileCards(state, [...enc.aiSide.deck].reverse())} />
+          <FloorLabel label="Hand">
+            <Hand hand={pileCards(state, enc.aiSide.hand)} faceDown />
+          </FloorLabel>
+          <Pile label="Discard" cards={pileCards(state, enc.aiSide.discard)} />
+          <Pile label="Graveyard" cards={pileCards(state, enc.aiSide.graveyard)} />
+          <Pile label="Junkyard" cards={pileCards(state, enc.aiSide.junkyard)} />
+        </div>
+      )}
+
       {/* Front line — the active location boards, in map column order. */}
       <div
         style={{

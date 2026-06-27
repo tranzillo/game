@@ -26,6 +26,7 @@ import {
   startEncounterFromCurrentNode,
 } from "../engine/overworld.ts";
 import { evaluateCost } from "../engine/costs.ts";
+import { cancelMove, commitMove, destinationIsPendingMove } from "../engine/movement.ts";
 import { shuffleDeck } from "../engine/piles.ts";
 
 // ---------- Selection (UI-local state inside engine.encounter for convenience) ----------
@@ -42,6 +43,48 @@ export function getSelectedCardId(): InstId | null {
 
 export function actionSelectCard(instId: InstId | null): void {
   selectedCardId = instId;
+  // Selecting a hand card clears any in-play move selection (one selection active at a time).
+  if (instId != null) selectedMoveCreatureId = null;
+  notifyStateChanged();
+}
+
+// ---------- In-play creature selection (for movement) ----------
+//
+// A separate selection axis from hand-card selection: clicking an in-play player creature in main
+// selects it for movement, highlighting its legal adjacent destinations. Only one of
+// {hand-card-selected, move-creature-selected} is active at a time.
+
+let selectedMoveCreatureId: InstId | null = null;
+
+export function getSelectedMoveCreatureId(): InstId | null {
+  return selectedMoveCreatureId;
+}
+
+export function actionSelectCreatureForMove(instId: InstId | null): void {
+  selectedMoveCreatureId = instId;
+  if (instId != null) selectedCardId = null; // clear hand selection
+  notifyStateChanged();
+}
+
+/**
+ * Commit a pending move for the selected in-play creature to (loc, pos). Mirrors
+ * actionPlaceSelectedCard for hand cards. Returns true on success.
+ */
+export function actionCommitMove(opts: { loc: string; pos: PositionKey }): boolean {
+  const state = getEngineState();
+  if (selectedMoveCreatureId == null) return false;
+  const card = state.cards[selectedMoveCreatureId];
+  if (!card) return false;
+  if (commitMove(state, card, opts.loc, opts.pos) !== "ok") return false;
+  selectedMoveCreatureId = null; // deselect after committing
+  notifyStateChanged();
+  return true;
+}
+
+/** Cancel a creature's pending move (click its ghost / source to undo before advance). */
+export function actionCancelMove(opts: { instId: InstId; loc: string }): void {
+  const state = getEngineState();
+  cancelMove(state, opts.instId, opts.loc);
   notifyStateChanged();
 }
 
@@ -211,6 +254,7 @@ export function actionStartRun(): void {
   }
 
   selectedCardId = null;
+  selectedMoveCreatureId = null;
   notifyStateChanged();
 }
 
@@ -266,6 +310,12 @@ export function canPlaceAt(
           ? locData.pending.structures
           : locData.pending.actions;
     if (pendingMap[opts.pos] != null) return false;
+    // A pending move's DESTINATION is a pending occupation of that creature slot — no card may
+    // commit there (same status as a pending placement). The move's SOURCE slot is already
+    // blocked above by the committed-map check (the creature still physically occupies it).
+    if (opts.kind === "creature" && destinationIsPendingMove(locData.pendingMoves, opts.pos)) {
+      return false;
+    }
   }
   return true;
 }
@@ -413,6 +463,7 @@ export function actionTravelTo(nodeId: string): boolean {
   // endEncounterPiles) and run-state Durability forward from it (§29/§31).
   startEncounterFromCurrentNode(state);
   selectedCardId = null;
+  selectedMoveCreatureId = null;
   notifyStateChanged();
   return true;
 }

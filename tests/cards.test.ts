@@ -79,7 +79,6 @@ describe("createCardInstance", () => {
     expect(card.markCount).toBe(0);
     expect(card.buffs).toEqual([]);
     expect(card.sleepCounter).toBe(0);
-    expect(card.flippedThisTurn).toBe(false);
     expect(card.pendingLeavePile).toBeNull();
   });
 
